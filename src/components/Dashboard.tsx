@@ -1140,6 +1140,7 @@ interface AssetCardProps {
 }
 
 function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; onSelect: () => void; isSelected: boolean; onPreview: () => void }) {
+  const [showMenu, setShowMenu] = useState(false);
   const Icon = asset.type === "folder" ? FolderIcon : (asset.type === "image" ? ImageIcon : (asset.type === "video" ? Video : FileText));
   const iconColor = asset.type === "image" ? "text-blue-500" : (asset.type === "video" ? "text-purple-500" : "text-gray-400");
 
@@ -1150,12 +1151,149 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
       onClick={onSelect}
       onDoubleClick={onPreview}
       className={cn(
-        "aspect-[3/2] relative border transition-all cursor-pointer overflow-hidden group",
+        "aspect-[3/2] relative border transition-all cursor-pointer overflow-hidden group rounded-lg shadow-sm",
         isSelected
           ? "border-[#a21b7e] ring-2 ring-[#a21b7e]/10 shadow-lg"
           : "border-gray-100 hover:border-gray-300"
       )}
     >
+      {/* 3 dots button over the image in the upper right corner */}
+      <div className="absolute top-2 right-2 z-20">
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowMenu(!showMenu);
+          }}
+          className="text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] hover:text-[#a21b7e] transition-all p-1.5 rounded-full hover:bg-white/20 backdrop-blur-[1px]"
+        >
+          <MoreVertical size={18} />
+        </button>
+
+        <AnimatePresence>
+          {showMenu && (
+            <>
+              {/* Invisible click-catcher to dismiss the menu */}
+              <div 
+                className="fixed inset-0 z-30" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                }}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{ duration: 0.1 }}
+                className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-40 p-1.5 text-left text-gray-700 font-sans cursor-default"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPreview();
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                >
+                  <LayoutGrid size={14} className="text-gray-400" />
+                  <span>Visualizar</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const url = asset.versions[0]?.url || asset.webViewLink;
+                    if (url) window.open(url, '_blank');
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                >
+                  <Download size={14} className="text-gray-400" />
+                  <span>Transferir</span>
+                </button>
+
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const newName = prompt("Digite o novo nome para o arquivo:", asset.name);
+                    if (newName) {
+                      try {
+                        await updateDoc(doc(db, "assets", asset.id), { name: newName });
+                      } catch (error) {
+                        console.error("Erro ao renomear arquivo:", error);
+                      }
+                    }
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <FileText size={14} className="text-gray-400" />
+                    <span>Mudar nome</span>
+                  </div>
+                  <span className="text-[9px] text-gray-400 font-medium">⌥⌘E</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alert("Link de partilha copiado para a área de transferência!");
+                    navigator.clipboard.writeText(asset.versions[0]?.url || asset.webViewLink || "");
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Users size={14} className="text-gray-400" />
+                    <span>Partilhar</span>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-400" />
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alert("Detalhes do Arquivo:\nNome: " + asset.name + "\nTamanho: " + (asset.versions[0]?.size || "0 MB") + "\nTipo: " + asset.type);
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <BarChart3 size={14} className="text-gray-400" />
+                    <span>Informações</span>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-400" />
+                </button>
+
+                <div className="my-1 border-t border-gray-100" />
+
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (confirm("Tem certeza que deseja mover " + asset.name + " para o lixo?")) {
+                      try {
+                        await updateDoc(doc(db, "assets", asset.id), { folderId: "trash" });
+                      } catch (error) {
+                        console.error("Erro ao mover arquivo para o lixo:", error);
+                      }
+                    }
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-all text-left"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Trash2 size={14} className="text-red-400" />
+                    <span>Mover para o lixo</span>
+                  </div>
+                  <span className="text-[9px] text-red-400 font-medium">Delete</span>
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      </div>
+
       <div className="w-full h-full flex items-center justify-center bg-gray-50">
         {(asset.thumbnailUrl || asset.driveId) ? (
           <img 
