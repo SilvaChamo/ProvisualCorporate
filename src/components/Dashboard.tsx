@@ -579,7 +579,7 @@ export default function Dashboard() {
           ) : (
             <>
               {viewMode === "grid" ? (
-                <div className="p-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 bg-gray-50 min-h-full">
+                <div className="p-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 bg-gray-50 min-h-full items-start">
                   {/* 1. PASTAS PRIMEIRO (Estilo Light com Opções) */}
                   {activeTab === 'all' && folders.filter(f => f.parentId === selectedFolderId).map(folder => (
                     <div
