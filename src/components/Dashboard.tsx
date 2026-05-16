@@ -597,8 +597,8 @@ export default function Dashboard() {
                     </div>
                   ))}
 
-                  {/* 2. ARQUIVOS DEPOIS (Estilo Card com Header Negro) */}
-                  {filteredAssets.map(asset => (
+                  {/* 2. ARQUIVOS DEPOIS (Mostrar apenas nas outras abas, não em 'todos os arquivos') */}
+                  {activeTab !== 'all' && filteredAssets.map(asset => (
                     <AssetCard
                       key={asset.id}
                       asset={asset}
@@ -871,26 +871,15 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
   return (
     <div
       onClick={onSelect}
+      onDoubleClick={onPreview}
       className={cn(
-        "flex flex-col bg-white border transition-all cursor-pointer group shadow-sm",
+        "aspect-[3/2] relative border transition-all cursor-pointer overflow-hidden group",
         isSelected
-          ? "border-[#a21b7e] ring-1 ring-[#a21b7e]/30 shadow-lg"
+          ? "border-[#a21b7e] ring-2 ring-[#a21b7e]/10 shadow-lg"
           : "border-gray-100 hover:border-gray-300"
       )}
     >
-      {/* Header do Card (Light Gray) */}
-      <div className="flex items-center justify-between p-3 bg-gray-50/80 border-b border-gray-100">
-        <div className="flex items-center gap-2 truncate">
-          <Icon size={16} className={iconColor} />
-          <span className="text-[10px] font-bold text-gray-700 truncate uppercase tracking-tight">{asset.name}</span>
-        </div>
-        <button className="text-gray-400 hover:text-gray-600 transition-colors">
-          <MoreVertical size={14} />
-        </button>
-      </div>
-
-      {/* Área da Imagem (Branca) */}
-      <div className="aspect-square bg-white flex items-center justify-center overflow-hidden">
+      <div className="w-full h-full flex items-center justify-center bg-gray-50">
         {(asset.thumbnailUrl || asset.driveId) ? (
           <img 
             src={thumbUrl} 
@@ -898,14 +887,18 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
-          <Icon size={48} className="text-gray-100" />
+          <Icon size={40} className={cn("transition-all duration-300", iconColor)} />
         )}
       </div>
 
-      {/* Footer discreto se selecionado */}
-      {isSelected && (
-        <div className="h-0.5 bg-[#a21b7e] w-full" />
-      )}
+      {/* Hover Overlay - Descrição ao passar o mouse */}
+      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/95 via-black/80 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-10">
+        <h4 className="font-bold text-[11px] text-white truncate mb-0.5">{asset.name}</h4>
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] font-bold text-gray-300 uppercase">{format(asset.captureDate, "dd/MM/yy")}</span>
+          <span className="text-[9px] font-bold text-[#a21b7e] bg-white px-1.5 py-0.5 rounded-sm uppercase">{asset.versions[0]?.size}</span>
+        </div>
+      </div>
     </div>
   );
 }

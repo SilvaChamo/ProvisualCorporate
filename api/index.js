@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import multer from "multer";
 import { Readable } from "stream";
 import fs from "fs";
+import path from "path";
 
 const app = express();
 app.use(express.json());
@@ -15,7 +16,8 @@ const getGoogleAuth = () => {
   } else {
     // Fallback local se necessário
     try {
-      keys = JSON.parse(fs.readFileSync('./provisual-corporate-a16cee3d2250.json', 'utf8'));
+      const keyPath = path.join(process.cwd(), 'provisual-corporate-a16cee3d2250.json');
+      keys = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
     } catch (e) {
       throw new Error("Google Keys not found");
     }
