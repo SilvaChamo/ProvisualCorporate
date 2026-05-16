@@ -35,7 +35,9 @@ app.post("/api/drive/list", async (req, res) => {
     const auth = getGoogleAuth();
     const drive = google.drive({ version: 'v3', auth });
 
-    let queryStr = `'${folderId || 'root'}' in parents and trashed = false`;
+    let queryStr = (!folderId || folderId === 'root')
+      ? `('root' in parents or sharedWithMe = true) and trashed = false`
+      : `'${folderId}' in parents and trashed = false`;
     let orderByStr = 'folder,name,createdTime';
 
     if (filterType === 'sharedWithMe') {
