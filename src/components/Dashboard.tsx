@@ -145,6 +145,7 @@ export default function Dashboard() {
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const [driveFilterType, setDriveFilterType] = useState<string | null>(null);
   const [storageQuota, setStorageQuota] = useState<{ limit: string; usage: string } | null>(null);
+  const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
 
   // Grelha de 5 colunas como padrão para tudo
   useEffect(() => {
@@ -718,15 +719,141 @@ export default function Dashboard() {
                           setSelectedFolderId(folder.id);
                         }
                       }}
-                      className="flex items-center justify-between p-4 bg-white border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group shadow-sm"
+                      className="flex items-center justify-between p-4 bg-white border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group shadow-sm relative overflow-visible"
                     >
                       <div className="flex items-center gap-3 truncate">
-                        <FolderIcon size={20} className="text-yellow-500 fill-yellow-500/10" />
+                        <FolderIcon size={20} className="text-yellow-500 fill-yellow-500/10 shrink-0" />
                         <span className="text-xs font-bold text-gray-700 truncate uppercase">{folder.name}</span>
                       </div>
-                      <button className="text-gray-400 hover:text-gray-600 transition-colors">
-                        <MoreVertical size={16} />
-                      </button>
+                      
+                      <div className="relative overflow-visible">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
+                          }}
+                          className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-50 transition-colors"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+
+                        <AnimatePresence>
+                          {activeFolderMenuId === folder.id && (
+                            <>
+                              {/* Invisible click-catcher to dismiss the menu */}
+                              <div 
+                                className="fixed inset-0 z-30" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveFolderMenuId(null);
+                                }}
+                              />
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                transition={{ duration: 0.1 }}
+                                className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-40 p-1.5 text-left text-gray-700 font-sans cursor-default"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    alert("Descarregando a pasta: " + folder.name);
+                                    setActiveFolderMenuId(null);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                >
+                                  <Download size={14} className="text-gray-400" />
+                                  <span>Transferir</span>
+                                </button>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const newName = prompt("Digite o novo nome para " + folder.name);
+                                    if (newName) {
+                                      updateDoc(doc(db, "folders", folder.id), { name: newName });
+                                    }
+                                    setActiveFolderMenuId(null);
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <FileText size={14} className="text-gray-400" />
+                                    <span>Mudar nome</span>
+                                  </div>
+                                  <span className="text-[9px] text-gray-400 font-medium">⌥⌘E</span>
+                                </button>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    alert("Abrindo partilha para " + folder.name);
+                                    setActiveFolderMenuId(null);
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <Users size={14} className="text-gray-400" />
+                                    <span>Partilhar</span>
+                                  </div>
+                                  <ChevronRight size={14} className="text-gray-400" />
+                                </button>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    alert("Organizando pasta " + folder.name);
+                                    setActiveFolderMenuId(null);
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <FolderIcon size={14} className="text-gray-400" />
+                                    <span>Organizar</span>
+                                  </div>
+                                  <ChevronRight size={14} className="text-gray-400" />
+                                </button>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    alert("Informações da pasta: " + folder.name);
+                                    setActiveFolderMenuId(null);
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <BarChart3 size={14} className="text-gray-400" />
+                                    <span>Informações da pasta</span>
+                                  </div>
+                                  <ChevronRight size={14} className="text-gray-400" />
+                                </button>
+
+                                <div className="my-1 border-t border-gray-100" />
+
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm("Tem certeza que deseja mover " + folder.name + " para o lixo?")) {
+                                      await updateDoc(doc(db, "folders", folder.id), { parentId: "trash" });
+                                    }
+                                    setActiveFolderMenuId(null);
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-all text-left"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <Trash2 size={14} className="text-red-400" />
+                                    <span>Mover para o lixo</span>
+                                  </div>
+                                  <span className="text-[9px] text-red-400 font-medium">Delete</span>
+                                </button>
+                              </motion.div>
+                            </>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
                   ))}
 
