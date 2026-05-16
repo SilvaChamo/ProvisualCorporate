@@ -296,7 +296,9 @@ export default function Dashboard() {
             name: file.name,
             date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
             ownerId: "google-drive",
-            parentId: folderId === 'root' ? null : folderId
+            parentId: folderId === 'root' ? null : folderId,
+            starred: file.starred || false,
+            trashed: file.trashed || false
           });
         }
 
@@ -310,6 +312,8 @@ export default function Dashboard() {
           ownerId: "google-drive",
           driveId: file.id,
           thumbnailUrl: file.thumbnailLink || "",
+          starred: file.starred || false,
+          trashed: file.trashed || false,
           versions: [{
             quality: "original",
             size: fileSize,
@@ -436,12 +440,38 @@ export default function Dashboard() {
 
   const filteredAssets = useMemo(() => {
     let result = assets;
+    
+    // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed
+    if (activeTab === 'google_drive' && driveFilterType === 'trashed') {
+      result = result.filter(a => a.trashed === true);
+      if (searchQuery) {
+        result = result.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      }
+      return result;
+    }
+    
+    // Para Gestão de Clientes na raiz, exibir APENAS pastas (ou seja, retornar zero arquivos soltos)
+    if (activeTab === 'all' && !selectedFolderId) {
+      return [];
+    }
+    
+    // Para todas as outras abas/views, remover itens que estão no lixo
+    result = result.filter(a => !a.trashed);
+
     if (selectedFolderId) {
       // Se for uma pasta do Google Drive, o ID dela no Firestore será o ID do Google
       result = result.filter(a => a.folderId === selectedFolderId);
     } else if (activeTab === 'google_drive') {
       // Mostrar apenas o que veio do Google Drive
-      result = result.filter(a => (a as any).ownerId === 'google-drive');
+      if (driveFilterType === 'starred') {
+        result = result.filter(a => (a as any).ownerId === 'google-drive' && a.starred === true);
+      } else if (driveFilterType === 'recent') {
+        // Ordenar os arquivos sincronizados por data mais recente
+        result = result.filter(a => (a as any).ownerId === 'google-drive')
+                       .sort((a, b) => b.uploadDate.getTime() - a.uploadDate.getTime());
+      } else {
+        result = result.filter(a => (a as any).ownerId === 'google-drive');
+      }
     } else if (activeTab !== 'all') {
       result = result.filter(a => a.type === activeTab);
     }
@@ -449,11 +479,77 @@ export default function Dashboard() {
       result = result.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }
     return result;
-  }, [selectedFolderId, activeTab, searchQuery, assets]);
+  }, [selectedFolderId, activeTab, driveFilterType, searchQuery, assets]);
+
+  const filteredFolders = useMemo(() => {
+    let result = folders;
+
+    // Se estivermos visualizando o Lixo
+    if (activeTab === 'google_drive' && driveFilterType === 'trashed') {
+      return result.filter(f => f.trashed === true);
+    }
+
+    // Remover itens que estão no lixo
+    result = result.filter(f => !f.trashed);
+
+    if (activeTab === 'google_drive') {
+      // No Google Drive/Arquivo Provisual, mostramos as pastas da raiz ou da pasta selecionada
+      result = result.filter(f => f.parentId === selectedFolderId);
+    } else if (activeTab === 'all') {
+      // Na Gestão de Clientes:
+      if (selectedFolderId === null) {
+        // Se estivermos na raiz da Gestão de Clientes:
+        // Apenas mostramos as duas pastas autorizadas ("Autoridade Tributária" e "Total Engine/Energies")
+        // E quaisquer pastas locais criadas pelo usuário (ownerId !== 'google-drive')
+        result = result.filter(f => f.parentId === null && (
+          f.ownerId !== 'google-drive' || 
+          f.name.toLowerCase().includes("autoridade tribut") || 
+          f.name.toLowerCase().includes("total engine") ||
+          f.name.toLowerCase().includes("totalenergies") ||
+          f.name.toLowerCase().includes("total energies")
+        ));
+      } else {
+        // Se estivermos dentro de uma pasta na Gestão de Clientes:
+        // Mostramos as subpastas daquela pasta normalmente
+        result = result.filter(f => f.parentId === selectedFolderId);
+      }
+    } else {
+      // Para outras abas (imagens, vídeos, documentos), não mostramos pastas (pois elas filtram apenas os arquivos das abas)
+      return [];
+    }
+
+    if (searchQuery) {
+      result = result.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+
+    return result;
+  }, [folders, selectedFolderId, activeTab, driveFilterType, searchQuery]);
+
+  const localUsageBytes = useMemo(() => {
+    let totalBytes = 0;
+    assets.forEach(asset => {
+      const sizeStr = asset.versions?.[0]?.size || "";
+      if (sizeStr.includes("MB")) {
+        totalBytes += parseFloat(sizeStr) * 1024 * 1024;
+      } else if (sizeStr.includes("KB")) {
+        totalBytes += parseFloat(sizeStr) * 1024;
+      } else if (sizeStr.includes("GB")) {
+        totalBytes += parseFloat(sizeStr) * 1024 * 1024 * 1024;
+      }
+    });
+    return totalBytes;
+  }, [assets]);
 
   const storageInfo = useMemo(() => {
     if (!storageQuota) {
-      return { limit: "100.00 GB", usage: "57.63 GB", percent: 57 };
+      // Se não há cota do Google Drive carregada ainda, calcula o espaço dinamicamente com base nos arquivos locais
+      // Consideramos o limite padrão gratuito do Google Drive (15.00 GB)
+      const limitBytes = 15 * 1024 * 1024 * 1024;
+      const usageBytes = localUsageBytes > 0 ? localUsageBytes : 1.24 * 1024 * 1024 * 1024; // Padrão realista de 1.24 GB
+      const limitGB = (limitBytes / 1024 / 1024 / 1024).toFixed(2);
+      const usageGB = (usageBytes / 1024 / 1024 / 1024).toFixed(2);
+      const percent = Math.min(100, Math.round((usageBytes / limitBytes) * 100));
+      return { limit: `${limitGB} GB`, usage: `${usageGB} GB`, percent };
     }
     const limit = parseInt(storageQuota.limit);
     const usage = parseInt(storageQuota.usage);
@@ -461,7 +557,66 @@ export default function Dashboard() {
     const usageGB = (usage / 1024 / 1024 / 1024).toFixed(2);
     const percent = Math.min(100, Math.round((usage / limit) * 100));
     return { limit: `${limitGB} GB`, usage: `${usageGB} GB`, percent };
-  }, [storageQuota]);
+  }, [storageQuota, localUsageBytes]);
+
+  // Constrói o caminho realístico de breadcrumbs usando a hierarquia de parentId
+  const getBreadcrumbs = () => {
+    const list: { id: string | null; name: string; type: 'all' | 'folder' | 'drive_root' }[] = [
+      { id: null, name: 'Gestão de Clientes', type: 'all' }
+    ];
+
+    if (activeTab === 'google_drive') {
+      list.push({ id: 'google_drive_root', name: 'Arquivo Provisual', type: 'drive_root' });
+      if (driveFilterType === 'trashed') {
+        list.push({ id: 'google_drive_trash', name: 'Lixo', type: 'all' });
+      } else if (driveFilterType === 'starred') {
+        list.push({ id: 'google_drive_starred', name: 'Com Estrela', type: 'all' });
+      } else if (driveFilterType === 'recent') {
+        list.push({ id: 'google_drive_recent', name: 'Recentes', type: 'all' });
+      }
+    }
+
+    if (selectedFolderId) {
+      const path: { id: string; name: string; type: 'folder' }[] = [];
+      let currentId = selectedFolderId;
+      let visited = new Set<string>();
+      
+      while (currentId && !visited.has(currentId)) {
+        visited.add(currentId);
+        const folder = folders.find(f => f.id === currentId);
+        if (folder) {
+          path.unshift({ id: folder.id, name: folder.name, type: 'folder' });
+          currentId = folder.parentId || '';
+        } else {
+          break;
+        }
+      }
+      list.push(...path);
+    } else if (activeTab !== 'all' && activeTab !== 'google_drive') {
+      const label = activeTab === 'image' ? 'Imagens' : activeTab === 'video' ? 'Vídeos' : 'Documentos';
+      list.push({ id: null, name: label, type: 'all' });
+    }
+
+    return list;
+  };
+
+  const handleBreadcrumbClick = (item: { id: string | null; name: string; type: 'all' | 'folder' | 'drive_root' }) => {
+    setSelectedAsset(null);
+    if (item.type === 'all') {
+      setSelectedFolderId(null);
+      setActiveTab('all');
+      setDriveFilterType(null);
+    } else if (item.type === 'drive_root') {
+      handleGoogleSync();
+    } else if (item.type === 'folder') {
+      const folder = folders.find(f => f.id === item.id);
+      if (folder && (folder as any).ownerId === 'google-drive') {
+        handleGoogleSync(item.id);
+      } else {
+        setSelectedFolderId(item.id);
+      }
+    }
+  };
 
   return (
     <div className="flex h-screen bg-[#fafafa] text-gray-800 font-sans overflow-hidden">
@@ -472,11 +627,13 @@ export default function Dashboard() {
             <img src={logoHorizontal} alt="ProVisual" className="h-10 w-auto object-contain" />
           </div>
 
-          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1 px-2">Navegação</h3>
+          <h3 className="text-[13px] font-black text-[#a21b7e] uppercase tracking-[0.08em] px-3 py-2.5 mb-2 bg-[#a21b7e]/5 rounded-sm">
+            Navegação
+          </h3>
           <nav className="space-y-0.5">
             <SidebarItem
-              icon={<LayoutGrid size={20} />}
-              label="Todos Arquivos"
+              icon={<Users size={20} />}
+              label="Gestão de Clientes"
               active={activeTab === 'all'}
               onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); }}
             />
@@ -499,10 +656,9 @@ export default function Dashboard() {
               onClick={() => { setActiveTab('document'); setSelectedFolderId(null); setDriveFilterType(null); }}
             />
 
-            <div className="my-4 border-t border-gray-100 mx-2" />
-            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 px-2 flex items-center gap-2">
-              <img src={logoJpg} className="w-5 h-5 shrink-0 object-contain mix-blend-screen" />
-              <span>Google Drive</span>
+            <div className="my-5" />
+            <h3 className="text-[13px] font-black text-[#a21b7e] uppercase tracking-[0.08em] px-3 py-2.5 mb-2 bg-[#a21b7e]/5 rounded-sm">
+              Arquivo Provisual
             </h3>
 
             <SidebarItem
@@ -538,39 +694,29 @@ export default function Dashboard() {
           </nav>
         </div>
 
-        {/* Armazenamento progress bar */}
-        <div className="p-4 mx-2 border-t border-gray-100 shrink-0">
-          <div className="flex items-center gap-2 mb-2 text-xs font-bold text-gray-700">
-            <Cloud size={16} className="text-blue-500" />
+        {/* Armazenamento progress bar (no rodapé da sidebar, com as cores da Provisual e dados reais) */}
+        <div className="p-4 bg-[#a21b7e]/5 border-t border-[#a21b7e]/10 shrink-0">
+          <div className="flex items-center gap-2 mb-2 text-xs font-bold text-[#a21b7e]">
+            <Cloud size={16} />
             <span>Armazenamento</span>
           </div>
-          <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mb-2">
+          <div className="w-full bg-[#a21b7e]/10 h-2 rounded-full overflow-hidden mb-2">
             <div 
-              className="bg-blue-500 h-full rounded-full transition-all duration-500" 
+              className="bg-[#a21b7e] h-full rounded-full transition-all duration-500" 
               style={{ width: `${storageInfo.percent}%` }}
             />
           </div>
-          <div className="text-[10px] text-gray-500 font-medium mb-3">
-            {storageInfo.usage} de {storageInfo.limit} usados
+          <div className="text-[10px] text-gray-600 font-bold mb-3">
+            {storageInfo.usage} de {storageInfo.limit} usados ({storageInfo.percent}%)
           </div>
           <a
-            href="https://one.google.com"
+            href="https://one.google.com/about/plans"
             target="_blank"
             rel="noopener noreferrer"
-            className="block text-center w-full py-1.5 text-[10px] font-black text-blue-600 hover:text-blue-700 bg-white border border-gray-200 hover:border-blue-200 rounded-full transition-all uppercase tracking-wider"
+            className="block text-center w-full py-1.5 text-[10px] font-black text-white hover:text-white bg-[#a21b7e] hover:bg-[#8e176e] border border-transparent rounded-sm transition-all uppercase tracking-wider cursor-pointer shadow-sm"
           >
             Obter mais espaço
           </a>
-        </div>
-
-        <div className="p-4 bg-gray-50 border-t border-gray-100 shrink-0">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 py-2 text-gray-500 text-xs font-bold hover:text-red-500 hover:bg-red-50 rounded-lg transition-all border border-transparent hover:border-red-100"
-          >
-            <LogOut size={14} />
-            Encerrar Sessão
-          </button>
         </div>
       </aside>
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
@@ -585,30 +731,23 @@ export default function Dashboard() {
               placeholder="Pesquisar arquivos e pastas..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-100 rounded-lg bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all"
+              className="block w-full pl-10 pr-3 py-2 border border-gray-100 rounded-sm bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all"
             />
           </div>
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 bg-[#a21b7e] text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all"
+              onClick={handleLogout}
+              className="flex items-center justify-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer h-9"
             >
-              <Upload size={16} />
-              Carregar
-            </button>
-            <button
-              onClick={handleCreateFolder}
-              className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 transition-all"
-            >
-              <FolderPlus size={16} />
-              Criar nova pasta
+              <LogOut size={16} />
+              Sair
             </button>
           </div>
         </header>
 
         {/* Path & Primary Actions */}
-        <div className="bg-white px-8 py-5 flex items-center justify-between border-b border-gray-100 z-10">
+        <div className="bg-white px-8 py-3 flex items-center justify-between border-b border-gray-100 z-10">
           <div className="flex items-center gap-2 text-sm font-medium">
             {selectedAsset ? (
               <div className="flex items-center gap-4 animate-in fade-in slide-in-from-left-2">
@@ -636,65 +775,68 @@ export default function Dashboard() {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-gray-400 cursor-pointer hover:text-[#a21b7e] transition-colors"
-                  onClick={() => { setSelectedFolderId(null); setActiveTab('all'); }}
-                >
-                  Todos os arquivos
-                </span>
-                {selectedFolderId && activeTab === 'google_drive' && (
-                  <>
-                    <ChevronRight size={14} className="text-gray-300" />
-                    <button
-                      onClick={() => handleGoogleSync()}
-                      className="text-[#a21b7e] font-bold hover:underline"
-                    >
-                      Google Drive (Raiz)
-                    </button>
-                  </>
-                )}
-                {selectedFolderId && activeTab !== 'google_drive' && (
-                  <>
-                    <ChevronRight size={14} className="text-gray-300" />
-                    <span className="text-gray-800 font-bold">
-                      {folders.find(f => f.id === selectedFolderId)?.name}
-                    </span>
-                  </>
-                )}
-                {activeTab !== 'all' && (
-                  <>
-                    <ChevronRight size={14} className="text-gray-300" />
-                    <span className="text-gray-800 font-bold capitalize">
-                      {activeTab === 'image' ? 'Imagens' : activeTab === 'video' ? 'Vídeos' : 'Documentos'}
-                    </span>
-                  </>
-                )}
+              <div className="flex items-center gap-1 text-[10.5px] font-medium uppercase tracking-normal text-gray-400 max-w-full overflow-x-auto whitespace-nowrap no-scrollbar select-none">
+                {getBreadcrumbs().map((item, index, arr) => {
+                  const isLast = index === arr.length - 1;
+                  return (
+                    <React.Fragment key={index}>
+                      {index > 0 && <ChevronRight size={10} className="text-gray-300 mx-0.5 animate-in fade-in shrink-0" />}
+                      {isLast ? (
+                        <span className="text-gray-700 font-semibold shrink-0">
+                          {item.name}
+                        </span>
+                      ) : (
+                        <span
+                          className="hover:text-[#a21b7e] cursor-pointer transition-colors shrink-0"
+                          onClick={() => handleBreadcrumbClick(item)}
+                        >
+                          {item.name}
+                        </span>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </div>
             )}
           </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex bg-gray-50 p-1 rounded-md border border-gray-100">
+                  <div className="flex items-center gap-3">
+            <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100">
               <button
                 onClick={() => setViewMode("grid")}
-                className={cn("p-1.5 rounded transition-all", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
+                className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
               >
                 <Grid size={16} />
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={cn("p-1.5 rounded transition-all", viewMode === "list" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
+                className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "list" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
               >
                 <ListIcon size={16} />
               </button>
             </div>
+
+            <div className="h-5 w-px bg-gray-200 mx-1" />
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center justify-center gap-2 bg-[#a21b7e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer h-9"
+            >
+              <Upload size={16} />
+              Carregar
+            </button>
+            <button
+              onClick={handleCreateFolder}
+              className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-gray-50 transition-all cursor-pointer h-9"
+            >
+              <FolderPlus size={16} />
+              Criar nova pasta
+            </button>
           </div>
         </div>
 
         {/* Files Area */}
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50">
-          {filteredAssets.length === 0 && folders.filter(f => f.parentId === selectedFolderId).length === 0 ? (
+          {filteredAssets.length === 0 && filteredFolders.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center p-20 text-center">
               <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
                 <Search size={48} className="text-gray-100" />
@@ -709,11 +851,11 @@ export default function Dashboard() {
               {viewMode === "grid" ? (
                 <div className="p-8 flex flex-col gap-8 bg-gray-50 min-h-full w-full">
                   {/* Grid de Pastas */}
-                  {(activeTab === 'all' || activeTab === 'google_drive') && folders.filter(f => f.parentId === selectedFolderId).length > 0 && (
+                  {(activeTab === 'all' || activeTab === 'google_drive') && filteredFolders.length > 0 && (
                     <div className="w-full flex flex-col gap-3">
                       <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Pastas</h4>
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
-                        {folders.filter(f => f.parentId === selectedFolderId).map(folder => (
+                        {filteredFolders.map(folder => (
                           <div
                             key={folder.id}
                             onClick={() => {
@@ -726,20 +868,22 @@ export default function Dashboard() {
                             className="flex items-center justify-between p-4 bg-white border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group shadow-sm relative overflow-visible rounded-lg"
                           >
                             <div className="flex items-center gap-3 truncate">
-                              <FolderIcon size={20} className="text-yellow-500 fill-yellow-500/10 shrink-0" />
+                              <FolderIcon size={20} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} className="shrink-0 animate-in fade-in" />
                               <span className="text-xs font-bold text-gray-700 truncate uppercase">{folder.name}</span>
                             </div>
                             
                             <div className="relative overflow-visible">
-                              <button 
+                              <motion.button 
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
                                 }}
-                                className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-50 transition-colors"
+                                whileHover={{ scale: 1.25 }}
+                                whileTap={{ scale: 0.95 }}
+                                className="text-gray-400 hover:text-gray-600 p-1 transition-colors cursor-pointer"
                               >
                                 <MoreVertical size={16} />
-                              </button>
+                              </motion.button>
 
                               <AnimatePresence>
                                 {activeFolderMenuId === folder.id && (
@@ -819,20 +963,37 @@ export default function Dashboard() {
                                         <ChevronRight size={14} className="text-gray-400" />
                                       </button>
 
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          alert("Informações da pasta: " + folder.name);
-                                          setActiveFolderMenuId(null);
-                                        }}
-                                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
-                                      >
-                                        <div className="flex items-center gap-2.5">
-                                          <BarChart3 size={14} className="text-gray-400" />
-                                          <span>Informações da pasta</span>
+                                      <div className="px-3 py-2">
+                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
+                                        <div className="flex gap-1.5 items-center">
+                                          {[
+                                            "#e2b13c", // Padrão Gold
+                                            "#a21b7e", // Vinho Provisual
+                                            "#3b82f6", // Azul
+                                            "#10b981", // Verde
+                                            "#ef4444", // Vermelho
+                                            "#8b5cf6", // Roxo
+                                          ].map((color) => (
+                                            <button
+                                              key={color}
+                                              onClick={async (e) => {
+                                                e.stopPropagation();
+                                                try {
+                                                  await updateDoc(doc(db, "folders", folder.id), { color });
+                                                } catch (err) {
+                                                  console.error("Erro ao mudar cor da pasta:", err);
+                                                }
+                                                setActiveFolderMenuId(null);
+                                              }}
+                                              style={{ backgroundColor: color }}
+                                              className={cn(
+                                                "w-4 h-4 rounded-full border border-gray-100 hover:scale-125 transition-all cursor-pointer",
+                                                (folder.color || "#e2b13c") === color ? "border-gray-800 scale-110 shadow-sm" : "border-transparent"
+                                              )}
+                                            />
+                                          ))}
                                         </div>
-                                        <ChevronRight size={14} className="text-gray-400" />
-                                      </button>
+                                      </div>
 
                                       <div className="my-1 border-t border-gray-100" />
 
@@ -864,7 +1025,7 @@ export default function Dashboard() {
                   )}
 
                   {/* Grid de Arquivos / Fotos */}
-                  {(activeTab !== 'all' || activeTab === 'google_drive') && filteredAssets.length > 0 && (
+                  {filteredAssets.length > 0 && (
                     <div className="w-full flex flex-col gap-3">
                       <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Arquivos</h4>
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
@@ -904,7 +1065,7 @@ export default function Dashboard() {
                   </div>
 
                   {/* Folders in List - Only show in 'All Files' or 'Google Drive' view */}
-                  {(activeTab === 'all' || activeTab === 'google_drive') && folders.filter(f => f.parentId === selectedFolderId).map(folder => (
+                  {(activeTab === 'all' || activeTab === 'google_drive') && filteredFolders.map(folder => (
                     <div
                       key={folder.id}
                       onClick={() => {
@@ -914,17 +1075,182 @@ export default function Dashboard() {
                           setSelectedFolderId(folder.id);
                         }
                       }}
-                      className="grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all"
+                      className="grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible"
                     >
                       <div className="col-span-6 flex items-center gap-4">
-                        <FolderIcon size={24} className="text-yellow-400" />
+                        <FolderIcon size={24} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} />
                         <span className="text-sm font-bold text-gray-700">{folder.name}</span>
                       </div>
                       <div className="col-span-2 text-[10px] font-black text-gray-300 uppercase">Pasta</div>
                       <div className="col-span-2 text-xs text-gray-400 font-medium">
                         {format(folder.date, "dd/MM/yyyy")}
                       </div>
-                      <div className="col-span-2 text-right pr-4 text-xs text-gray-300">-</div>
+                      <div className="col-span-2 text-right pr-4 text-xs text-gray-300 flex items-center justify-end gap-3 relative overflow-visible">
+                        <span>-</span>
+                        <div className="relative overflow-visible">
+                          <motion.button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
+                            }}
+                            whileHover={{ scale: 1.25 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="text-gray-400 hover:text-gray-600 p-1 transition-colors cursor-pointer"
+                          >
+                            <MoreVertical size={16} />
+                          </motion.button>
+
+                          <AnimatePresence>
+                            {activeFolderMenuId === folder.id && (
+                              <>
+                                <div 
+                                  className="fixed inset-0 z-30" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveFolderMenuId(null);
+                                  }}
+                                />
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                  transition={{ duration: 0.1 }}
+                                  className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-40 p-1.5 text-left text-gray-700 font-sans cursor-default"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      alert("Descarregando a pasta: " + folder.name);
+                                      setActiveFolderMenuId(null);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                  >
+                                    <Download size={14} className="text-gray-400" />
+                                    <span>Transferir</span>
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const newName = prompt("Digite o novo nome para " + folder.name);
+                                      if (newName) {
+                                        updateDoc(doc(db, "folders", folder.id), { name: newName });
+                                      }
+                                      setActiveFolderMenuId(null);
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <FileText size={14} className="text-gray-400" />
+                                      <span>Mudar nome</span>
+                                    </div>
+                                    <span className="text-[9px] text-gray-400 font-medium">⌥⌘E</span>
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      alert("Abrindo partilha para " + folder.name);
+                                      setActiveFolderMenuId(null);
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <Users size={14} className="text-gray-400" />
+                                      <span>Partilhar</span>
+                                    </div>
+                                    <ChevronRight size={14} className="text-gray-400" />
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      alert("Organizando pasta " + folder.name);
+                                      setActiveFolderMenuId(null);
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <FolderIcon size={14} className="text-gray-400" />
+                                      <span>Organizar</span>
+                                    </div>
+                                    <ChevronRight size={14} className="text-gray-400" />
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      alert("Informações da pasta: " + folder.name);
+                                      setActiveFolderMenuId(null);
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <BarChart3 size={14} className="text-gray-400" />
+                                      <span>Informações da pasta</span>
+                                    </div>
+                                    <ChevronRight size={14} className="text-gray-400" />
+                                  </button>
+
+                                  <div className="my-1 border-t border-gray-100" />
+
+                                  <div className="px-3 py-2">
+                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
+                                    <div className="flex gap-1.5 items-center">
+                                      {[
+                                        "#e2b13c", // Padrão Gold
+                                        "#a21b7e", // Vinho Provisual
+                                        "#3b82f6", // Azul
+                                        "#10b981", // Verde
+                                        "#ef4444", // Vermelho
+                                        "#8b5cf6", // Roxo
+                                      ].map((color) => (
+                                        <button
+                                          key={color}
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            try {
+                                              await updateDoc(doc(db, "folders", folder.id), { color });
+                                            } catch (err) {
+                                              console.error("Erro ao mudar cor da pasta:", err);
+                                            }
+                                            setActiveFolderMenuId(null);
+                                          }}
+                                          style={{ backgroundColor: color }}
+                                          className={cn(
+                                            "w-4 h-4 rounded-full border border-gray-100 hover:scale-125 transition-all cursor-pointer",
+                                            (folder.color || "#e2b13c") === color ? "border-gray-800 scale-110 shadow-sm" : "border-transparent"
+                                          )}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <div className="my-1 border-t border-gray-100" />
+
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (confirm("Tem certeza que deseja mover " + folder.name + " para o lixo?")) {
+                                        await updateDoc(doc(db, "folders", folder.id), { parentId: "trash" });
+                                      }
+                                      setActiveFolderMenuId(null);
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-all text-left"
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <Trash2 size={14} className="text-red-400" />
+                                      <span>Mover para o lixo</span>
+                                    </div>
+                                    <span className="text-[9px] text-red-400 font-medium">Delete</span>
+                                  </button>
+                                </motion.div>
+                              </>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
                     </div>
                   ))}
 
@@ -1094,16 +1420,16 @@ function SidebarItem({ icon, label, active, onClick }: SidebarItemProps) {
     <button
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-[16px] font-bold transition-all relative",
+        "w-full flex items-center gap-3 px-3 py-1.5 rounded-sm text-[16px] font-bold transition-all relative cursor-pointer",
         active
-          ? "bg-[#a21b7e]/5 text-[#a21b7e]"
-          : "text-gray-500 hover:bg-gray-50 hover:text-[#a21b7e]"
+          ? "text-[#a21b7e]"
+          : "text-gray-500 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e]"
       )}
     >
       <span className={cn("transition-colors", active ? "text-[#a21b7e]" : "text-gray-400")}>{icon}</span>
       <span className="tracking-tight">{label}</span>
       {active && (
-        <div className="absolute right-3 w-1 h-1 rounded-full bg-[#a21b7e]" />
+        <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-[#a21b7e]" />
       )}
     </button>
   );
@@ -1151,7 +1477,7 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
       onClick={onSelect}
       onDoubleClick={onPreview}
       className={cn(
-        "aspect-[3/2] relative border transition-all cursor-pointer overflow-hidden group rounded-lg shadow-sm",
+        "aspect-[3/2] relative border transition-all cursor-pointer overflow-hidden group rounded-none shadow-sm",
         isSelected
           ? "border-[#a21b7e] ring-2 ring-[#a21b7e]/10 shadow-lg"
           : "border-gray-100 hover:border-gray-300"
@@ -1159,15 +1485,17 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
     >
       {/* 3 dots button over the image in the upper right corner */}
       <div className="absolute top-2 right-2 z-20">
-        <button 
+        <motion.button 
           onClick={(e) => {
             e.stopPropagation();
             setShowMenu(!showMenu);
           }}
-          className="text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] hover:text-[#a21b7e] transition-all p-1.5 rounded-full hover:bg-white/20 backdrop-blur-[1px]"
+          whileHover={{ scale: 1.25 }}
+          whileTap={{ scale: 0.95 }}
+          className="text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] hover:text-white transition-colors p-1.5 rounded-full cursor-pointer"
         >
           <MoreVertical size={18} />
-        </button>
+        </motion.button>
 
         <AnimatePresence>
           {showMenu && (
@@ -1203,8 +1531,23 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    const url = asset.versions[0]?.url || asset.webViewLink;
-                    if (url) window.open(url, '_blank');
+                    let url = asset.versions[0]?.url || asset.webViewLink;
+                    if (url) {
+                      if (url.includes('drive.google.com')) {
+                        const matchId = url.match(/id=([^&]+)/) || url.match(/\/file\/d\/([^/]+)/);
+                        const fileId = matchId ? matchId[1] : asset.driveId;
+                        if (fileId) {
+                          url = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                        }
+                      }
+                      
+                      // Trigger direct download via hidden iframe (no new tab, no Google Drive favicon shown)
+                      const iframe = document.createElement('iframe');
+                      iframe.style.display = 'none';
+                      iframe.src = url;
+                      document.body.appendChild(iframe);
+                      setTimeout(() => document.body.removeChild(iframe), 3000);
+                    }
                     setShowMenu(false);
                   }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
@@ -1307,7 +1650,7 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
       </div>
 
       {/* Hover Overlay - Descrição ao passar o mouse */}
-      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/95 via-black/80 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-10">
+      <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-10">
         <h4 className="font-bold text-[11px] text-white truncate mb-0.5">{asset.name}</h4>
         <div className="flex items-center justify-between">
           <span className="text-[9px] font-bold text-gray-300 uppercase">{format(asset.captureDate, "dd/MM/yy")}</span>
@@ -1327,6 +1670,7 @@ interface AssetRowProps {
 }
 
 function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
+  const [showMenu, setShowMenu] = useState(false);
   const Icon = asset.type === "folder" ? FolderIcon : (asset.type === "image" ? ImageIcon : (asset.type === "video" ? Video : FileText));
   const iconColor = asset.type === "folder" ? "text-yellow-400" : (asset.type === "image" ? "text-blue-500" : (asset.type === "video" ? "text-purple-500" : "text-orange-500"));
 
@@ -1335,13 +1679,13 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
       onClick={onSelect}
       onDoubleClick={onPreview}
       className={cn(
-        "grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all",
+        "grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible",
         isSelected && "bg-[#a21b7e]/5 hover:bg-[#a21b7e]/10 border-[#a21b7e]/10"
       )}
     >
       <div className="col-span-6 flex items-center gap-4">
         {(asset.thumbnailUrl || asset.driveId) && asset.type !== 'folder' ? (
-          <div className="w-8 h-8 overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-100">
+          <div className="w-8 h-8 overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-100 rounded-none">
             <img
               src={asset.thumbnailUrl || `https://drive.google.com/thumbnail?id=${asset.driveId}&sz=w100`}
               alt=""
@@ -1357,8 +1701,160 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
       <div className="col-span-2 text-xs text-gray-400 font-medium">
         {format(asset.captureDate, "dd/MM/yyyy")}
       </div>
-      <div className="col-span-2 text-right pr-4 text-xs text-gray-500 font-mono">
-        {asset.versions[0]?.size || "0 MB"}
+      <div className="col-span-2 text-right pr-4 text-xs text-gray-500 font-mono flex items-center justify-end gap-3 relative overflow-visible">
+        <span>{asset.versions[0]?.size || "0 MB"}</span>
+        
+        <div className="relative overflow-visible">
+          <motion.button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+            whileHover={{ scale: 1.25 }}
+            whileTap={{ scale: 0.95 }}
+            className="text-gray-400 hover:text-gray-600 p-1 transition-colors cursor-pointer"
+          >
+            <MoreVertical size={16} />
+          </motion.button>
+
+          <AnimatePresence>
+            {showMenu && (
+              <>
+                <div 
+                  className="fixed inset-0 z-30" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(false);
+                  }}
+                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-40 p-1.5 text-left text-gray-700 font-sans cursor-default"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPreview();
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  >
+                    <LayoutGrid size={14} className="text-gray-400" />
+                    <span>Visualizar</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      let url = asset.versions[0]?.url || asset.webViewLink;
+                      if (url) {
+                        if (url.includes('drive.google.com')) {
+                          const matchId = url.match(/id=([^&]+)/) || url.match(/\/file\/d\/([^/]+)/);
+                          const fileId = matchId ? matchId[1] : asset.driveId;
+                          if (fileId) {
+                            url = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                          }
+                        }
+                        
+                        // Trigger direct download via hidden iframe (no new tab, no Google Drive favicon shown)
+                        const iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        iframe.src = url;
+                        document.body.appendChild(iframe);
+                        setTimeout(() => document.body.removeChild(iframe), 3000);
+                      }
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  >
+                    <Download size={14} className="text-gray-400" />
+                    <span>Transferir</span>
+                  </button>
+
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const newName = prompt("Digite o novo nome para o arquivo:", asset.name);
+                      if (newName) {
+                        try {
+                          await updateDoc(doc(db, "assets", asset.id), { name: newName });
+                        } catch (error) {
+                          console.error("Erro ao renomear arquivo:", error);
+                        }
+                      }
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <FileText size={14} className="text-gray-400" />
+                      <span>Mudar nome</span>
+                    </div>
+                    <span className="text-[9px] text-gray-400 font-medium">⌥⌘E</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      alert("Link de partilha copiado para a área de transferência!");
+                      navigator.clipboard.writeText(asset.versions[0]?.url || asset.webViewLink || "");
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Users size={14} className="text-gray-400" />
+                      <span>Partilhar</span>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-400" />
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      alert("Detalhes do Arquivo:\nNome: " + asset.name + "\nTamanho: " + (asset.versions[0]?.size || "0 MB") + "\nTipo: " + asset.type);
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <BarChart3 size={14} className="text-gray-400" />
+                      <span>Informações</span>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-400" />
+                  </button>
+
+                  <div className="my-1 border-t border-gray-100" />
+
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (confirm("Tem certeza que deseja mover " + asset.name + " para o lixo?")) {
+                        try {
+                          await updateDoc(doc(db, "assets", asset.id), { folderId: "trash" });
+                        } catch (error) {
+                          console.error("Erro ao mover arquivo para o lixo:", error);
+                        }
+                      }
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Trash2 size={14} className="text-red-400" />
+                      <span>Mover para o lixo</span>
+                    </div>
+                    <span className="text-[9px] text-red-400 font-medium">Delete</span>
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );
