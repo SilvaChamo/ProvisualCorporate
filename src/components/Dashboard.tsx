@@ -708,7 +708,7 @@ export default function Dashboard() {
               {viewMode === "grid" ? (
                 <div className="p-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 bg-gray-50 min-h-full items-start">
                   {/* 1. PASTAS PRIMEIRO (Estilo Light com Opções) */}
-                  {activeTab === 'all' && folders.filter(f => f.parentId === selectedFolderId).map(folder => (
+                  {(activeTab === 'all' || activeTab === 'google_drive') && folders.filter(f => f.parentId === selectedFolderId).map(folder => (
                     <div
                       key={folder.id}
                       onClick={() => {
@@ -730,8 +730,8 @@ export default function Dashboard() {
                     </div>
                   ))}
 
-                  {/* 2. ARQUIVOS DEPOIS (Mostrar apenas nas outras abas, não em 'todos os arquivos') */}
-                  {activeTab !== 'all' && filteredAssets.map(asset => (
+                  {/* 2. ARQUIVOS DEPOIS (Mostrar apenas nas outras abas, não em 'todos os arquivos', exceto no google_drive) */}
+                  {(activeTab !== 'all' || activeTab === 'google_drive') && filteredAssets.map(asset => (
                     <AssetCard
                       key={asset.id}
                       asset={asset}
@@ -763,8 +763,8 @@ export default function Dashboard() {
                     <div className="col-span-2 text-right pr-4">Tamanho</div>
                   </div>
 
-                  {/* Folders in List - Only show in 'All Files' view */}
-                  {activeTab === 'all' && folders.filter(f => f.parentId === selectedFolderId).map(folder => (
+                  {/* Folders in List - Only show in 'All Files' or 'Google Drive' view */}
+                  {(activeTab === 'all' || activeTab === 'google_drive') && folders.filter(f => f.parentId === selectedFolderId).map(folder => (
                     <div
                       key={folder.id}
                       onClick={() => {
