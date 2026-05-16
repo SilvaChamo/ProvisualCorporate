@@ -5,6 +5,7 @@ import { cn } from "../lib/utils";
 import { auth, db } from "../lib/firebase";
 import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import logoJpg from "../Logo/Logo.jpg";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -94,7 +95,12 @@ export default function Login() {
   return (
     <div className="flex min-h-screen font-sans bg-white">
       {/* Left side - Branding Section */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#a21b7e] flex-col items-center justify-center text-white px-12 relative">
+      <div className="hidden lg:flex lg:w-1/2 bg-[#a21b7e] flex-col items-center justify-center text-white px-12 relative overflow-hidden">
+        {/* Real Logo in the top-left corner with black background removed by mix-blend-screen */}
+        <div className="absolute top-8 left-8 flex items-center gap-3">
+          <img src={logoJpg} alt="ProVisual Logo" className="h-10 w-auto object-contain mix-blend-screen" />
+          <span className="text-lg font-bold text-white/95 tracking-wider">ProVisual</span>
+        </div>
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}

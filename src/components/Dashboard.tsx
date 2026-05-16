@@ -38,6 +38,7 @@ import { signOut } from "firebase/auth";
 import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useRef } from "react";
+import logoHorizontal from "../Logo/Logo horizontal.png";
 
 // Types
 interface AssetVersion {
@@ -467,9 +468,8 @@ export default function Dashboard() {
       <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
       <aside className="w-60 bg-white border-r border-gray-100 flex flex-col shrink-0">
         <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 bg-[#a21b7e] flex items-center justify-center text-white font-bold shadow-md shadow-[#a21b7e]/20">P</div>
-            <span className="text-lg font-bold text-gray-800 tracking-tight">ProVisual</span>
+          <div className="flex items-center gap-2 mb-6 mt-1 px-1">
+            <img src={logoHorizontal} alt="ProVisual" className="h-10 w-auto object-contain" />
           </div>
 
           <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1 px-2">Navegação</h3>
