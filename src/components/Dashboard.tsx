@@ -39,7 +39,7 @@ import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, s
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useRef } from "react";
 import logoHorizontal from "../Logo/Logo horizontal.png";
-
+import logoJpg from "../Logo/Logo.jpg";
 // Types
 interface AssetVersion {
   quality: "low" | "high" | "original";
@@ -501,7 +501,7 @@ export default function Dashboard() {
 
             <div className="my-4 border-t border-gray-100 mx-2" />
             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 px-2 flex items-center gap-2">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-5 h-5 shrink-0" />
+              <img src={logoJpg} className="w-5 h-5 shrink-0 object-contain mix-blend-screen" />
               <span>Google Drive</span>
             </h3>
 
@@ -589,21 +589,21 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex bg-gray-50 p-1 rounded-md border border-gray-100">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={cn("p-1.5 rounded transition-all", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
-              >
-                <Grid size={16} />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={cn("p-1.5 rounded transition-all", viewMode === "list" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
-              >
-                <ListIcon size={16} />
-              </button>
-            </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 bg-[#a21b7e] text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all"
+            >
+              <Upload size={16} />
+              Carregar
+            </button>
+            <button
+              onClick={handleCreateFolder}
+              className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 transition-all"
+            >
+              <FolderPlus size={16} />
+              Criar nova pasta
+            </button>
           </div>
         </header>
 
@@ -674,21 +674,21 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 bg-[#a21b7e] text-white px-5 py-2.5 rounded-[5px] text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all"
-            >
-              <Upload size={16} />
-              Carregar
-            </button>
-            <button
-              onClick={handleCreateFolder}
-              className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-[5px] text-sm font-bold shadow-sm hover:bg-gray-50 transition-all"
-            >
-              <FolderPlus size={16} />
-              Criar nova pasta
-            </button>
+          <div className="flex items-center gap-4">
+            <div className="flex bg-gray-50 p-1 rounded-md border border-gray-100">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={cn("p-1.5 rounded transition-all", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
+              >
+                <Grid size={16} />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={cn("p-1.5 rounded transition-all", viewMode === "list" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
+              >
+                <ListIcon size={16} />
+              </button>
+            </div>
           </div>
         </div>
 
