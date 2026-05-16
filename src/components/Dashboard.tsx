@@ -500,37 +500,37 @@ export default function Dashboard() {
             />
 
             <div className="my-4 border-t border-gray-100 mx-2" />
-            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1 px-2 flex items-center gap-1.5">
-              <div className="w-4 h-4 flex items-center justify-center"><img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-3 h-3" /></div>
-              Google Drive
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 px-2 flex items-center gap-2">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-5 h-5 shrink-0" />
+              <span>Google Drive</span>
             </h3>
 
             <SidebarItem
-              icon={<HardDrive size={18} />}
+              icon={<HardDrive size={20} />}
               label="Meu Drive"
               active={activeTab === 'google_drive' && driveFilterType === null}
               onClick={() => handleGoogleSync('root')}
             />
             <SidebarItem
-              icon={<Users size={18} />}
+              icon={<Users size={20} />}
               label="Partilhados Comigo"
               active={activeTab === 'google_drive' && driveFilterType === 'sharedWithMe'}
               onClick={() => handleGoogleSync(undefined, 'sharedWithMe')}
             />
             <SidebarItem
-              icon={<Clock size={18} />}
+              icon={<Clock size={20} />}
               label="Recentes"
               active={activeTab === 'google_drive' && driveFilterType === 'recent'}
               onClick={() => handleGoogleSync(undefined, 'recent')}
             />
             <SidebarItem
-              icon={<Star size={18} />}
+              icon={<Star size={20} />}
               label="Com Estrela"
               active={activeTab === 'google_drive' && driveFilterType === 'starred'}
               onClick={() => handleGoogleSync(undefined, 'starred')}
             />
             <SidebarItem
-              icon={<Trash2 size={18} />}
+              icon={<Trash2 size={20} />}
               label="Lixo"
               active={activeTab === 'google_drive' && driveFilterType === 'trashed'}
               onClick={() => handleGoogleSync(undefined, 'trashed')}
