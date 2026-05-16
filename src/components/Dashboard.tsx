@@ -35,7 +35,7 @@ import { cn, handleFirestoreError, OperationType } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { auth, db, storage } from "../lib/firebase";
 import { signOut } from "firebase/auth";
-import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useRef } from "react";
 
@@ -402,6 +402,34 @@ export default function Dashboard() {
       }
     };
     fetchStorage();
+
+    // Sincronização silenciosa automática das pastas raiz do Google Drive ao iniciar
+    const syncRootFolders = async () => {
+      try {
+        const response = await fetch('/api/drive/list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderId: 'root' })
+        });
+        if (response.ok) {
+          const driveFiles = await response.json();
+          for (const file of driveFiles) {
+            const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+            if (isFolder) {
+              await setDoc(doc(db, "folders", file.id), {
+                name: file.name,
+                date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
+                ownerId: "google-drive",
+                parentId: null
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Erro na sincronização silenciosa inicial de pastas:", error);
+      }
+    };
+    syncRootFolders();
   }, []);
 
   const filteredAssets = useMemo(() => {
@@ -683,7 +711,13 @@ export default function Dashboard() {
                   {activeTab === 'all' && folders.filter(f => f.parentId === selectedFolderId).map(folder => (
                     <div
                       key={folder.id}
-                      onClick={() => setSelectedFolderId(folder.id)}
+                      onClick={() => {
+                        if ((folder as any).ownerId === 'google-drive') {
+                          handleGoogleSync(folder.id);
+                        } else {
+                          setSelectedFolderId(folder.id);
+                        }
+                      }}
                       className="flex items-center justify-between p-4 bg-white border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group shadow-sm"
                     >
                       <div className="flex items-center gap-3 truncate">
@@ -705,7 +739,6 @@ export default function Dashboard() {
                         if (asset.type === 'folder') {
                           handleGoogleSync(asset.driveId || asset.id);
                         } else {
-                          setSelectedAsset(asset);
                           setPreviewAsset(asset);
                         }
                       }}
@@ -734,7 +767,13 @@ export default function Dashboard() {
                   {activeTab === 'all' && folders.filter(f => f.parentId === selectedFolderId).map(folder => (
                     <div
                       key={folder.id}
-                      onClick={() => setSelectedFolderId(folder.id)}
+                      onClick={() => {
+                        if ((folder as any).ownerId === 'google-drive') {
+                          handleGoogleSync(folder.id);
+                        } else {
+                          setSelectedFolderId(folder.id);
+                        }
+                      }}
                       className="grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all"
                     >
                       <div className="col-span-6 flex items-center gap-4">
@@ -758,7 +797,6 @@ export default function Dashboard() {
                         if (asset.type === 'folder') {
                           handleGoogleSync(asset.driveId || asset.id);
                         } else {
-                          setSelectedAsset(asset);
                           setPreviewAsset(asset); // Abrir visualização no clique simples
                         }
                       }}
