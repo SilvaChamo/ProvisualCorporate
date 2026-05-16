@@ -38,12 +38,11 @@ async function startServer() {
   const { Readable } = require("stream");
 
   app.post("/api/drive/list", async (req, res) => {
-    const { folderId } = req.body;
-    if (!folderId) return res.status(400).json({ error: "Folder ID is required" });
+    const { folderId, filterType } = req.body;
 
     try {
       console.log('--- Listando Pasta do Drive ---');
-      console.log('ID Solicitado:', folderId);
+      console.log('ID Solicitado:', folderId, 'Filtro:', filterType);
       const { google } = require("googleapis");
       let keys;
       if (process.env.GOOGLE_KEYS) {
@@ -56,14 +55,53 @@ async function startServer() {
       auth.scopes = ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'];
 
       const drive = google.drive({ version: 'v3', auth });
+
+      let queryStr = `'${folderId || 'root'}' in parents and trashed = false`;
+      let orderByStr = 'folder,name,createdTime';
+
+      if (filterType === 'sharedWithMe') {
+        queryStr = `sharedWithMe = true and trashed = false`;
+      } else if (filterType === 'starred') {
+        queryStr = `starred = true and trashed = false`;
+      } else if (filterType === 'recent') {
+        queryStr = `trashed = false`;
+        orderByStr = 'modifiedTime desc';
+      } else if (filterType === 'trashed') {
+        queryStr = `trashed = true`;
+      }
+
       const response = await drive.files.list({
-        q: `'${folderId}' in parents and trashed = false`,
+        q: queryStr,
+        orderBy: orderByStr,
         fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime)',
+        pageSize: 100
       });
 
       res.json(response.data.files);
     } catch (error: any) {
       console.error("Google Drive Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/drive/storage", async (req, res) => {
+    try {
+      const { google } = require("googleapis");
+      let keys;
+      if (process.env.GOOGLE_KEYS) {
+        keys = JSON.parse(process.env.GOOGLE_KEYS);
+      } else {
+        keys = require("./provisual-corporate-a16cee3d2250.json");
+      }
+      const auth = google.auth.fromJSON(keys);
+      auth.scopes = ['https://www.googleapis.com/auth/drive.readonly'];
+      const drive = google.drive({ version: 'v3', auth });
+      const response = await drive.about.get({
+        fields: 'storageQuota'
+      });
+      res.json(response.data.storageQuota);
+    } catch (error: any) {
+      console.error("Storage Info Error:", error);
       res.status(500).json({ error: error.message });
     }
   });

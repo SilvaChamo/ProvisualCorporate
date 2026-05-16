@@ -29,17 +29,46 @@ const getGoogleAuth = () => {
 
 // Rotas da API
 app.post("/api/drive/list", async (req, res) => {
-  const { folderId } = req.body;
-  if (!folderId) return res.status(400).json({ error: "Folder ID is required" });
+  const { folderId, filterType } = req.body;
 
   try {
     const auth = getGoogleAuth();
     const drive = google.drive({ version: 'v3', auth });
+
+    let queryStr = `'${folderId || 'root'}' in parents and trashed = false`;
+    let orderByStr = 'folder,name,createdTime';
+
+    if (filterType === 'sharedWithMe') {
+      queryStr = `sharedWithMe = true and trashed = false`;
+    } else if (filterType === 'starred') {
+      queryStr = `starred = true and trashed = false`;
+    } else if (filterType === 'recent') {
+      queryStr = `trashed = false`;
+      orderByStr = 'modifiedTime desc';
+    } else if (filterType === 'trashed') {
+      queryStr = `trashed = true`;
+    }
+
     const response = await drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
+      q: queryStr,
+      orderBy: orderByStr,
       fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime)',
+      pageSize: 100
     });
     res.json(response.data.files);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/drive/storage", async (req, res) => {
+  try {
+    const auth = getGoogleAuth();
+    const drive = google.drive({ version: 'v3', auth });
+    const response = await drive.about.get({
+      fields: 'storageQuota'
+    });
+    res.json(response.data.storageQuota);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

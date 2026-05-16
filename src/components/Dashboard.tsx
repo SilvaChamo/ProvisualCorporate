@@ -24,7 +24,10 @@ import {
   Upload,
   FileUp,
   FolderUp,
-  ChevronDown
+  ChevronDown,
+  Users,
+  Star,
+  Cloud
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -140,6 +143,8 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
+  const [driveFilterType, setDriveFilterType] = useState<string | null>(null);
+  const [storageQuota, setStorageQuota] = useState<{ limit: string; usage: string } | null>(null);
 
   // Grelha de 5 colunas como padrão para tudo
   useEffect(() => {
@@ -251,10 +256,11 @@ export default function Dashboard() {
     }
   };
 
-  const handleGoogleSync = async (targetFolderId?: string) => {
-    const folderId = targetFolderId || '1RqKUJs3NsX8glAqnQmKQPf5Pm_0BuZlp';
+  const handleGoogleSync = async (targetFolderId?: string, filterType?: string) => {
+    const folderId = targetFolderId || 'root';
     setActiveTab('google_drive');
-    setSelectedFolderId(folderId);
+    setDriveFilterType(filterType || null);
+    setSelectedFolderId(folderId === 'root' ? null : folderId);
     setIsUploading(true);
     setUploadProgress(10);
 
@@ -262,7 +268,7 @@ export default function Dashboard() {
       const response = await fetch('/api/drive/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderId })
+        body: JSON.stringify({ folderId, filterType })
       });
 
       if (!response.ok) {
@@ -282,6 +288,16 @@ export default function Dashboard() {
         const fileType = isFolder ? 'folder' : (file.mimeType.includes('image') || isRaw ? 'image' : (file.mimeType.includes('video') ? 'video' : 'document'));
         const fileSize = file.size ? `${(parseInt(file.size) / 1024 / 1024).toFixed(1)} MB` : (isFolder ? '-' : '0 MB');
 
+        if (isFolder) {
+          // Salvar pasta no Firestore com o mesmo ID do Drive
+          await setDoc(doc(db, "folders", file.id), {
+            name: file.name,
+            date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
+            ownerId: "google-drive",
+            parentId: folderId === 'root' ? null : folderId
+          });
+        }
+
         const existing = assets.find(a => a.driveId === file.id || (a.name === file.name && a.folderId === folderId));
         const assetData = {
           name: file.name,
@@ -291,7 +307,7 @@ export default function Dashboard() {
           folderId: folderId,
           ownerId: "google-drive",
           driveId: file.id,
-          thumbnailUrl: file.thumbnailLink || "", // Salvar miniatura do Drive (ou vazio)
+          thumbnailUrl: file.thumbnailLink || "",
           versions: [{
             quality: "original",
             size: fileSize,
@@ -299,10 +315,12 @@ export default function Dashboard() {
           }]
         };
 
-        if (existing) {
-          await updateDoc(doc(db, "assets", existing.id), assetData);
-        } else {
-          await addDoc(collection(db, "assets"), assetData);
+        if (!isFolder) {
+          if (existing) {
+            await updateDoc(doc(db, "assets", existing.id), assetData);
+          } else {
+            await addDoc(collection(db, "assets"), assetData);
+          }
         }
       }
 
@@ -371,6 +389,21 @@ export default function Dashboard() {
     console.log("Tentando conectar ao bucket:", storage.app.options.storageBucket);
   }, []);
 
+  useEffect(() => {
+    const fetchStorage = async () => {
+      try {
+        const res = await fetch('/api/drive/storage');
+        if (res.ok) {
+          const data = await res.json();
+          setStorageQuota(data);
+        }
+      } catch (e) {
+        console.error("Storage fetch error:", e);
+      }
+    };
+    fetchStorage();
+  }, []);
+
   const filteredAssets = useMemo(() => {
     let result = assets;
     if (selectedFolderId) {
@@ -388,11 +421,23 @@ export default function Dashboard() {
     return result;
   }, [selectedFolderId, activeTab, searchQuery, assets]);
 
+  const storageInfo = useMemo(() => {
+    if (!storageQuota) {
+      return { limit: "100.00 GB", usage: "57.63 GB", percent: 57 };
+    }
+    const limit = parseInt(storageQuota.limit);
+    const usage = parseInt(storageQuota.usage);
+    const limitGB = (limit / 1024 / 1024 / 1024).toFixed(2);
+    const usageGB = (usage / 1024 / 1024 / 1024).toFixed(2);
+    const percent = Math.min(100, Math.round((usage / limit) * 100));
+    return { limit: `${limitGB} GB`, usage: `${usageGB} GB`, percent };
+  }, [storageQuota]);
+
   return (
     <div className="flex h-screen bg-[#fafafa] text-gray-800 font-sans overflow-hidden">
       <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
       <aside className="w-60 bg-white border-r border-gray-100 flex flex-col shrink-0">
-        <div className="p-4">
+        <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 bg-[#a21b7e] flex items-center justify-center text-white font-bold shadow-md shadow-[#a21b7e]/20">P</div>
             <span className="text-lg font-bold text-gray-800 tracking-tight">ProVisual</span>
@@ -404,38 +449,92 @@ export default function Dashboard() {
               icon={<LayoutGrid size={20} />}
               label="Todos Arquivos"
               active={activeTab === 'all'}
-              onClick={() => { setActiveTab('all'); setSelectedFolderId(null); }}
+              onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); }}
             />
             <SidebarItem
               icon={<ImageIcon size={20} />}
               label="Imagens"
               active={activeTab === 'image'}
-              onClick={() => { setActiveTab('image'); setSelectedFolderId(null); }}
+              onClick={() => { setActiveTab('image'); setSelectedFolderId(null); setDriveFilterType(null); }}
             />
             <SidebarItem
               icon={<Video size={20} />}
               label="Vídeos"
               active={activeTab === 'video'}
-              onClick={() => { setActiveTab('video'); setSelectedFolderId(null); }}
+              onClick={() => { setActiveTab('video'); setSelectedFolderId(null); setDriveFilterType(null); }}
             />
             <SidebarItem
               icon={<FileText size={20} />}
               label="Documentos"
               active={activeTab === 'document'}
-              onClick={() => { setActiveTab('document'); setSelectedFolderId(null); }}
+              onClick={() => { setActiveTab('document'); setSelectedFolderId(null); setDriveFilterType(null); }}
             />
+
             <div className="my-4 border-t border-gray-100 mx-2" />
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1 px-2 flex items-center gap-1.5">
+              <div className="w-4 h-4 flex items-center justify-center"><img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-3 h-3" /></div>
+              Google Drive
+            </h3>
+
             <SidebarItem
-              icon={<div className="w-5 h-5 flex items-center justify-center"><img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-4 h-4" /></div>}
-              label="Google Drive"
-              active={activeTab === 'google_drive'}
-              onClick={() => handleGoogleSync()}
+              icon={<HardDrive size={18} />}
+              label="Meu Drive"
+              active={activeTab === 'google_drive' && driveFilterType === null}
+              onClick={() => handleGoogleSync('root')}
+            />
+            <SidebarItem
+              icon={<Users size={18} />}
+              label="Partilhados Comigo"
+              active={activeTab === 'google_drive' && driveFilterType === 'sharedWithMe'}
+              onClick={() => handleGoogleSync(undefined, 'sharedWithMe')}
+            />
+            <SidebarItem
+              icon={<Clock size={18} />}
+              label="Recentes"
+              active={activeTab === 'google_drive' && driveFilterType === 'recent'}
+              onClick={() => handleGoogleSync(undefined, 'recent')}
+            />
+            <SidebarItem
+              icon={<Star size={18} />}
+              label="Com Estrela"
+              active={activeTab === 'google_drive' && driveFilterType === 'starred'}
+              onClick={() => handleGoogleSync(undefined, 'starred')}
+            />
+            <SidebarItem
+              icon={<Trash2 size={18} />}
+              label="Lixo"
+              active={activeTab === 'google_drive' && driveFilterType === 'trashed'}
+              onClick={() => handleGoogleSync(undefined, 'trashed')}
             />
           </nav>
-
         </div>
 
-        <div className="mt-auto p-6 bg-gray-50 border-t border-gray-200">
+        {/* Armazenamento progress bar */}
+        <div className="p-4 mx-2 border-t border-gray-100 shrink-0">
+          <div className="flex items-center gap-2 mb-2 text-xs font-bold text-gray-700">
+            <Cloud size={16} className="text-blue-500" />
+            <span>Armazenamento</span>
+          </div>
+          <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mb-2">
+            <div 
+              className="bg-blue-500 h-full rounded-full transition-all duration-500" 
+              style={{ width: `${storageInfo.percent}%` }}
+            />
+          </div>
+          <div className="text-[10px] text-gray-500 font-medium mb-3">
+            {storageInfo.usage} de {storageInfo.limit} usados
+          </div>
+          <a
+            href="https://one.google.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-center w-full py-1.5 text-[10px] font-black text-blue-600 hover:text-blue-700 bg-white border border-gray-200 hover:border-blue-200 rounded-full transition-all uppercase tracking-wider"
+          >
+            Obter mais espaço
+          </a>
+        </div>
+
+        <div className="p-4 bg-gray-50 border-t border-gray-100 shrink-0">
           <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center gap-2 py-2 text-gray-500 text-xs font-bold hover:text-red-500 hover:bg-red-50 rounded-lg transition-all border border-transparent hover:border-red-100"
