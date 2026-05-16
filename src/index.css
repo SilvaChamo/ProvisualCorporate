@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  --color-provisual: #a21b7e;
+  --font-cairo: "Cairo Play", sans-serif;
+  --color-border: #e5e7eb;
+  --color-input: #f9fafb;
+}
+
+/* Global Reset */
+* {
+  font-family: "Cairo Play", sans-serif !important;
+}
+
+html {
+  font-size: 16px; /* Tamanho equilibrado e profissional */
+}
+
+body {
+  @apply bg-gray-50 text-gray-900;
+  margin: 0;
+}
+
+#root {
+  width: 100%;
+}
+
+/* Custom Utilities */
+.bg-provisual {
+  background-color: #a21b7e;
+}
+
+.text-provisual {
+  color: #a21b7e;
+}
+
+.border-provisual {
+  border-color: #a21b7e;
+}

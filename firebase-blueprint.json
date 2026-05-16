@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "Folder": {
+      "title": "Folder",
+      "description": "Represents a collection of assets organized by date.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "date"]
+    },
+    "Asset": {
+      "title": "Asset",
+      "description": "Represents an individual file/asset with multiple quality versions.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["image", "video", "document"] },
+        "captureDate": { "type": "string", "format": "date-time" },
+        "uploadDate": { "type": "string", "format": "date-time" },
+        "folderId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quality": { "type": "string", "enum": ["low", "high", "original"] },
+              "size": { "type": "string" },
+              "url": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["name", "type", "captureDate", "uploadDate", "folderId", "ownerId", "versions"]
+    }
+  },
+  "firestore": {
+    "/folders/{folderId}": {
+      "schema": "Folder",
+      "description": "Storage for folder metadata."
+    },
+    "/assets/{assetId}": {
+      "schema": "Asset",
+      "description": "Storage for asset metadata and quality versions."
+    }
+  }
+}
