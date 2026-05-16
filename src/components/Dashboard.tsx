@@ -208,7 +208,7 @@ export default function Dashboard() {
 
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("folderId", '1RqKUJs3NsX8glAqnQmKQPf5Pm_0BuZlp');
+        formData.append("folderId", selectedFolderId || 'root');
 
         const response = await fetch('/api/drive/upload', {
           method: 'POST',

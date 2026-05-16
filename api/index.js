@@ -87,15 +87,29 @@ app.post("/api/drive/upload", upload.single("file"), async (req, res) => {
     const auth = getGoogleAuth();
     const drive = google.drive({ version: 'v3', auth });
     
-    const bufferStream = new Readable();
-    bufferStream.push(file.buffer);
-    bufferStream.push(null);
+    let response;
+    try {
+      const bufferStream = new Readable();
+      bufferStream.push(file.buffer);
+      bufferStream.push(null);
 
-    const response = await drive.files.create({
-      requestBody: { name: file.originalname, parents: [folderId] },
-      media: { mimeType: file.mimetype, body: bufferStream },
-      fields: 'id, name, webViewLink, size, mimeType, createdTime',
-    });
+      response = await drive.files.create({
+        requestBody: { name: file.originalname, parents: [folderId] },
+        media: { mimeType: file.mimetype, body: bufferStream },
+        fields: 'id, name, webViewLink, size, mimeType, createdTime',
+      });
+    } catch (uploadError) {
+      console.warn("Upload to specific folder failed, falling back to root:", uploadError.message);
+      const fallbackStream = new Readable();
+      fallbackStream.push(file.buffer);
+      fallbackStream.push(null);
+
+      response = await drive.files.create({
+        requestBody: { name: file.originalname, parents: ['root'] },
+        media: { mimeType: file.mimetype, body: fallbackStream },
+        fields: 'id, name, webViewLink, size, mimeType, createdTime',
+      });
+    }
     res.json(response.data);
   } catch (error) {
     res.status(500).json({ error: error.message });
