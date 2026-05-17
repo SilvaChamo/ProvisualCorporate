@@ -27,7 +27,14 @@ import {
   ChevronDown,
   Users,
   Star,
-  Cloud
+  Cloud,
+  Sparkles,
+  ExternalLink,
+  Pencil,
+  Copy,
+  UserPlus,
+  Info,
+  CheckCircle2
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -38,8 +45,8 @@ import { signOut } from "firebase/auth";
 import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useRef } from "react";
-import logoHorizontal from "../Logo/Logo horizontal.png";
-import logoJpg from "../Logo/Logo.jpg";
+import logoHorizontal from "../Logo/logo_horizontal_clean.png";
+import logoJpg from "../Logo/logo_main_jpg.jpg";
 // Types
 interface AssetVersion {
   quality: "low" | "high" | "original";
@@ -147,6 +154,19 @@ export default function Dashboard() {
   const [driveFilterType, setDriveFilterType] = useState<string | null>(null);
   const [storageQuota, setStorageQuota] = useState<{ limit: string; usage: string } | null>(null);
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean } | null>(null);
+
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setContextMenu(null);
+    };
+    window.addEventListener("click", handleGlobalClick);
+    window.addEventListener("contextmenu", handleGlobalClick);
+    return () => {
+      window.removeEventListener("click", handleGlobalClick);
+      window.removeEventListener("contextmenu", handleGlobalClick);
+    };
+  }, []);
 
   // Grelha de 5 colunas como padrão para tudo
   useEffect(() => {
@@ -180,8 +200,10 @@ export default function Dashboard() {
         name: folderName,
         date: serverTimestamp(),
         ownerId: auth.currentUser?.uid || "mock-admin",
-        parentId: selectedFolderId
+        parentId: selectedFolderId || (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : null),
+        color: "#e2b13c"
       });
+      window.location.reload();
     } catch (error) {
       console.error("Erro ao criar pasta:", error);
     }
@@ -248,6 +270,7 @@ export default function Dashboard() {
       }
 
       alert("Upload concluído com sucesso!");
+      window.location.reload();
     } catch (error: any) {
       console.error(error);
       alert("Erro no upload: " + error.message);
@@ -331,7 +354,7 @@ export default function Dashboard() {
       }
 
       setUploadProgress(100);
-      setTimeout(() => { setIsUploading(false); setUploadProgress(0); }, 1000);
+      setTimeout(() => { setIsUploading(false); setUploadProgress(0); window.location.reload(); }, 1000);
     } catch (error: any) {
       console.error("Sync Error:", error);
       alert("Erro na Sincronização: " + error.message);
@@ -436,6 +459,34 @@ export default function Dashboard() {
       }
     };
     syncRootFolders();
+
+    // Sincronização silenciosa das pastas de clientes do Google Drive ao iniciar (ID da pasta "clientes")
+    const syncClientFolders = async () => {
+      try {
+        const response = await fetch('/api/drive/list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' })
+        });
+        if (response.ok) {
+          const driveFiles = await response.json();
+          for (const file of driveFiles) {
+            const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+            if (isFolder) {
+              await setDoc(doc(db, "folders", file.id), {
+                name: file.name,
+                date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
+                ownerId: "google-drive",
+                parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG'
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Erro na sincronização silenciosa de pastas de clientes:", error);
+      }
+    };
+    syncClientFolders();
   }, []);
 
   const filteredAssets = useMemo(() => {
@@ -499,15 +550,8 @@ export default function Dashboard() {
       // Na Gestão de Clientes:
       if (selectedFolderId === null) {
         // Se estivermos na raiz da Gestão de Clientes:
-        // Apenas mostramos as duas pastas autorizadas ("Autoridade Tributária" e "Total Engine/Energies")
-        // E quaisquer pastas locais criadas pelo usuário (ownerId !== 'google-drive')
-        result = result.filter(f => f.parentId === null && (
-          f.ownerId !== 'google-drive' || 
-          f.name.toLowerCase().includes("autoridade tribut") || 
-          f.name.toLowerCase().includes("total engine") ||
-          f.name.toLowerCase().includes("totalenergies") ||
-          f.name.toLowerCase().includes("total energies")
-        ));
+        // O conteúdo desta pasta ('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG') deve vir no menu "Gestão de Clientes"
+        result = result.filter(f => f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
       } else {
         // Se estivermos dentro de uma pasta na Gestão de Clientes:
         // Mostramos as subpastas daquela pasta normalmente
@@ -561,18 +605,24 @@ export default function Dashboard() {
 
   // Constrói o caminho realístico de breadcrumbs usando a hierarquia de parentId
   const getBreadcrumbs = () => {
-    const list: { id: string | null; name: string; type: 'all' | 'folder' | 'drive_root' }[] = [
-      { id: null, name: 'Gestão de Clientes', type: 'all' }
-    ];
+    const list: { id: string | null; name: string; type: 'all' | 'folder' | 'drive_root' }[] = [];
 
-    if (activeTab === 'google_drive') {
-      list.push({ id: 'google_drive_root', name: 'Arquivo Provisual', type: 'drive_root' });
-      if (driveFilterType === 'trashed') {
-        list.push({ id: 'google_drive_trash', name: 'Lixo', type: 'all' });
-      } else if (driveFilterType === 'starred') {
-        list.push({ id: 'google_drive_starred', name: 'Com Estrela', type: 'all' });
-      } else if (driveFilterType === 'recent') {
-        list.push({ id: 'google_drive_recent', name: 'Recentes', type: 'all' });
+    // Se nenhuma pasta estiver selecionada, mostramos o rótulo da aba correspondente
+    if (!selectedFolderId) {
+      if (activeTab === 'all') {
+        list.push({ id: null, name: 'Gestão de Clientes', type: 'all' });
+      } else if (activeTab === 'google_drive') {
+        list.push({ id: 'google_drive_root', name: 'Arquivo Provisual', type: 'drive_root' });
+        if (driveFilterType === 'trashed') {
+          list.push({ id: 'google_drive_trash', name: 'Lixo', type: 'all' });
+        } else if (driveFilterType === 'starred') {
+          list.push({ id: 'google_drive_starred', name: 'Com Estrela', type: 'all' });
+        } else if (driveFilterType === 'recent') {
+          list.push({ id: 'google_drive_recent', name: 'Recentes', type: 'all' });
+        }
+      } else {
+        const label = activeTab === 'image' ? 'Imagens' : activeTab === 'video' ? 'Vídeos' : 'Documentos';
+        list.push({ id: null, name: label, type: 'all' });
       }
     }
 
@@ -581,7 +631,7 @@ export default function Dashboard() {
       let currentId = selectedFolderId;
       let visited = new Set<string>();
       
-      while (currentId && !visited.has(currentId)) {
+      while (currentId && currentId !== '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' && !visited.has(currentId)) {
         visited.add(currentId);
         const folder = folders.find(f => f.id === currentId);
         if (folder) {
@@ -592,9 +642,6 @@ export default function Dashboard() {
         }
       }
       list.push(...path);
-    } else if (activeTab !== 'all' && activeTab !== 'google_drive') {
-      const label = activeTab === 'image' ? 'Imagens' : activeTab === 'video' ? 'Vídeos' : 'Documentos';
-      list.push({ id: null, name: label, type: 'all' });
     }
 
     return list;
@@ -735,7 +782,24 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
+            {userProfile && (
+              <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-3.5 py-1.5 rounded-lg select-none">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <div className="flex flex-col items-start leading-none">
+                  <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">
+                    Acesso
+                  </span>
+                  <span className={cn(
+                    "text-[11px] font-black uppercase tracking-wide",
+                    userProfile.role === 'admin' ? "text-[#a21b7e]" : "text-blue-600"
+                  )}>
+                    {userProfile.role === 'admin' ? 'Administrador' : 'Cliente'}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={handleLogout}
               className="flex items-center justify-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer h-9"
@@ -835,7 +899,18 @@ export default function Dashboard() {
         </div>
 
         {/* Files Area */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50">
+        <div 
+          className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 relative"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              visible: true
+            });
+          }}
+        >
           {filteredAssets.length === 0 && filteredFolders.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center p-20 text-center">
               <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
@@ -864,6 +939,11 @@ export default function Dashboard() {
                               } else {
                                 setSelectedFolderId(folder.id);
                               }
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
                             }}
                             className="flex items-center justify-between p-4 bg-white border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group shadow-sm relative overflow-visible rounded-lg"
                           >
@@ -916,11 +996,12 @@ export default function Dashboard() {
                                       </button>
 
                                       <button
-                                        onClick={(e) => {
+                                        onClick={async (e) => {
                                           e.stopPropagation();
                                           const newName = prompt("Digite o novo nome para " + folder.name);
                                           if (newName) {
-                                            updateDoc(doc(db, "folders", folder.id), { name: newName });
+                                            await updateDoc(doc(db, "folders", folder.id), { name: newName });
+                                            window.location.reload();
                                           }
                                           setActiveFolderMenuId(null);
                                         }}
@@ -980,6 +1061,7 @@ export default function Dashboard() {
                                                 e.stopPropagation();
                                                 try {
                                                   await updateDoc(doc(db, "folders", folder.id), { color });
+                                                  window.location.reload();
                                                 } catch (err) {
                                                   console.error("Erro ao mudar cor da pasta:", err);
                                                 }
@@ -1002,6 +1084,7 @@ export default function Dashboard() {
                                           e.stopPropagation();
                                           if (confirm("Tem certeza que deseja mover " + folder.name + " para o lixo?")) {
                                             await updateDoc(doc(db, "folders", folder.id), { parentId: "trash" });
+                                            window.location.reload();
                                           }
                                           setActiveFolderMenuId(null);
                                         }}
@@ -1075,6 +1158,11 @@ export default function Dashboard() {
                           setSelectedFolderId(folder.id);
                         }
                       }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
+                      }}
                       className="grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible"
                     >
                       <div className="col-span-6 flex items-center gap-4">
@@ -1131,11 +1219,12 @@ export default function Dashboard() {
                                   </button>
 
                                   <button
-                                    onClick={(e) => {
+                                    onClick={async (e) => {
                                       e.stopPropagation();
                                       const newName = prompt("Digite o novo nome para " + folder.name);
                                       if (newName) {
-                                        updateDoc(doc(db, "folders", folder.id), { name: newName });
+                                        await updateDoc(doc(db, "folders", folder.id), { name: newName });
+                                        window.location.reload();
                                       }
                                       setActiveFolderMenuId(null);
                                     }}
@@ -1212,6 +1301,7 @@ export default function Dashboard() {
                                             e.stopPropagation();
                                             try {
                                               await updateDoc(doc(db, "folders", folder.id), { color });
+                                              window.location.reload();
                                             } catch (err) {
                                               console.error("Erro ao mudar cor da pasta:", err);
                                             }
@@ -1234,6 +1324,7 @@ export default function Dashboard() {
                                       e.stopPropagation();
                                       if (confirm("Tem certeza que deseja mover " + folder.name + " para o lixo?")) {
                                         await updateDoc(doc(db, "folders", folder.id), { parentId: "trash" });
+                                        window.location.reload();
                                       }
                                       setActiveFolderMenuId(null);
                                     }}
@@ -1402,6 +1493,62 @@ export default function Dashboard() {
           </motion.aside>
         )}
       </AnimatePresence>
+
+      {/* Floating custom context menu for page container right-click */}
+      {contextMenu && contextMenu.visible && (
+        <div 
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="fixed bg-[#1e1f20] border border-[#2d2e30] rounded-xl shadow-2xl z-50 py-2 w-56 text-left text-gray-200 font-sans cursor-default animate-in fade-in zoom-in-95 duration-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.removeAttribute("webkitdirectory");
+                fileInputRef.current.removeAttribute("directory");
+                fileInputRef.current.click();
+              }
+              setContextMenu(null);
+            }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+          >
+            <FileUp size={15} className="text-gray-400" />
+            <span>Carregar ficheiro</span>
+          </button>
+          
+          <button
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.setAttribute("webkitdirectory", "true");
+                fileInputRef.current.setAttribute("directory", "true");
+                fileInputRef.current.click();
+                setTimeout(() => {
+                  fileInputRef.current?.removeAttribute("webkitdirectory");
+                  fileInputRef.current?.removeAttribute("directory");
+                }, 1000);
+              }
+              setContextMenu(null);
+            }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+          >
+            <FolderUp size={15} className="text-gray-400" />
+            <span>Carregar pasta</span>
+          </button>
+
+          <div className="my-1.5 border-t border-gray-800" />
+
+          <button
+            onClick={() => {
+              handleCreateFolder();
+              setContextMenu(null);
+            }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+          >
+            <FolderPlus size={15} className="text-gray-400" />
+            <span>Criar uma nova pasta</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1476,6 +1623,11 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
     <div
       onClick={onSelect}
       onDoubleClick={onPreview}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowMenu(true);
+      }}
       className={cn(
         "aspect-[3/2] relative border transition-all cursor-pointer overflow-hidden group rounded-none shadow-sm",
         isSelected
@@ -1513,7 +1665,7 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
                 transition={{ duration: 0.1 }}
-                className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-40 p-1.5 text-left text-gray-700 font-sans cursor-default"
+                className="absolute right-0 mt-1 w-72 bg-[#1e1f20] border border-[#2d2e30] rounded-xl shadow-2xl z-40 py-2 text-left text-gray-200 font-sans cursor-default"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
@@ -1522,11 +1674,16 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
                     onPreview();
                     setShowMenu(false);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                 >
-                  <LayoutGrid size={14} className="text-gray-400" />
-                  <span>Visualizar</span>
+                  <div className="flex items-center gap-3">
+                    <ExternalLink size={15} className="text-gray-400" />
+                    <span>Abrir com</span>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-500" />
                 </button>
+
+                <div className="my-1.5 border-t border-gray-800" />
 
                 <button
                   onClick={(e) => {
@@ -1550,9 +1707,9 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
                     }
                     setShowMenu(false);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                 >
-                  <Download size={14} className="text-gray-400" />
+                  <Download size={15} className="text-gray-400" />
                   <span>Transferir</span>
                 </button>
 
@@ -1563,20 +1720,55 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
                     if (newName) {
                       try {
                         await updateDoc(doc(db, "assets", asset.id), { name: newName });
+                        window.location.reload();
                       } catch (error) {
                         console.error("Erro ao renomear arquivo:", error);
                       }
                     }
                     setShowMenu(false);
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <FileText size={14} className="text-gray-400" />
-                    <span>Mudar nome</span>
+                  <div className="flex items-center gap-3">
+                    <Pencil size={15} className="text-gray-400" />
+                    <span>Mudar o nome</span>
                   </div>
-                  <span className="text-[9px] text-gray-400 font-medium">⌥⌘E</span>
+                  <span className="text-[10px] text-gray-400 font-mono tracking-tighter">⌥⌘E</span>
                 </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alert("Cópia do arquivo adicionada à fila!");
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <Copy size={15} className="text-gray-400" />
+                    <span>Fazer cópia</span>
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-mono tracking-tighter">⌘C ⌘V</span>
+                </button>
+
+                <div className="my-1.5 border-t border-gray-800" />
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alert("Perguntar ao Gemini sobre este arquivo...");
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <Sparkles size={15} className="text-violet-400" />
+                    <span>Pedir ao Gemini</span>
+                  </div>
+                  <span className="text-[9px] font-bold text-white bg-blue-600 px-1.5 py-0.5 rounded-full uppercase leading-none scale-90">Novo</span>
+                </button>
+
+                <div className="my-1.5 border-t border-gray-800" />
 
                 <button
                   onClick={(e) => {
@@ -1585,13 +1777,27 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
                     navigator.clipboard.writeText(asset.versions[0]?.url || asset.webViewLink || "");
                     setShowMenu(false);
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <Users size={14} className="text-gray-400" />
+                  <div className="flex items-center gap-3">
+                    <UserPlus size={15} className="text-gray-400" />
                     <span>Partilhar</span>
                   </div>
-                  <ChevronRight size={14} className="text-gray-400" />
+                  <ChevronRight size={14} className="text-gray-500" />
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <FolderIcon size={15} className="text-gray-400" />
+                    <span>Organizar</span>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-500" />
                 </button>
 
                 <button
@@ -1600,16 +1806,28 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
                     alert("Detalhes do Arquivo:\nNome: " + asset.name + "\nTamanho: " + (asset.versions[0]?.size || "0 MB") + "\nTipo: " + asset.type);
                     setShowMenu(false);
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <BarChart3 size={14} className="text-gray-400" />
-                    <span>Informações</span>
+                  <div className="flex items-center gap-3">
+                    <Info size={15} className="text-gray-400" />
+                    <span>Informações do ficheiro</span>
                   </div>
-                  <ChevronRight size={14} className="text-gray-400" />
+                  <ChevronRight size={14} className="text-gray-500" />
                 </button>
 
-                <div className="my-1 border-t border-gray-100" />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alert("Arquivo disponibilizado offline com sucesso!");
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+                >
+                  <CheckCircle2 size={15} className="text-green-400" />
+                  <span>Disponibilizar offline</span>
+                </button>
+
+                <div className="my-1.5 border-t border-gray-800" />
 
                 <button
                   onClick={async (e) => {
@@ -1617,19 +1835,20 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
                     if (confirm("Tem certeza que deseja mover " + asset.name + " para o lixo?")) {
                       try {
                         await updateDoc(doc(db, "assets", asset.id), { folderId: "trash" });
+                        window.location.reload();
                       } catch (error) {
                         console.error("Erro ao mover arquivo para o lixo:", error);
                       }
                     }
                     setShowMenu(false);
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-all text-left"
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-red-400 cursor-pointer"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <Trash2 size={14} className="text-red-400" />
+                  <div className="flex items-center gap-3">
+                    <Trash2 size={15} className="text-red-400" />
                     <span>Mover para o lixo</span>
                   </div>
-                  <span className="text-[9px] text-red-400 font-medium">Delete</span>
+                  <span className="text-[10px] text-red-500 font-mono tracking-tighter">Delete</span>
                 </button>
               </motion.div>
             </>
@@ -1678,6 +1897,11 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
     <div
       onClick={onSelect}
       onDoubleClick={onPreview}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowMenu(true);
+      }}
       className={cn(
         "grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible",
         isSelected && "bg-[#a21b7e]/5 hover:bg-[#a21b7e]/10 border-[#a21b7e]/10"
@@ -1732,7 +1956,7 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -10 }}
                   transition={{ duration: 0.1 }}
-                  className="absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl z-40 p-1.5 text-left text-gray-700 font-sans cursor-default"
+                  className="absolute right-0 mt-2 w-72 bg-[#1e1f20] border border-[#2d2e30] rounded-xl shadow-2xl z-40 py-2 text-left text-gray-200 font-sans cursor-default animate-in fade-in"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -1741,11 +1965,16 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
                       onPreview();
                       setShowMenu(false);
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                   >
-                    <LayoutGrid size={14} className="text-gray-400" />
-                    <span>Visualizar</span>
+                    <div className="flex items-center gap-3">
+                      <ExternalLink size={15} className="text-gray-400" />
+                      <span>Abrir com</span>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-500" />
                   </button>
+
+                  <div className="my-1.5 border-t border-gray-800" />
 
                   <button
                     onClick={(e) => {
@@ -1769,9 +1998,9 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
                       }
                       setShowMenu(false);
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                   >
-                    <Download size={14} className="text-gray-400" />
+                    <Download size={15} className="text-gray-400" />
                     <span>Transferir</span>
                   </button>
 
@@ -1782,20 +2011,55 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
                       if (newName) {
                         try {
                           await updateDoc(doc(db, "assets", asset.id), { name: newName });
+                          window.location.reload();
                         } catch (error) {
                           console.error("Erro ao renomear arquivo:", error);
                         }
                       }
                       setShowMenu(false);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <FileText size={14} className="text-gray-400" />
-                      <span>Mudar nome</span>
+                    <div className="flex items-center gap-3">
+                      <Pencil size={15} className="text-gray-400" />
+                      <span>Mudar o nome</span>
                     </div>
-                    <span className="text-[9px] text-gray-400 font-medium">⌥⌘E</span>
+                    <span className="text-[10px] text-gray-400 font-mono tracking-tighter">⌥⌘E</span>
                   </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      alert("Cópia do arquivo adicionada à fila!");
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Copy size={15} className="text-gray-400" />
+                      <span>Fazer cópia</span>
+                    </div>
+                    <span className="text-[10px] text-gray-400 font-mono tracking-tighter">⌘C ⌘V</span>
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-800" />
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      alert("Perguntar ao Gemini sobre este arquivo...");
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Sparkles size={15} className="text-violet-400" />
+                      <span>Pedir ao Gemini</span>
+                    </div>
+                    <span className="text-[9px] font-bold text-white bg-blue-600 px-1.5 py-0.5 rounded-full uppercase leading-none scale-90">Novo</span>
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-800" />
 
                   <button
                     onClick={(e) => {
@@ -1804,13 +2068,27 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
                       navigator.clipboard.writeText(asset.versions[0]?.url || asset.webViewLink || "");
                       setShowMenu(false);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Users size={14} className="text-gray-400" />
+                    <div className="flex items-center gap-3">
+                      <UserPlus size={15} className="text-gray-400" />
                       <span>Partilhar</span>
                     </div>
-                    <ChevronRight size={14} className="text-gray-400" />
+                    <ChevronRight size={14} className="text-gray-500" />
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FolderIcon size={15} className="text-gray-400" />
+                      <span>Organizar</span>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-500" />
                   </button>
 
                   <button
@@ -1819,16 +2097,28 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
                       alert("Detalhes do Arquivo:\nNome: " + asset.name + "\nTamanho: " + (asset.versions[0]?.size || "0 MB") + "\nTipo: " + asset.type);
                       setShowMenu(false);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-left"
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <BarChart3 size={14} className="text-gray-400" />
-                      <span>Informações</span>
+                    <div className="flex items-center gap-3">
+                      <Info size={15} className="text-gray-400" />
+                      <span>Informações do ficheiro</span>
                     </div>
-                    <ChevronRight size={14} className="text-gray-400" />
+                    <ChevronRight size={14} className="text-gray-500" />
                   </button>
 
-                  <div className="my-1 border-t border-gray-100" />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      alert("Arquivo disponibilizado offline com sucesso!");
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-gray-200 cursor-pointer"
+                  >
+                    <CheckCircle2 size={15} className="text-green-400" />
+                    <span>Disponibilizar offline</span>
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-800" />
 
                   <button
                     onClick={async (e) => {
@@ -1836,19 +2126,20 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
                       if (confirm("Tem certeza que deseja mover " + asset.name + " para o lixo?")) {
                         try {
                           await updateDoc(doc(db, "assets", asset.id), { folderId: "trash" });
+                          window.location.reload();
                         } catch (error) {
                           console.error("Erro ao mover arquivo para o lixo:", error);
                         }
                       }
                       setShowMenu(false);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-all text-left"
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/10 transition-all text-left text-xs font-medium text-red-400 cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Trash2 size={14} className="text-red-400" />
+                    <div className="flex items-center gap-3">
+                      <Trash2 size={15} className="text-red-400" />
                       <span>Mover para o lixo</span>
                     </div>
-                    <span className="text-[9px] text-red-400 font-medium">Delete</span>
+                    <span className="text-[10px] text-red-500 font-mono tracking-tighter">Delete</span>
                   </button>
                 </motion.div>
               </>
