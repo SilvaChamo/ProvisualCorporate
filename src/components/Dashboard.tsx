@@ -67,6 +67,50 @@ interface Asset {
   thumbnailUrl?: string;
 }
 
+// Componente SafeImage para garantir visibilidade e fallbacks de thumbnails
+interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+  thumbnailUrl?: string;
+  driveId?: string;
+  fallbackSize?: 'w100' | 'w500' | 'w1200';
+  alt?: string;
+}
+
+function SafeImage({ thumbnailUrl, driveId, fallbackSize = 'w500', alt, className, ...props }: SafeImageProps) {
+  const initialUrl = thumbnailUrl || (driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=${fallbackSize}` : '');
+  const [src, setSrc] = useState(initialUrl);
+  const [hasFailedOnce, setHasFailedOnce] = useState(false);
+  const [hasFailedAlt, setHasFailedAlt] = useState(false);
+
+  useEffect(() => {
+    const newUrl = thumbnailUrl || (driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=${fallbackSize}` : '');
+    setSrc(newUrl);
+    setHasFailedOnce(false);
+    setHasFailedAlt(false);
+  }, [thumbnailUrl, driveId, fallbackSize]);
+
+  const handleError = () => {
+    if (!hasFailedOnce && driveId) {
+      setHasFailedOnce(true);
+      setSrc(`https://drive.google.com/thumbnail?id=${driveId}&sz=${fallbackSize}`);
+    } else if (!hasFailedAlt && driveId) {
+      setHasFailedAlt(true);
+      setSrc(`https://docs.google.com/uc?export=view&id=${driveId}`);
+    }
+  };
+
+  if (!src) return null;
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={handleError}
+      className={className}
+      {...props}
+    />
+  );
+}
+
 // Componente do Visualizador Interno
 function FilePreviewModal({ asset, onClose }: { asset: Asset; onClose: () => void }) {
   const url = asset.versions[0]?.url;
@@ -103,8 +147,10 @@ function FilePreviewModal({ asset, onClose }: { asset: Asset; onClose: () => voi
         <div className="flex-1 bg-gray-50 flex items-center justify-center relative overflow-hidden">
           {asset.type === 'image' ? (
             <div className="w-full h-full flex items-center justify-center p-4">
-              <img
-                src={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s1200') : `https://drive.google.com/thumbnail?id=${asset.driveId}&sz=w1200`}
+              <SafeImage
+                thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s1200') : undefined}
+                driveId={asset.driveId}
+                fallbackSize="w1200"
                 className="max-w-full max-h-full object-contain shadow-2xl"
                 alt={asset.name}
               />
@@ -155,6 +201,39 @@ export default function Dashboard() {
   const [storageQuota, setStorageQuota] = useState<{ limit: string; usage: string } | null>(null);
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean } | null>(null);
+
+  // Buscar a pasta geral chamada "arquivo" no nível raiz para servir como raiz do Meu Drive
+  const arquivoFolder = useMemo(() => {
+    if (!folders || !Array.isArray(folders)) return null;
+    // 1. Tentar busca exata por "arquivo" na raiz
+    let found = folders.find(f => 
+      f && f.name && typeof f.name === 'string' && 
+      f.name.trim().toLowerCase() === 'arquivo' && 
+      (!(f as any).parentId || (f as any).parentId === 'root' || (f as any).parentId === '') && 
+      !(f as any).trashed
+    );
+    if (found) return found;
+
+    // 2. Fallback: buscar pasta que contenha "arquivo" no nome na raiz
+    found = folders.find(f => 
+      f && f.name && typeof f.name === 'string' && 
+      f.name.toLowerCase().includes('arquivo') && 
+      (!(f as any).parentId || (f as any).parentId === 'root' || (f as any).parentId === '') && 
+      !(f as any).trashed
+    );
+    if (found) return found;
+
+    // 3. Fallback final: se não achou na raiz, buscar qualquer pasta chamada "arquivo" no sistema
+    return folders.find(f => 
+      f && f.name && typeof f.name === 'string' && 
+      f.name.trim().toLowerCase() === 'arquivo' && 
+      !(f as any).trashed
+    );
+  }, [folders]);
+
+  const arquivoFolderId = arquivoFolder ? arquivoFolder.id : null;
+
+  const [visibleImagesCount, setVisibleImagesCount] = useState(10);
 
   useEffect(() => {
     const handleGlobalClick = () => {
@@ -283,8 +362,14 @@ export default function Dashboard() {
 
   const handleGoogleSync = async (targetFolderId?: string, filterType?: string) => {
     const folderId = targetFolderId || 'root';
-    setActiveTab('google_drive');
-    setDriveFilterType(filterType || null);
+    
+    // Se a aba ativa for 'all' (Gestão de Clientes), mantemos a aba ativa como 'all' para consistência de navegação.
+    // Caso contrário, alteramos para a aba 'google_drive'.
+    if (activeTab !== 'all') {
+      setActiveTab('google_drive');
+      setDriveFilterType(filterType || null);
+    }
+    
     setSelectedFolderId(folderId === 'root' ? null : folderId);
     setIsUploading(true);
     setUploadProgress(10);
@@ -354,7 +439,7 @@ export default function Dashboard() {
       }
 
       setUploadProgress(100);
-      setTimeout(() => { setIsUploading(false); setUploadProgress(0); window.location.reload(); }, 1000);
+      setTimeout(() => { setIsUploading(false); setUploadProgress(0); }, 1000);
     } catch (error: any) {
       console.error("Sync Error:", error);
       alert("Erro na Sincronização: " + error.message);
@@ -496,7 +581,7 @@ export default function Dashboard() {
     if (activeTab === 'google_drive' && driveFilterType === 'trashed') {
       result = result.filter(a => a.trashed === true);
       if (searchQuery) {
-        result = result.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        result = result.filter(a => a && a.name && typeof a.name === 'string' && a.name.toLowerCase().includes(searchQuery.toLowerCase()));
       }
       return result;
     }
@@ -509,28 +594,42 @@ export default function Dashboard() {
     // Para todas as outras abas/views, remover itens que estão no lixo
     result = result.filter(a => !a.trashed);
 
+    // Não exibir imagens nas abas 'google_drive' e 'all' (elas ficam centralizadas sob a aba 'Imagens')
+    if (activeTab === 'google_drive' || activeTab === 'all') {
+      result = result.filter(a => a.type !== 'image');
+    }
+
     if (selectedFolderId) {
       // Se for uma pasta do Google Drive, o ID dela no Firestore será o ID do Google
       result = result.filter(a => a.folderId === selectedFolderId);
     } else if (activeTab === 'google_drive') {
-      // Mostrar apenas o que veio do Google Drive
+      // Mostrar apenas os arquivos que pertencem à pasta geral "arquivo" na raiz (ou arquivos sem pai se a pasta não existir)
       if (driveFilterType === 'starred') {
         result = result.filter(a => (a as any).ownerId === 'google-drive' && a.starred === true);
       } else if (driveFilterType === 'recent') {
-        // Ordenar os arquivos sincronizados por data mais recente
         result = result.filter(a => (a as any).ownerId === 'google-drive')
                        .sort((a, b) => b.uploadDate.getTime() - a.uploadDate.getTime());
       } else {
-        result = result.filter(a => (a as any).ownerId === 'google-drive');
+        result = result.filter(a => 
+          (a as any).ownerId === 'google-drive' && 
+          (a.folderId === arquivoFolderId || (!a.folderId && !arquivoFolderId))
+        );
       }
     } else if (activeTab !== 'all') {
       result = result.filter(a => a.type === activeTab);
     }
     if (searchQuery) {
-      result = result.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      result = result.filter(a => a && a.name && typeof a.name === 'string' && a.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }
     return result;
-  }, [selectedFolderId, activeTab, driveFilterType, searchQuery, assets]);
+  }, [selectedFolderId, activeTab, driveFilterType, searchQuery, assets, arquivoFolderId]);
+
+  const displayedAssets = useMemo(() => {
+    if (activeTab === 'image') {
+      return filteredAssets.slice(0, visibleImagesCount);
+    }
+    return filteredAssets;
+  }, [filteredAssets, activeTab, visibleImagesCount]);
 
   const filteredFolders = useMemo(() => {
     let result = folders;
@@ -544,8 +643,11 @@ export default function Dashboard() {
     result = result.filter(f => !f.trashed);
 
     if (activeTab === 'google_drive') {
-      // No Google Drive/Arquivo Provisual, mostramos as pastas da raiz ou da pasta selecionada
-      result = result.filter(f => f.parentId === selectedFolderId);
+      // No Google Drive/Arquivo Provisual, se estivermos na raiz, mostramos as pastas da pasta geral "arquivo"
+      // Caso contrário, mostramos as subpastas da pasta selecionada.
+      // Ocultamos a pasta de Clientes ('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG') de qualquer nível aqui.
+      const targetParentId = selectedFolderId === null ? arquivoFolderId : selectedFolderId;
+      result = result.filter(f => f.parentId === targetParentId && f.id !== '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
     } else if (activeTab === 'all') {
       // Na Gestão de Clientes:
       if (selectedFolderId === null) {
@@ -563,7 +665,7 @@ export default function Dashboard() {
     }
 
     if (searchQuery) {
-      result = result.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      result = result.filter(f => f && f.name && typeof f.name === 'string' && f.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }
 
     return result;
@@ -682,25 +784,25 @@ export default function Dashboard() {
               icon={<Users size={20} />}
               label="Gestão de Clientes"
               active={activeTab === 'all'}
-              onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); }}
+              onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
             />
             <SidebarItem
               icon={<ImageIcon size={20} />}
               label="Imagens"
               active={activeTab === 'image'}
-              onClick={() => { setActiveTab('image'); setSelectedFolderId(null); setDriveFilterType(null); }}
+              onClick={() => { setActiveTab('image'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
             />
             <SidebarItem
               icon={<Video size={20} />}
               label="Vídeos"
               active={activeTab === 'video'}
-              onClick={() => { setActiveTab('video'); setSelectedFolderId(null); setDriveFilterType(null); }}
+              onClick={() => { setActiveTab('video'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
             />
             <SidebarItem
               icon={<FileText size={20} />}
               label="Documentos"
               active={activeTab === 'document'}
-              onClick={() => { setActiveTab('document'); setSelectedFolderId(null); setDriveFilterType(null); }}
+              onClick={() => { setActiveTab('document'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
             />
 
             <div className="my-5" />
@@ -712,31 +814,31 @@ export default function Dashboard() {
               icon={<HardDrive size={20} />}
               label="Meu Drive"
               active={activeTab === 'google_drive' && driveFilterType === null}
-              onClick={() => handleGoogleSync('root')}
+              onClick={() => { setActiveTab('google_drive'); handleGoogleSync('root'); setVisibleImagesCount(10); }}
             />
             <SidebarItem
               icon={<Users size={20} />}
               label="Partilhados Comigo"
               active={activeTab === 'google_drive' && driveFilterType === 'sharedWithMe'}
-              onClick={() => handleGoogleSync(undefined, 'sharedWithMe')}
+              onClick={() => { setActiveTab('google_drive'); handleGoogleSync(undefined, 'sharedWithMe'); setVisibleImagesCount(10); }}
             />
             <SidebarItem
               icon={<Clock size={20} />}
               label="Recentes"
               active={activeTab === 'google_drive' && driveFilterType === 'recent'}
-              onClick={() => handleGoogleSync(undefined, 'recent')}
+              onClick={() => { setActiveTab('google_drive'); handleGoogleSync(undefined, 'recent'); setVisibleImagesCount(10); }}
             />
             <SidebarItem
               icon={<Star size={20} />}
               label="Com Estrela"
               active={activeTab === 'google_drive' && driveFilterType === 'starred'}
-              onClick={() => handleGoogleSync(undefined, 'starred')}
+              onClick={() => { setActiveTab('google_drive'); handleGoogleSync(undefined, 'starred'); setVisibleImagesCount(10); }}
             />
             <SidebarItem
               icon={<Trash2 size={20} />}
               label="Lixo"
               active={activeTab === 'google_drive' && driveFilterType === 'trashed'}
-              onClick={() => handleGoogleSync(undefined, 'trashed')}
+              onClick={() => { setActiveTab('google_drive'); handleGoogleSync(undefined, 'trashed'); setVisibleImagesCount(10); }}
             />
           </nav>
         </div>
@@ -864,23 +966,6 @@ export default function Dashboard() {
             )}
           </div>
                   <div className="flex items-center gap-3">
-            <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
-              >
-                <Grid size={16} />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "list" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
-              >
-                <ListIcon size={16} />
-              </button>
-            </div>
-
-            <div className="h-5 w-px bg-gray-200 mx-1" />
-
             <button
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center justify-center gap-2 bg-[#a21b7e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer h-9"
@@ -895,6 +980,23 @@ export default function Dashboard() {
               <FolderPlus size={16} />
               Criar nova pasta
             </button>
+
+            <div className="h-5 w-px bg-gray-200 mx-1" />
+
+            <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
+              >
+                <Grid size={16} />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "list" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
+              >
+                <ListIcon size={16} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1112,7 +1214,7 @@ export default function Dashboard() {
                     <div className="w-full flex flex-col gap-3">
                       <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Arquivos</h4>
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
-                        {filteredAssets.map(asset => (
+                        {displayedAssets.map(asset => (
                           <AssetCard
                             key={asset.id}
                             asset={asset}
@@ -1346,7 +1448,7 @@ export default function Dashboard() {
                   ))}
 
                   {/* Assets (Files & Folders from Drive) in List */}
-                  {filteredAssets.map(asset => (
+                  {displayedAssets.map(asset => (
                     <AssetRow
                       key={asset.id}
                       asset={asset}
@@ -1370,6 +1472,17 @@ export default function Dashboard() {
                 </div>
               )}
             </>
+          )}
+          {activeTab === 'image' && filteredAssets.length > visibleImagesCount && (
+            <div className="flex justify-center my-8 pb-10 w-full">
+              <button
+                onClick={() => setVisibleImagesCount(prev => prev + 10)}
+                className="flex items-center gap-2 bg-[#a21b7e] text-white px-6 py-3 rounded-md text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer select-none"
+              >
+                <Plus size={18} />
+                Carregar mais imagens
+              </button>
+            </div>
           )}
         </div>
 
@@ -1428,8 +1541,10 @@ export default function Dashboard() {
 
             <div className="aspect-square bg-gray-50 mb-6 flex items-center justify-center border border-gray-100 relative group overflow-hidden shadow-inner">
               {(selectedAsset.thumbnailUrl || selectedAsset.driveId) ? (
-                <img
-                  src={selectedAsset.thumbnailUrl || `https://drive.google.com/thumbnail?id=${selectedAsset.driveId}&sz=w500`}
+                <SafeImage
+                  thumbnailUrl={selectedAsset.thumbnailUrl}
+                  driveId={selectedAsset.driveId}
+                  fallbackSize="w500"
                   alt=""
                   className="w-full h-full object-cover"
                 />
@@ -1858,8 +1973,10 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
 
       <div className="w-full h-full flex items-center justify-center bg-gray-50">
         {(asset.thumbnailUrl || asset.driveId) ? (
-          <img 
-            src={thumbUrl} 
+          <SafeImage
+            thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s500') : undefined}
+            driveId={asset.driveId}
+            fallbackSize="w500"
             alt={asset.name}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
@@ -1910,8 +2027,10 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
       <div className="col-span-6 flex items-center gap-4">
         {(asset.thumbnailUrl || asset.driveId) && asset.type !== 'folder' ? (
           <div className="w-8 h-8 overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-100 rounded-none">
-            <img
-              src={asset.thumbnailUrl || `https://drive.google.com/thumbnail?id=${asset.driveId}&sz=w100`}
+            <SafeImage
+              thumbnailUrl={asset.thumbnailUrl}
+              driveId={asset.driveId}
+              fallbackSize="w100"
               alt=""
               className="w-full h-full object-cover"
             />
