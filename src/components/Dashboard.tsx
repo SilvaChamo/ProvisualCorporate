@@ -34,7 +34,16 @@ import {
   Copy,
   UserPlus,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  FolderDot,
+  Key,
+  Mail,
+  Folder,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  AlertCircle,
+  Database
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -42,7 +51,7 @@ import { cn, handleFirestoreError, OperationType } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { auth, db, storage } from "../lib/firebase";
 import { signOut } from "firebase/auth";
-import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useRef } from "react";
 import logoHorizontal from "../Logo/logo_horizontal_clean.png";
@@ -108,6 +117,105 @@ function SafeImage({ thumbnailUrl, driveId, fallbackSize = 'w500', alt, classNam
       className={className}
       {...props}
     />
+  );
+}
+
+// Componente Skeleton Loading realista e premium
+function SkeletonView({ viewMode, activeTab }: { viewMode: 'grid' | 'list'; activeTab: string }) {
+  const isList = viewMode === 'list';
+  const showFolders = activeTab === 'all' || activeTab === 'google_drive';
+
+  if (isList) {
+    return (
+      <div className="p-8 flex flex-col gap-3 bg-gray-50 min-h-full w-full">
+        {/* Cabeçalho da Tabela fake */}
+        <div className="grid grid-cols-12 gap-4 pb-3 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider px-4">
+          <div className="col-span-6">Nome</div>
+          <div className="col-span-2">Modificado em</div>
+          <div className="col-span-2">Tamanho</div>
+          <div className="col-span-2 text-right">Ações</div>
+        </div>
+
+        {/* Linhas de Pastas */}
+        {showFolders && Array.from({ length: 4 }).map((_, i) => (
+          <div key={`folder-ske-${i}`} className="grid grid-cols-12 gap-4 py-3.5 items-center bg-white border border-gray-50 rounded-lg px-4 shadow-sm animate-pulse">
+            <div className="col-span-6 flex items-center gap-3">
+              <div className="w-5 h-5 bg-yellow-100 rounded-md shrink-0" />
+              <div className="w-32 h-3.5 bg-gray-200 rounded" />
+            </div>
+            <div className="col-span-2">
+              <div className="w-20 h-3 bg-gray-100 rounded" />
+            </div>
+            <div className="col-span-2">
+              <div className="w-10 h-3 bg-gray-100 rounded" />
+            </div>
+            <div className="col-span-2 flex justify-end gap-2">
+              <div className="w-4 h-4 bg-gray-100 rounded-full" />
+            </div>
+          </div>
+        ))}
+
+        {/* Linhas de Arquivos */}
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={`file-ske-${i}`} className="grid grid-cols-12 gap-4 py-3.5 items-center bg-white border border-gray-50 rounded-lg px-4 shadow-sm animate-pulse">
+            <div className="col-span-6 flex items-center gap-3">
+              <div className="w-5 h-5 bg-purple-100 rounded-md shrink-0" />
+              <div className="w-44 h-3.5 bg-gray-200 rounded" />
+            </div>
+            <div className="col-span-2">
+              <div className="w-20 h-3 bg-gray-100 rounded" />
+            </div>
+            <div className="col-span-2">
+              <div className="w-12 h-3 bg-gray-100 rounded" />
+            </div>
+            <div className="col-span-2 flex justify-end gap-2">
+              <div className="w-4 h-4 bg-gray-100 rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Grid view
+  return (
+    <div className="p-8 flex flex-col gap-8 bg-gray-50 min-h-full w-full">
+      {/* Grid de Pastas */}
+      {showFolders && (
+        <div className="w-full flex flex-col gap-3">
+          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] animate-pulse">Pastas</h4>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={`folder-ske-g-${i}`} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-lg shadow-sm animate-pulse">
+                <div className="flex items-center gap-3 truncate">
+                  <div className="w-5 h-5 bg-yellow-100 rounded-md shrink-0" />
+                  <div className="w-24 h-3 bg-gray-200 rounded" />
+                </div>
+                <div className="w-4 h-4 bg-gray-100 rounded-full animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Grid de Arquivos */}
+      <div className="w-full flex flex-col gap-3">
+        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] animate-pulse">Arquivos</h4>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={`file-ske-g-${i}`} className="bg-white border border-gray-100 rounded-lg overflow-hidden shadow-sm aspect-square flex flex-col animate-pulse">
+              <div className="flex-1 bg-gray-50 flex items-center justify-center relative">
+                <div className="w-8 h-8 bg-purple-50 rounded-full flex items-center justify-center animate-pulse" />
+              </div>
+              <div className="p-3 flex flex-col gap-1.5 border-t border-gray-50 bg-white">
+                <div className="w-28 h-3 bg-gray-200 rounded" />
+                <div className="w-16 h-2 bg-gray-100 rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -191,7 +299,9 @@ export default function Dashboard() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'image' | 'video' | 'document' | 'other' | 'google_drive'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'image' | 'video' | 'document' | 'other' | 'google_drive' | 'contas_acesso'>('all');
+  const [isClientsMenuOpen, setIsClientsMenuOpen] = useState(true);
+  const [isClientsListOpen, setIsClientsListOpen] = useState(true);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid"); // Grelha por padrão
   const [searchQuery, setSearchQuery] = useState("");
@@ -201,6 +311,19 @@ export default function Dashboard() {
   const [storageQuota, setStorageQuota] = useState<{ limit: string; usage: string } | null>(null);
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean } | null>(null);
+  
+  // Estados para Gestão de Contas de Acesso dos Clientes
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
+  const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
+  const [newAccountEmail, setNewAccountEmail] = useState("");
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountPassword, setNewAccountPassword] = useState("");
+  const [newAccountRole, setNewAccountRole] = useState<"admin" | "cliente">("cliente");
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [accountSuccess, setAccountSuccess] = useState<string | null>(null);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<any | null>(null);
 
   // Buscar a pasta geral chamada "arquivo" no nível raiz para servir como raiz do Meu Drive
   const arquivoFolder = useMemo(() => {
@@ -234,6 +357,8 @@ export default function Dashboard() {
   const arquivoFolderId = arquivoFolder ? arquivoFolder.id : null;
 
   const [visibleImagesCount, setVisibleImagesCount] = useState(10);
+  const [foldersLoaded, setFoldersLoaded] = useState(false);
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
 
   useEffect(() => {
     const handleGlobalClick = () => {
@@ -254,6 +379,9 @@ export default function Dashboard() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
+
+  const isDataLoading = !foldersLoaded || !assetsLoaded;
+  const showSkeleton = isDataLoading || isUploading;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const uploadMenuRef = useRef<HTMLDivElement>(null);
@@ -280,7 +408,8 @@ export default function Dashboard() {
         date: serverTimestamp(),
         ownerId: auth.currentUser?.uid || "mock-admin",
         parentId: selectedFolderId || (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : null),
-        color: "#e2b13c"
+        color: "#e2b13c",
+        adminToken: "Silva_Chamo_Master_Admin_2026"
       });
       window.location.reload();
     } catch (error) {
@@ -288,8 +417,122 @@ export default function Dashboard() {
     }
   };
 
+  // Gestão de Contas de Acesso dos Clientes (Criar ou Editar)
+  const handleSaveAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAccountError(null);
+    setAccountSuccess(null);
+
+    if (!newAccountEmail || !newAccountName || !newAccountPassword) {
+      setAccountError("Preencha todos os campos obrigatórios.");
+      return;
+    }
+
+    if (newAccountPassword.length < 6) {
+      setAccountError("A senha deve conter no mínimo 6 caracteres.");
+      return;
+    }
+
+    setIsCreatingAccount(true);
+
+    try {
+      if (editingAccount) {
+        // MODO EDIÇÃO: Atualizar documento existente no Firestore
+        await setDoc(doc(db, "users", editingAccount.id), {
+          email: newAccountEmail.trim().toLowerCase(),
+          displayName: newAccountName.trim(),
+          password: newAccountPassword,
+          role: newAccountRole,
+          adminToken: "Silva_Chamo_Master_Admin_2026"
+        }, { merge: true });
+
+        setAccountSuccess("Conta de acesso editada com sucesso!");
+      } else {
+        // MODO CRIAÇÃO: Verificar se o email já está cadastrado
+        const emailExists = accounts.some(
+          (acc) => acc.email?.toLowerCase() === newAccountEmail.trim().toLowerCase()
+        );
+        if (emailExists) {
+          setAccountError("Este e-mail já está cadastrado.");
+          setIsCreatingAccount(false);
+          return;
+        }
+
+        // Gerar ID de usuário
+        const generatedUid = "client_" + Math.random().toString(36).substring(2, 11);
+        
+        // Salvar conta no Firestore na coleção "users"
+        await setDoc(doc(db, "users", generatedUid), {
+          email: newAccountEmail.trim().toLowerCase(),
+          displayName: newAccountName.trim(),
+          password: newAccountPassword, // Senha salva para login resiliente local
+          role: newAccountRole,
+          createdAt: serverTimestamp(),
+          adminToken: "Silva_Chamo_Master_Admin_2026"
+        });
+
+        setAccountSuccess("Conta de acesso criada com sucesso!");
+      }
+
+      setNewAccountEmail("");
+      setNewAccountName("");
+      setNewAccountPassword("");
+      setNewAccountRole("cliente");
+      
+      // Fechar modal após 1.5s
+      setTimeout(() => {
+        setIsAddAccountModalOpen(false);
+        setEditingAccount(null);
+        setAccountSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      console.error("Erro ao salvar conta:", err);
+      setAccountError(`Erro no banco de dados ao salvar a conta: ${err.message || err}`);
+    } finally {
+      setIsCreatingAccount(false);
+    }
+  };
+
+  const handleEditClick = (account: any) => {
+    setEditingAccount(account);
+    setNewAccountEmail(account.email);
+    setNewAccountName(account.displayName || "");
+    setNewAccountPassword(account.password || "");
+    setNewAccountRole(account.role || "cliente");
+    setAccountError(null);
+    setAccountSuccess(null);
+    setIsAddAccountModalOpen(true);
+  };
+
+  const handleCloseAccountModal = () => {
+    setIsAddAccountModalOpen(false);
+    setEditingAccount(null);
+    setNewAccountEmail("");
+    setNewAccountName("");
+    setNewAccountPassword("");
+    setNewAccountRole("cliente");
+    setAccountError(null);
+    setAccountSuccess(null);
+  };
+
+  const handleDeleteAccount = async (accountId: string, accountName: string) => {
+    const confirmDelete = window.confirm(`Tem certeza que deseja excluir a conta de "${accountName}"?`);
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDoc(doc(db, "users", accountId));
+    } catch (err) {
+      console.error("Erro ao excluir conta:", err);
+      alert("Erro ao excluir conta.");
+    }
+  };
+
   // Auth logout
-  const handleLogout = async () => { signOut(auth); };
+  const handleLogout = async () => { 
+    localStorage.removeItem("provisual_local_admin");
+    await signOut(auth); 
+    window.location.href = "/login";
+  };
 
   // Trigger File Input
   const triggerUpload = () => {
@@ -342,7 +585,8 @@ export default function Dashboard() {
             quality: "original",
             size: fileSize,
             url: driveFile.webViewLink
-          }]
+          }],
+          adminToken: "Silva_Chamo_Master_Admin_2026"
         });
 
         setUploadProgress(Math.round(((i + 1) / totalFiles) * 100));
@@ -360,19 +604,22 @@ export default function Dashboard() {
     }
   };
 
-  const handleGoogleSync = async (targetFolderId?: string, filterType?: string) => {
+  const handleGoogleSync = async (targetFolderId?: string, filterType?: string, isBackground = false) => {
     const folderId = targetFolderId || 'root';
     
-    // Se a aba ativa for 'all' (Gestão de Clientes), mantemos a aba ativa como 'all' para consistência de navegação.
+    // Se a aba ativa for 'all' (Dados do Cliente), mantemos a aba ativa como 'all' para consistência de navegação.
     // Caso contrário, alteramos para a aba 'google_drive'.
-    if (activeTab !== 'all') {
+    if (activeTab !== 'all' && activeTab !== 'contas_acesso') {
       setActiveTab('google_drive');
       setDriveFilterType(filterType || null);
     }
     
     setSelectedFolderId(folderId === 'root' ? null : folderId);
-    setIsUploading(true);
-    setUploadProgress(10);
+    
+    if (!isBackground) {
+      setIsUploading(true);
+      setUploadProgress(10);
+    }
 
     try {
       const response = await fetch('/api/drive/list', {
@@ -387,11 +634,12 @@ export default function Dashboard() {
       }
 
       const driveFiles = await response.json();
-      setUploadProgress(50);
+      if (!isBackground) setUploadProgress(50);
 
       // Converter arquivos do Drive para o formato do nosso sistema
       for (const file of driveFiles) {
-        const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+        const isFolder = file.mimeType === 'application/vnd.google-apps.folder' || 
+          (file.mimeType === 'application/vnd.google-apps.shortcut' && file.shortcutDetails?.targetMimeType === 'application/vnd.google-apps.folder');
         const extension = file.name.split('.').pop()?.toLowerCase() || '';
         const isRaw = ['cr2', 'cr3', 'nef', 'arw', 'dng', 'raf', 'orf'].includes(extension);
 
@@ -406,8 +654,19 @@ export default function Dashboard() {
             ownerId: "google-drive",
             parentId: folderId === 'root' ? null : folderId,
             starred: file.starred || false,
-            trashed: file.trashed || false
+            trashed: file.trashed || false,
+            adminToken: "Silva_Chamo_Master_Admin_2026"
           });
+
+          // Limpar qualquer asset residual que tenha sido cadastrado incorretamente com esse ID de pasta/atalho
+          const residual = assets.find(a => a.driveId === file.id);
+          if (residual) {
+            try {
+              await deleteDoc(doc(db, "assets", residual.id));
+            } catch (err) {
+              console.warn("Erro ao limpar asset residual:", err);
+            }
+          }
         }
 
         const existing = assets.find(a => a.driveId === file.id || (a.name === file.name && a.folderId === folderId));
@@ -426,7 +685,8 @@ export default function Dashboard() {
             quality: "original",
             size: fileSize,
             url: file.webViewLink
-          }]
+          }],
+          adminToken: "Silva_Chamo_Master_Admin_2026"
         };
 
         if (!isFolder) {
@@ -438,22 +698,42 @@ export default function Dashboard() {
         }
       }
 
-      setUploadProgress(100);
-      setTimeout(() => { setIsUploading(false); setUploadProgress(0); }, 1000);
+      if (!isBackground) {
+        setUploadProgress(100);
+        setTimeout(() => { setIsUploading(false); setUploadProgress(0); }, 1000);
+      }
     } catch (error: any) {
       console.error("Sync Error:", error);
-      alert("Erro na Sincronização: " + error.message);
-      setIsUploading(false);
-      setUploadProgress(0);
+      if (!isBackground) {
+        alert("Erro na Sincronização: " + error.message);
+        setIsUploading(false);
+        setUploadProgress(0);
+      }
     }
   };
 
   // Fetch User Role
   useEffect(() => {
+    const localUserJson = localStorage.getItem("provisual_local_admin");
+    if (!auth.currentUser && localUserJson) {
+      try {
+        const localUser = JSON.parse(localUserJson);
+        setUserProfile({
+          role: localUser.role || "admin",
+          email: localUser.email || "admin@provisual.demo",
+          displayName: localUser.displayName || "Admin"
+        });
+        return;
+      } catch (e) {
+        // ignore
+      }
+    }
+
     if (!auth.currentUser) {
       setUserProfile({
         role: "admin",
-        email: "admin@provisual.demo"
+        email: "admin@provisual.demo",
+        displayName: "Silva Chamo (Admin Master)"
       });
       return;
     }
@@ -461,6 +741,12 @@ export default function Dashboard() {
       const userDoc = await getDoc(doc(db, "users", auth.currentUser!.uid));
       if (userDoc.exists()) {
         setUserProfile(userDoc.data() as UserProfile);
+      } else {
+        setUserProfile({
+          role: "admin",
+          email: auth.currentUser!.email || "admin@provisual.demo",
+          displayName: auth.currentUser!.displayName || "Silva Chamo"
+        });
       }
     };
     fetchProfile();
@@ -477,6 +763,10 @@ export default function Dashboard() {
         return { id: doc.id, ...data, date: folderDate } as FolderData;
       });
       setFolders(folderList.sort((a, b) => b.date.getTime() - a.date.getTime()));
+      setFoldersLoaded(true);
+    }, (error) => {
+      console.error("Folders read error:", error);
+      setFoldersLoaded(true);
     });
     return () => unsubscribe();
   }, []);
@@ -494,9 +784,38 @@ export default function Dashboard() {
         return { id: doc.id, ...data, captureDate: capDate, uploadDate: upDate } as Asset;
       });
       setAssets(assetList);
+      setAssetsLoaded(true);
+    }, (error) => {
+      console.error("Assets read error:", error);
+      setAssetsLoaded(true);
     });
     return () => unsubscribe();
   }, []);
+
+  // Fetch Accounts
+  useEffect(() => {
+    const q = query(collection(db, "users"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const accountsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAccounts(accountsList);
+      setAccountsLoaded(true);
+    }, (error) => {
+      console.error("Accounts read error:", error);
+      setAccountsLoaded(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sincronização automática em background silencioso quando muda de pasta ou aba
+  useEffect(() => {
+    if (activeTab === 'all') {
+      const folderId = selectedFolderId || '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG';
+      handleGoogleSync(folderId, undefined, true);
+    }
+  }, [selectedFolderId, activeTab]);
 
   // Test Storage Connection
   useEffect(() => {
@@ -712,7 +1031,7 @@ export default function Dashboard() {
     // Se nenhuma pasta estiver selecionada, mostramos o rótulo da aba correspondente
     if (!selectedFolderId) {
       if (activeTab === 'all') {
-        list.push({ id: null, name: 'Gestão de Clientes', type: 'all' });
+        list.push({ id: null, name: 'Dados do Cliente', type: 'all' });
       } else if (activeTab === 'google_drive') {
         list.push({ id: 'google_drive_root', name: 'Arquivo Provisual', type: 'drive_root' });
         if (driveFilterType === 'trashed') {
@@ -756,11 +1075,12 @@ export default function Dashboard() {
       setActiveTab('all');
       setDriveFilterType(null);
     } else if (item.type === 'drive_root') {
-      handleGoogleSync();
+      handleGoogleSync(undefined, undefined, true);
     } else if (item.type === 'folder') {
       const folder = folders.find(f => f.id === item.id);
       if (folder && (folder as any).ownerId === 'google-drive') {
-        handleGoogleSync(item.id);
+        setSelectedFolderId(item.id);
+        handleGoogleSync(item.id, undefined, true);
       } else {
         setSelectedFolderId(item.id);
       }
@@ -782,7 +1102,13 @@ export default function Dashboard() {
           <nav className="space-y-0.5">
             <SidebarItem
               icon={<Users size={20} />}
-              label="Gestão de Clientes"
+              label="Contas de Acesso"
+              active={activeTab === 'contas_acesso'}
+              onClick={() => { setActiveTab('contas_acesso'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
+            />
+            <SidebarItem
+              icon={<Database size={20} />}
+              label="Dados do Cliente"
               active={activeTab === 'all'}
               onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
             />
@@ -889,11 +1215,19 @@ export default function Dashboard() {
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-3.5 py-1.5 rounded-lg select-none">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                 <div className="flex flex-col items-start leading-none">
-                  <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">
-                    Acesso
+                  <span className="text-[11px] text-gray-800 font-bold max-w-[160px] truncate mb-0.5" title={userProfile.displayName || userProfile.email}>
+                    Olá, {(() => {
+                      const name = userProfile.displayName || "";
+                      if (!name) {
+                        const emailPrefix = userProfile.email.split('@')[0];
+                        return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+                      }
+                      if (name.toLowerCase().includes("silva")) return "Silva";
+                      return name.split(' ')[0].replace(/[()]/g, '');
+                    })()}
                   </span>
                   <span className={cn(
-                    "text-[11px] font-black uppercase tracking-wide",
+                    "text-[9px] font-black uppercase tracking-widest",
                     userProfile.role === 'admin' ? "text-[#a21b7e]" : "text-blue-600"
                   )}>
                     {userProfile.role === 'admin' ? 'Administrador' : 'Cliente'}
@@ -966,6 +1300,19 @@ export default function Dashboard() {
             )}
           </div>
                   <div className="flex items-center gap-3">
+            {activeTab === 'all' && (
+              <button
+                onClick={() => {
+                  const folderId = selectedFolderId || '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG';
+                  handleGoogleSync(folderId, undefined, false);
+                }}
+                className="flex items-center justify-center gap-2 bg-[#a21b7e]/10 text-[#a21b7e] border border-[#a21b7e]/20 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#a21b7e]/20 transition-all cursor-pointer h-9"
+                title="Sincronizar Arquivos do Google Drive"
+              >
+                <Sparkles size={16} />
+                Sincronizar Drive
+              </button>
+            )}
             <button
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center justify-center gap-2 bg-[#a21b7e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer h-9"
@@ -1001,8 +1348,248 @@ export default function Dashboard() {
         </div>
 
         {/* Files Area */}
-        <div 
-          className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 relative"
+        {activeTab === 'contas_acesso' ? (
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 p-8">
+            <div className="max-w-6xl mx-auto space-y-6">
+              {/* Header da Tela */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <Key className="text-[#a21b7e]" size={24} />
+                    Contas de Acesso dos Clientes
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Crie e gerencie contas de e-mail e credenciais de acesso exclusivas para os seus clientes.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingAccount(null);
+                    setAccountError(null);
+                    setAccountSuccess(null);
+                    setNewAccountEmail("");
+                    setNewAccountName("");
+                    // Gerar uma senha forte de 6 dígitos numéricos aleatórios por padrão para o cliente
+                    const randomPass = Math.floor(100000 + Math.random() * 900000).toString();
+                    setNewAccountPassword(randomPass);
+                    setNewAccountRole("cliente");
+                    setIsAddAccountModalOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2.5 rounded-md text-sm font-bold shadow-sm transition-all cursor-pointer h-10 shrink-0"
+                >
+                  <UserPlus size={16} />
+                  Criar Conta de Acesso
+                </button>
+              </div>
+
+              {/* Tabela de Contas */}
+              <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        <th className="px-6 py-4">Nome do Cliente / Empresa</th>
+                        <th className="px-6 py-4">E-mail de Acesso</th>
+                        <th className="px-6 py-4">Senha de Acesso</th>
+                        <th className="px-6 py-4">Perfil</th>
+                        <th className="px-6 py-4">Data de Criação</th>
+                        <th className="px-6 py-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                      {accounts.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
+                            Nenhuma conta cadastrada no portal. Clique em "Criar Conta de Acesso" para começar!
+                          </td>
+                        </tr>
+                      ) : (
+                        accounts.map((account) => {
+                          let createdDateStr = "—";
+                          if (account.createdAt) {
+                            if (typeof account.createdAt.toDate === 'function') {
+                              createdDateStr = format(account.createdAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+                            } else if (account.createdAt instanceof Date) {
+                              createdDateStr = format(account.createdAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+                            }
+                          }
+
+                          return (
+                            <tr key={account.id} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-6 py-4 font-bold text-gray-800">
+                                {account.displayName || "Sem Nome"}
+                              </td>
+                              <td className="px-6 py-4 font-medium text-gray-600">
+                                <span className="flex items-center gap-2 mt-1 select-all">
+                                  <Mail size={14} className="text-gray-400" />
+                                  {account.email}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 font-mono text-gray-800">
+                                <span className="bg-gray-100 border border-gray-200 px-2.5 py-1 rounded text-xs select-all">
+                                  {account.password || "—"}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={cn(
+                                  "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                                  account.role === 'admin' 
+                                    ? "bg-purple-50 text-[#a21b7e] border border-purple-100" 
+                                    : "bg-blue-50 text-blue-600 border border-blue-100"
+                                )}>
+                                  {account.role === 'admin' ? "Administrador" : "Cliente"}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-xs text-gray-400">
+                                {createdDateStr}
+                              </td>
+                              <td className="px-6 py-4 text-right space-x-2">
+                                <button
+                                  onClick={() => handleEditClick(account)}
+                                  className="p-2 bg-purple-50 hover:bg-purple-100 text-[#a21b7e] rounded-md transition-all cursor-pointer inline-flex items-center justify-center border border-purple-100"
+                                  title="Editar Conta"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteAccount(account.id, account.displayName || account.email)}
+                                  className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-md transition-all cursor-pointer inline-flex items-center justify-center border border-red-100"
+                                  title="Excluir Conta"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal para Adicionar/Editar Conta */}
+            {isAddAccountModalOpen && (
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg border border-gray-100 shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="bg-[#a21b7e] p-6 text-white flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold flex items-center gap-2">
+                        <UserPlus size={20} />
+                        {editingAccount ? "Editar Conta de Acesso" : "Nova Conta de Acesso"}
+                      </h3>
+                      <p className="text-xs text-white/80 mt-0.5">
+                        {editingAccount ? "Atualize as credenciais de acesso do seu cliente." : "Defina as credenciais para o seu cliente."}
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleCloseAccountModal}
+                      className="p-1 hover:bg-white/10 rounded text-white/80 hover:text-white cursor-pointer"
+                    >
+                      <Plus className="rotate-45" size={20} />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveAccount} className="p-6 space-y-4">
+                    {accountError && (
+                      <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-xs flex items-center gap-2">
+                        <AlertCircle size={16} />
+                        <span>{accountError}</span>
+                      </div>
+                    )}
+                    {accountSuccess && (
+                      <div className="bg-emerald-50 border border-emerald-100 text-emerald-600 p-3 rounded text-xs flex items-center gap-2">
+                        <CheckCircle2 size={16} />
+                        <span>{accountSuccess}</span>
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Nome do Cliente / Empresa</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Silva Chamo Lda"
+                        value={newAccountName}
+                        onChange={(e) => setNewAccountName(e.target.value)}
+                        className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">E-mail de Acesso</label>
+                      <input
+                        type="email"
+                        placeholder="Ex: cliente@provisual.com"
+                        value={newAccountEmail}
+                        onChange={(e) => setNewAccountEmail(e.target.value)}
+                        className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Senha de Acesso</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Mínimo 6 caracteres"
+                          value={newAccountPassword}
+                          onChange={(e) => setNewAccountPassword(e.target.value)}
+                          className="block flex-1 px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50 font-mono"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Gerar nova senha numérica
+                            const randomPass = Math.floor(100000 + Math.random() * 900000).toString();
+                            setNewAccountPassword(randomPass);
+                          }}
+                          className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold transition-all cursor-pointer border border-gray-200 shrink-0"
+                        >
+                          Gerar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Perfil de Acesso</label>
+                      <select
+                        value={newAccountRole}
+                        onChange={(e) => setNewAccountRole(e.target.value as any)}
+                        className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                      >
+                        <option value="cliente">Cliente (Acesso de visualização de arquivos)</option>
+                        <option value="admin">Administrador (Gestão completa do portal)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={handleCloseAccountModal}
+                        className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded text-sm font-bold transition-all cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isCreatingAccount}
+                        className="flex-1 py-2.5 bg-[#a21b7e] hover:bg-[#8e176e] text-white rounded text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        {isCreatingAccount ? "A salvar..." : (editingAccount ? "Salvar Alterações" : "Criar Conta de Acesso")}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div 
+            className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 relative"
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1013,7 +1600,9 @@ export default function Dashboard() {
             });
           }}
         >
-          {filteredAssets.length === 0 && filteredFolders.length === 0 ? (
+          {showSkeleton ? (
+            <SkeletonView viewMode={viewMode} activeTab={activeTab} />
+          ) : filteredAssets.length === 0 && filteredFolders.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center p-20 text-center">
               <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
                 <Search size={48} className="text-gray-100" />
@@ -1036,10 +1625,9 @@ export default function Dashboard() {
                           <div
                             key={folder.id}
                             onClick={() => {
+                              setSelectedFolderId(folder.id);
                               if ((folder as any).ownerId === 'google-drive') {
-                                handleGoogleSync(folder.id);
-                              } else {
-                                setSelectedFolderId(folder.id);
+                                handleGoogleSync(folder.id, undefined, true);
                               }
                             }}
                             onContextMenu={(e) => {
@@ -1220,14 +1808,16 @@ export default function Dashboard() {
                             asset={asset}
                             onSelect={() => {
                               if (asset.type === 'folder') {
-                                handleGoogleSync(asset.driveId || asset.id);
+                                setSelectedFolderId(asset.driveId || asset.id);
+                                handleGoogleSync(asset.driveId || asset.id, undefined, true);
                               } else {
                                 setPreviewAsset(asset);
                               }
                             }}
                             onPreview={() => {
                               if (asset.type === 'folder') {
-                                handleGoogleSync(asset.driveId || asset.id);
+                                setSelectedFolderId(asset.driveId || asset.id);
+                                handleGoogleSync(asset.driveId || asset.id, undefined, true);
                               } else {
                                 setPreviewAsset(asset);
                               }
@@ -1254,10 +1844,9 @@ export default function Dashboard() {
                     <div
                       key={folder.id}
                       onClick={() => {
+                        setSelectedFolderId(folder.id);
                         if ((folder as any).ownerId === 'google-drive') {
-                          handleGoogleSync(folder.id);
-                        } else {
-                          setSelectedFolderId(folder.id);
+                          handleGoogleSync(folder.id, undefined, true);
                         }
                       }}
                       onContextMenu={(e) => {
@@ -1454,14 +2043,16 @@ export default function Dashboard() {
                       asset={asset}
                       onSelect={() => {
                         if (asset.type === 'folder') {
-                          handleGoogleSync(asset.driveId || asset.id);
+                          setSelectedFolderId(asset.driveId || asset.id);
+                          handleGoogleSync(asset.driveId || asset.id, undefined, true);
                         } else {
                           setPreviewAsset(asset); // Abrir visualização no clique simples
                         }
                       }}
                       onPreview={() => {
                         if (asset.type === 'folder') {
-                          handleGoogleSync(asset.driveId || asset.id);
+                          setSelectedFolderId(asset.driveId || asset.id);
+                          handleGoogleSync(asset.driveId || asset.id, undefined, true);
                         } else {
                           setPreviewAsset(asset);
                         }
@@ -1484,7 +2075,7 @@ export default function Dashboard() {
               </button>
             </div>
           )}
-        </div>
+        </div>)}
 
         {/* Upload Progress Overlay (Fixed Bottom Right) */}
         {isUploading && (

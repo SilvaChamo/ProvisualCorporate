@@ -3,13 +3,27 @@ import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
 import { useState, useEffect } from "react";
 import { auth } from "./lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 1. Verifica primeiro se há um login local de emergência no localStorage
+    const localUserJson = localStorage.getItem("provisual_local_admin");
+    if (localUserJson) {
+      try {
+        const localUser = JSON.parse(localUserJson);
+        setUser(localUser);
+        setLoading(false);
+        return;
+      } catch (e) {
+        localStorage.removeItem("provisual_local_admin");
+      }
+    }
+
+    // 2. Se não houver, escuta o Firebase Auth
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -31,13 +45,13 @@ export default function App() {
         <Routes>
           <Route 
             path="/login" 
-            element={<Login />} 
+            element={user ? <Navigate to="/dashboard" replace /> : <Login />} 
           />
           <Route 
             path="/dashboard/*" 
-            element={<Dashboard />} 
+            element={user ? <Dashboard /> : <Navigate to="/login" replace />} 
           />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
         </Routes>
       </div>
     </Router>
