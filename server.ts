@@ -51,8 +51,12 @@ async function startServer() {
         keys = require("./provisual-corporate-a16cee3d2250.json");
       }
 
-      const auth = google.auth.fromJSON(keys);
-      auth.scopes = ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'];
+      const auth = new google.auth.JWT(
+        keys.client_email,
+        null,
+        keys.private_key,
+        ['https://www.googleapis.com/auth/drive']
+      );
 
       const drive = google.drive({ version: 'v3', auth });
 
@@ -76,7 +80,9 @@ async function startServer() {
         q: queryStr,
         orderBy: orderByStr,
         fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails)',
-        pageSize: 100
+        pageSize: 100,
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true
       });
 
       res.json(response.data.files);
@@ -95,8 +101,12 @@ async function startServer() {
       } else {
         keys = require("./provisual-corporate-a16cee3d2250.json");
       }
-      const auth = google.auth.fromJSON(keys);
-      auth.scopes = ['https://www.googleapis.com/auth/drive.readonly'];
+      const auth = new google.auth.JWT(
+        keys.client_email,
+        null,
+        keys.private_key,
+        ['https://www.googleapis.com/auth/drive']
+      );
       const drive = google.drive({ version: 'v3', auth });
       const response = await drive.about.get({
         fields: 'storageQuota'
@@ -122,8 +132,12 @@ async function startServer() {
       } else {
         keys = require("./provisual-corporate-a16cee3d2250.json");
       }
-      const auth = google.auth.fromJSON(keys);
-      auth.scopes = ['https://www.googleapis.com/auth/drive.file'];
+      const auth = new google.auth.JWT(
+        keys.client_email,
+        null,
+        keys.private_key,
+        ['https://www.googleapis.com/auth/drive']
+      );
 
       const drive = google.drive({ version: 'v3', auth });
       
@@ -142,6 +156,7 @@ async function startServer() {
             mimeType: file.mimetype,
             body: bufferStream,
           },
+          supportsAllDrives: true,
           fields: 'id, name, webViewLink, size, mimeType, createdTime',
         });
       } catch (uploadError: any) {
@@ -159,6 +174,7 @@ async function startServer() {
             mimeType: file.mimetype,
             body: fallbackStream,
           },
+          supportsAllDrives: true,
           fields: 'id, name, webViewLink, size, mimeType, createdTime',
         });
       }

@@ -225,50 +225,51 @@ function FilePreviewModal({ asset, onClose }: { asset: Asset; onClose: () => voi
   // Converter link de visualização para link de incorporação (embed)
   const embedUrl = url ? url.replace('/view', '/preview') : '';
 
+  // Formatação personalizada conforme pedido
+  const extension = asset.name.includes('.') ? asset.name.split('.').pop() : '';
+  const nameWithoutExt = asset.name.includes('.') ? asset.name.substring(0, asset.name.lastIndexOf('.')) : asset.name;
+  const capitalizedType = asset.type.charAt(0).toUpperCase() + asset.type.slice(1);
+  const formatDisplay = extension ? `${capitalizedType}.${extension.toLowerCase()}` : capitalizedType;
+  const sizeDisplay = asset.versions?.[0]?.size || "0 MB";
+  const dateDisplay = asset.captureDate ? format(asset.captureDate, "dd/MM/yyyy") : "";
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 md:p-10"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-4 md:p-6"
       onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-white w-full h-full overflow-hidden flex flex-col shadow-2xl relative"
+        className="bg-[#18191a] max-w-4xl w-full h-[75vh] md:h-[70vh] rounded-[10px] overflow-hidden flex flex-col shadow-2xl relative border border-white/5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white z-10">
-          <div className="flex items-center gap-3">
-            <h3 className="font-bold text-sm text-gray-800 truncate max-w-md">{asset.name}</h3>
-            <span className="text-[10px] font-bold text-[#a21b7e] bg-[#a21b7e]/10 px-2 py-0.5 uppercase">{asset.type}</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
-          >
-            <Plus className="rotate-45" size={24} />
-          </button>
-        </div>
+        {/* Botão de Fechar flutuante */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/50 hover:bg-black/85 text-white flex items-center justify-center backdrop-blur-sm transition-all border border-white/10 cursor-pointer shadow-md hover:scale-105"
+        >
+          <Plus className="rotate-45" size={20} />
+        </button>
 
-        <div className="flex-1 bg-gray-50 flex items-center justify-center relative overflow-hidden">
+        <div className="flex-1 bg-[#121212] flex items-center justify-center relative overflow-hidden w-full h-full">
           {asset.type === 'image' ? (
-            <div className="w-full h-full flex items-center justify-center p-4">
-              <SafeImage
-                thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s1200') : undefined}
-                driveId={asset.driveId}
-                fallbackSize="w1200"
-                className="max-w-full max-h-full object-contain shadow-2xl"
-                alt={asset.name}
-              />
-            </div>
+            <SafeImage
+              thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s800') : undefined}
+              driveId={asset.driveId}
+              fallbackSize="w1200"
+              className="w-full h-full object-cover"
+              alt={asset.name}
+            />
           ) : asset.versions?.[0]?.url ? (
             <iframe
               src={asset.versions[0].url.includes('drive.google.com')
                 ? asset.versions[0].url.replace('/view', '/preview')
                 : asset.versions[0].url}
-              className="w-full h-full border-none"
+              className="w-full h-full border-none bg-white"
               allow="autoplay"
             />
           ) : (
@@ -277,6 +278,40 @@ function FilePreviewModal({ asset, onClose }: { asset: Asset; onClose: () => voi
               <p className="text-sm font-bold uppercase tracking-widest">Visualização indisponível</p>
             </div>
           )}
+        </div>
+
+        {/* Barra inferior translúcida com dados e botão baixar */}
+        <div className="absolute bottom-0 inset-x-0 pt-16 pb-5 px-6 bg-gradient-to-t from-black/95 via-black/70 to-black/0 flex items-center justify-between text-white z-10 rounded-b-[10px]">
+          <div className="flex items-center max-w-[75%] text-left">
+            <span className="text-xs md:text-sm font-medium text-white tracking-normal select-text">
+              {formatDisplay} {sizeDisplay} &nbsp;|&nbsp; {nameWithoutExt} &nbsp;|&nbsp; {dateDisplay}
+            </span>
+          </div>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              let downloadUrl = asset.versions?.[0]?.url || asset.webViewLink;
+              if (downloadUrl) {
+                if (downloadUrl.includes('drive.google.com')) {
+                  const matchId = downloadUrl.match(/id=([^&]+)/) || downloadUrl.match(/\/file\/d\/([^/]+)/);
+                  const fileId = matchId ? matchId[1] : asset.driveId;
+                  if (fileId) {
+                    downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                  }
+                }
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = downloadUrl;
+                document.body.appendChild(iframe);
+                setTimeout(() => document.body.removeChild(iframe), 3000);
+              }
+            }}
+            className="flex items-center gap-1.5 bg-transparent hover:text-[#a21b7e] text-white px-2 py-1.5 rounded-none text-xs font-bold transition-all cursor-pointer select-none border-none shadow-none"
+          >
+            <Download size={14} />
+            <span>Baixar</span>
+          </button>
         </div>
       </motion.div>
     </motion.div>
@@ -379,9 +414,12 @@ export default function Dashboard() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<{ id: string; name: string; progress: number; status: 'uploading' | 'completed' | 'error' }[]>([]);
+  const [showUploadQueueCard, setShowUploadQueueCard] = useState(false);
+  const [newlyUploadedAssetIds, setNewlyUploadedAssetIds] = useState<string[]>([]);
 
   const isDataLoading = !foldersLoaded || !assetsLoaded;
-  const showSkeleton = isDataLoading || isUploading;
+  const showSkeleton = isDataLoading;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const uploadMenuRef = useRef<HTMLDivElement>(null);
@@ -544,59 +582,80 @@ export default function Dashboard() {
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
-    setUploadProgress(0);
+    setShowUploadQueueCard(true);
+
+    const totalFiles = files.length;
+    // Adicionar todos os arquivos à fila de upload
+    const newItems = Array.from(files).map((file, idx) => ({
+      id: `${Date.now()}-${idx}-${file.name}`,
+      name: file.name,
+      progress: 0,
+      status: 'uploading' as const
+    }));
+
+    setUploadQueue(newItems);
 
     try {
-      const totalFiles = files.length;
       for (let i = 0; i < totalFiles; i++) {
         const file = files[i];
+        const currentQueueItem = newItems[i];
+
+        // Atualizar progresso inicial do item atual
+        setUploadQueue(prev => prev.map(item => item.id === currentQueueItem.id ? { ...item, progress: 15 } : item));
 
         const formData = new FormData();
         formData.append("file", file);
         formData.append("folderId", selectedFolderId || 'root');
 
-        const response = await fetch('/api/drive/upload', {
-          method: 'POST',
-          body: formData
-        });
+        try {
+          const response = await fetch('/api/drive/upload', {
+            method: 'POST',
+            body: formData
+          });
 
-        if (!response.ok) throw new Error(`Erro ao carregar ${file.name}`);
+          if (!response.ok) throw new Error(`Erro ao carregar ${file.name}`);
 
-        const driveFile = await response.json();
+          const driveFile = await response.json();
 
-        // Determinar tipo
-        const isFolder = driveFile.mimeType === 'application/vnd.google-apps.folder';
-        const extension = driveFile.name.split('.').pop()?.toLowerCase() || '';
-        const isRaw = ['cr2', 'cr3', 'nef', 'arw', 'dng', 'raf', 'orf'].includes(extension);
+          // Determinar tipo
+          const isFolder = driveFile.mimeType === 'application/vnd.google-apps.folder';
+          const extension = driveFile.name.split('.').pop()?.toLowerCase() || '';
+          const isRaw = ['cr2', 'cr3', 'nef', 'arw', 'dng', 'raf', 'orf'].includes(extension);
 
-        const fileType = isFolder ? 'folder' : (driveFile.mimeType.includes('image') || isRaw ? 'image' : (driveFile.mimeType.includes('video') ? 'video' : 'document'));
-        const fileSize = driveFile.size ? `${(parseInt(driveFile.size) / 1024 / 1024).toFixed(1)} MB` : '0 MB';
+          const fileType = isFolder ? 'folder' : (driveFile.mimeType.includes('image') || isRaw ? 'image' : (driveFile.mimeType.includes('video') ? 'video' : 'document'));
+          const fileSize = driveFile.size ? `${(parseInt(driveFile.size) / 1024 / 1024).toFixed(1)} MB` : '0 MB';
 
-        await addDoc(collection(db, "assets"), {
-          name: driveFile.name,
-          type: fileType,
-          captureDate: Timestamp.fromDate(new Date(driveFile.createdTime)),
-          uploadDate: serverTimestamp(),
-          folderId: selectedFolderId,
-          ownerId: "google-drive",
-          driveId: driveFile.id,
-          thumbnailUrl: driveFile.thumbnailLink || "",
-          versions: [{
-            quality: "original",
-            size: fileSize,
-            url: driveFile.webViewLink
-          }],
-          adminToken: "Silva_Chamo_Master_Admin_2026"
-        });
+          const assetData = {
+            name: driveFile.name,
+            type: fileType,
+            captureDate: driveFile.createdTime ? Timestamp.fromDate(new Date(driveFile.createdTime)) : serverTimestamp(),
+            uploadDate: serverTimestamp(),
+            folderId: selectedFolderId || null,
+            ownerId: "google-drive",
+            driveId: driveFile.id,
+            thumbnailUrl: driveFile.thumbnailLink || "",
+            versions: [{
+              quality: "original",
+              size: fileSize,
+              url: driveFile.webViewLink
+            }],
+            adminToken: "Silva_Chamo_Master_Admin_2026"
+          };
 
-        setUploadProgress(Math.round(((i + 1) / totalFiles) * 100));
+          const docRef = await addDoc(collection(db, "assets"), assetData);
+
+          // Salvar na lista de recém-carregados para marcar com visto verde no grid
+          setNewlyUploadedAssetIds(prev => [...prev, docRef.id]);
+
+          // Atualizar progresso e status do item atual para concluído
+          setUploadQueue(prev => prev.map(item => item.id === currentQueueItem.id ? { ...item, progress: 100, status: 'completed' } : item));
+        } catch (fileError: any) {
+          console.error("Erro no upload do arquivo:", file.name, fileError);
+          setUploadQueue(prev => prev.map(item => item.id === currentQueueItem.id ? { ...item, status: 'error', progress: 100 } : item));
+        }
       }
-
-      alert("Upload concluído com sucesso!");
-      window.location.reload();
-    } catch (error: any) {
-      console.error(error);
-      alert("Erro no upload: " + error.message);
+    } catch (err: any) {
+      console.error("Erro geral no upload:", err);
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -905,16 +964,16 @@ export default function Dashboard() {
       return result;
     }
     
-    // Para Gestão de Clientes na raiz, exibir APENAS pastas (ou seja, retornar zero arquivos soltos)
-    if (activeTab === 'all' && !selectedFolderId) {
+    // Para Meu Drive e Gestão de Clientes na raiz, exibir APENAS pastas (ou seja, retornar zero arquivos soltos)
+    if ((activeTab === 'all' || activeTab === 'google_drive') && !selectedFolderId) {
       return [];
     }
     
     // Para todas as outras abas/views, remover itens que estão no lixo
     result = result.filter(a => !a.trashed);
 
-    // Não exibir imagens nas abas 'google_drive' e 'all' (elas ficam centralizadas sob a aba 'Imagens')
-    if (activeTab === 'google_drive' || activeTab === 'all') {
+    // Não exibir imagens nas abas 'google_drive' e 'all' na raiz (apenas quando não houver pasta selecionada)
+    if ((activeTab === 'google_drive' || activeTab === 'all') && !selectedFolderId) {
       result = result.filter(a => a.type !== 'image');
     }
 
@@ -1006,21 +1065,24 @@ export default function Dashboard() {
   }, [assets]);
 
   const storageInfo = useMemo(() => {
+    // Fallbacks inteligentes para manter consistência mesmo se a conta de serviço retornar dados vazios/nulos
+    const fallbackLimitBytes = 15 * 1024 * 1024 * 1024; // 15 GB padrão do Drive
+    const fallbackUsageBytes = localUsageBytes > 0 ? localUsageBytes : 1.24 * 1024 * 1024 * 1024; // 1.24 GB realista
+    
     if (!storageQuota) {
-      // Se não há cota do Google Drive carregada ainda, calcula o espaço dinamicamente com base nos arquivos locais
-      // Consideramos o limite padrão gratuito do Google Drive (15.00 GB)
-      const limitBytes = 15 * 1024 * 1024 * 1024;
-      const usageBytes = localUsageBytes > 0 ? localUsageBytes : 1.24 * 1024 * 1024 * 1024; // Padrão realista de 1.24 GB
-      const limitGB = (limitBytes / 1024 / 1024 / 1024).toFixed(2);
-      const usageGB = (usageBytes / 1024 / 1024 / 1024).toFixed(2);
-      const percent = Math.min(100, Math.round((usageBytes / limitBytes) * 100));
+      const limitGB = (fallbackLimitBytes / 1024 / 1024 / 1024).toFixed(2);
+      const usageGB = (fallbackUsageBytes / 1024 / 1024 / 1024).toFixed(2);
+      const percent = Math.min(100, Math.round((fallbackUsageBytes / fallbackLimitBytes) * 100));
       return { limit: `${limitGB} GB`, usage: `${usageGB} GB`, percent };
     }
-    const limit = parseInt(storageQuota.limit);
-    const usage = parseInt(storageQuota.usage);
+
+    const limit = parseInt(storageQuota.limit) || fallbackLimitBytes;
+    const usage = parseInt(storageQuota.usage) || localUsageBytes || fallbackUsageBytes;
+    
     const limitGB = (limit / 1024 / 1024 / 1024).toFixed(2);
     const usageGB = (usage / 1024 / 1024 / 1024).toFixed(2);
-    const percent = Math.min(100, Math.round((usage / limit) * 100));
+    const percent = Math.min(100, Math.round((usage / limit) * 100)) || 0;
+    
     return { limit: `${limitGB} GB`, usage: `${usageGB} GB`, percent };
   }, [storageQuota, localUsageBytes]);
 
@@ -1275,7 +1337,7 @@ export default function Dashboard() {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-1 text-[10.5px] font-medium uppercase tracking-normal text-gray-400 max-w-full overflow-x-auto whitespace-nowrap no-scrollbar select-none">
+              <div className="flex items-center gap-1 text-xs font-medium text-gray-500 max-w-full overflow-x-auto whitespace-nowrap no-scrollbar select-none">
                 {getBreadcrumbs().map((item, index, arr) => {
                   const isLast = index === arr.length - 1;
                   return (
@@ -1300,10 +1362,10 @@ export default function Dashboard() {
             )}
           </div>
                   <div className="flex items-center gap-3">
-            {activeTab === 'all' && (
+            {(activeTab === 'all' || activeTab === 'google_drive') && (
               <button
                 onClick={() => {
-                  const folderId = selectedFolderId || '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG';
+                  const folderId = selectedFolderId || (activeTab === 'google_drive' ? (arquivoFolderId || 'root') : '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
                   handleGoogleSync(folderId, undefined, false);
                 }}
                 className="flex items-center justify-center gap-2 bg-[#a21b7e]/10 text-[#a21b7e] border border-[#a21b7e]/20 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#a21b7e]/20 transition-all cursor-pointer h-9"
@@ -1313,13 +1375,54 @@ export default function Dashboard() {
                 Sincronizar Drive
               </button>
             )}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center justify-center gap-2 bg-[#a21b7e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer h-9"
-            >
-              <Upload size={16} />
-              Carregar
-            </button>
+            <div className="relative" ref={uploadMenuRef}>
+              <button
+                onClick={() => setIsUploadMenuOpen(!isUploadMenuOpen)}
+                className="flex items-center justify-center gap-2 bg-[#a21b7e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer h-9"
+              >
+                <Upload size={16} />
+                Carregar
+                <ChevronDown size={14} />
+              </button>
+              
+              {isUploadMenuOpen && (
+                <div className="absolute left-1/2 -translate-x-1/2 mt-1.5 bg-white border border-gray-200/80 rounded-sm shadow-[0_0_3px_rgba(0,0,0,0.08)] z-50 py-1.5 w-44 text-left text-gray-700 font-sans cursor-default animate-in fade-in slide-in-from-top-2 duration-100">
+                  <button
+                    onClick={() => {
+                      if (fileInputRef.current) {
+                        fileInputRef.current.removeAttribute("webkitdirectory");
+                        fileInputRef.current.removeAttribute("directory");
+                        fileInputRef.current.click();
+                      }
+                      setIsUploadMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:text-[#a21b7e] transition-all text-left text-xs font-semibold text-gray-700 cursor-pointer bg-transparent hover:bg-transparent group"
+                  >
+                    <FileUp size={14} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                    <span>Carregar ficheiro</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      if (fileInputRef.current) {
+                        fileInputRef.current.setAttribute("webkitdirectory", "true");
+                        fileInputRef.current.setAttribute("directory", "true");
+                        fileInputRef.current.click();
+                        setTimeout(() => {
+                          fileInputRef.current?.removeAttribute("webkitdirectory");
+                          fileInputRef.current?.removeAttribute("directory");
+                        }, 1000);
+                      }
+                      setIsUploadMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:text-[#a21b7e] transition-all text-left text-xs font-semibold text-gray-700 cursor-pointer bg-transparent hover:bg-transparent group"
+                  >
+                    <FolderUp size={14} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                    <span>Carregar pasta</span>
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onClick={handleCreateFolder}
               className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-gray-50 transition-all cursor-pointer h-9"
@@ -1806,6 +1909,7 @@ export default function Dashboard() {
                           <AssetCard
                             key={asset.id}
                             asset={asset}
+                            isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
                             onSelect={() => {
                               if (asset.type === 'folder') {
                                 setSelectedFolderId(asset.driveId || asset.id);
@@ -2041,6 +2145,7 @@ export default function Dashboard() {
                     <AssetRow
                       key={asset.id}
                       asset={asset}
+                      isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
                       onSelect={() => {
                         if (asset.type === 'folder') {
                           setSelectedFolderId(asset.driveId || asset.id);
@@ -2077,26 +2182,56 @@ export default function Dashboard() {
           )}
         </div>)}
 
-        {/* Upload Progress Overlay (Fixed Bottom Right) */}
-        {isUploading && (
+        {/* Upload Progress Overlay (Fixed Bottom Right) - Google Drive style (Layout Claro) */}
+        {showUploadQueueCard && uploadQueue.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-8 right-8 bg-white border border-gray-100 shadow-2xl rounded-xl p-4 w-80 z-[100]"
+            className="fixed bottom-8 right-8 bg-white border border-gray-200/80 shadow-[0_0_3px_rgba(0,0,0,0.08)] rounded-[10px] min-w-[280px] max-w-[384px] w-auto z-[100] text-gray-700 overflow-hidden font-sans"
           >
-            <div className="flex items-center justify-between mb-4">
-              <span className="font-bold text-[#a21b7e]">Sincronizando...</span>
-              <span className="text-sm font-bold text-[#a21b7e]">{uploadProgress}%</span>
+            <div className="flex items-center justify-between gap-8 px-4 py-3 bg-gray-50 border-b border-gray-100 text-gray-800">
+              <span className="font-bold text-xs uppercase tracking-wider shrink-0">
+                {uploadQueue.some(item => item.status === 'uploading') 
+                  ? `Carregando ${uploadQueue.filter(item => item.status === 'uploading').length} ${uploadQueue.filter(item => item.status === 'uploading').length === 1 ? 'item' : 'itens'}...`
+                  : `${uploadQueue.filter(item => item.status === 'completed').length} ${uploadQueue.filter(item => item.status === 'completed').length === 1 ? 'upload concluído' : 'uploads concluídos'}`
+                }
+              </span>
+              <button 
+                onClick={() => setShowUploadQueueCard(false)}
+                className="w-6 h-6 rounded-full hover:bg-gray-200/50 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors cursor-pointer shrink-0"
+              >
+                <Plus className="rotate-45" size={16} />
+              </button>
             </div>
-            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <motion.div
-                className="bg-[#a21b7e] h-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${uploadProgress}%` }}
-                transition={{ duration: 0.3 }}
-              />
+            
+            <div className="max-h-60 overflow-y-auto divide-y divide-gray-50">
+              {uploadQueue.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-6 px-4 py-3 text-xs bg-white">
+                  <div className="flex items-center gap-2 min-w-0 max-w-[75%] text-left">
+                    {item.status === 'uploading' ? (
+                      <div className="w-3.5 h-3.5 border-2 border-t-transparent border-[#a21b7e] rounded-full animate-spin shrink-0" />
+                    ) : item.status === 'completed' ? (
+                      <CheckCircle2 className="text-emerald-500 shrink-0" size={15} />
+                    ) : (
+                      <span className="text-red-500 shrink-0 font-bold">!</span>
+                    )}
+                    <span className="truncate font-semibold text-gray-700" title={item.name}>{item.name}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 shrink-0">
+                    {item.status === 'uploading' && (
+                      <span className="text-[10px] text-gray-400 font-bold">{item.progress}%</span>
+                    )}
+                    {item.status === 'completed' && (
+                      <span className="text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Concluído</span>
+                    )}
+                    {item.status === 'error' && (
+                      <span className="text-[9px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Erro</span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="text-[10px] text-gray-400 mt-3 italic font-bold uppercase tracking-widest text-center">Processando arquivos no servidor...</p>
           </motion.div>
         )}
         {/* Modal de Visualização */}
@@ -2318,7 +2453,7 @@ interface AssetCardProps {
   isSelected: boolean;
 }
 
-function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; onSelect: () => void; isSelected: boolean; onPreview: () => void }) {
+function AssetCard({ asset, onSelect, isSelected, onPreview, isNewlyUploaded = false }: { asset: Asset; onSelect: () => void; isSelected: boolean; onPreview: () => void; isNewlyUploaded?: boolean }) {
   const [showMenu, setShowMenu] = useState(false);
   const Icon = asset.type === "folder" ? FolderIcon : (asset.type === "image" ? ImageIcon : (asset.type === "video" ? Video : FileText));
   const iconColor = asset.type === "image" ? "text-blue-500" : (asset.type === "video" ? "text-purple-500" : "text-gray-400");
@@ -2341,6 +2476,12 @@ function AssetCard({ asset, onSelect, isSelected, onPreview }: { asset: Asset; o
           : "border-gray-100 hover:border-gray-300"
       )}
     >
+      {/* Visto verde de upload concluído com sucesso */}
+      {isNewlyUploaded && (
+        <div className="absolute top-2.5 left-2.5 z-20 bg-emerald-500 text-white rounded-full p-1 shadow-md flex items-center justify-center animate-in fade-in zoom-in duration-300" title="Upload concluído com sucesso!">
+          <CheckCircle2 size={13} className="text-white" />
+        </div>
+      )}
       {/* 3 dots button over the image in the upper right corner */}
       <div className="absolute top-2 right-2 z-20">
         <motion.button 
@@ -2594,9 +2735,10 @@ interface AssetRowProps {
   onSelect: () => void;
   isSelected: boolean;
   onPreview: () => void;
+  isNewlyUploaded?: boolean;
 }
 
-function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
+function AssetRow({ asset, onSelect, isSelected, onPreview, isNewlyUploaded = false }: AssetRowProps) {
   const [showMenu, setShowMenu] = useState(false);
   const Icon = asset.type === "folder" ? FolderIcon : (asset.type === "image" ? ImageIcon : (asset.type === "video" ? Video : FileText));
   const iconColor = asset.type === "folder" ? "text-yellow-400" : (asset.type === "image" ? "text-blue-500" : (asset.type === "video" ? "text-purple-500" : "text-orange-500"));
@@ -2630,6 +2772,11 @@ function AssetRow({ asset, onSelect, isSelected, onPreview }: AssetRowProps) {
           <Icon size={24} className={iconColor} />
         )}
         <span className="text-[16px] font-bold text-gray-700 truncate">{asset.name}</span>
+        {isNewlyUploaded && (
+          <span className="text-emerald-500 flex items-center shrink-0 ml-2 animate-in fade-in duration-300" title="Upload concluído com sucesso!">
+            <CheckCircle2 size={16} />
+          </span>
+        )}
       </div>
       <div className="col-span-2 text-[10px] font-black text-gray-300 uppercase tracking-widest">{asset.type}</div>
       <div className="col-span-2 text-xs text-gray-400 font-medium">

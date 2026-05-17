@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Users2, Eye, EyeOff, Globe } from "lucide-react";
+import { Users2, Eye, EyeOff, HelpCircle, Phone, Mail, MessageSquare, ExternalLink } from "lucide-react";
 import { cn } from "../lib/utils";
 import { auth, db } from "../lib/firebase";
-import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import logoHorizontal from "../Logo/logo_horizontal_clean.png";
 import simboloImg from "../Logo/Simbolo.png";
@@ -16,6 +16,7 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showSupport, setShowSupport] = useState(false);
 
   // Auto-prover a conta master de administrador no Firestore no primeiro carregamento
   useEffect(() => {
@@ -46,40 +47,7 @@ export default function Login() {
     }
   }, []);
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({
-        prompt: "select_account"
-      });
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
 
-      // Create profile if doesn't exist
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (!userDoc.exists()) {
-        await setDoc(doc(db, "users", user.uid), {
-          email: user.email,
-          displayName: user.displayName,
-          role: "admin", // Definido como administrador ao logar
-          createdAt: serverTimestamp()
-        });
-      }
-    } catch (err: any) {
-      console.warn("Google Auth falhou:", err.code);
-      
-      if (err.code === "auth/unauthorized-domain") {
-        setError("Este domínio (localhost) não está autorizado para login com Google no seu Console do Firebase. Adicione 'localhost' nas configurações de autenticação do Firebase ou acesse com seu e-mail e senha.");
-      } else {
-        setError(`Falha na autenticação com Google: ${err.message || "Tente novamente."}`);
-      }
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,22 +122,7 @@ export default function Login() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (!email) {
-      setError("Por favor, digite seu e-mail primeiro para recuperar a senha.");
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      await sendPasswordResetEmail(auth, email);
-      setSuccessMessage("E-mail de recuperação enviado! Verifique sua caixa de entrada.");
-    } catch (err: any) {
-      setError("Erro ao enviar e-mail. Verifique se o endereço está correto.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
 
   return (
     <div className="flex min-h-screen font-sans bg-white">
@@ -201,108 +154,161 @@ export default function Login() {
           transition={{ duration: 0.5 }}
           className="w-full max-w-md"
         >
-          <div className="border border-gray-200 p-8 md:p-10 rounded-lg bg-white shadow-md">
-            <form onSubmit={handleEmailAuth} className="space-y-6">
-              {error && (
-                <div className="bg-red-50 text-red-600 p-3 text-xs font-bold border border-red-100">
-                  {error}
-                </div>
-              )}
+          <div className="border border-gray-200 p-8 md:p-10 rounded-2xl bg-white shadow-md transition-all duration-300">
+            {!showSupport ? (
+              <form onSubmit={handleEmailAuth} className="space-y-6 animate-fade-in">
+                {error && (
+                  <div className="bg-red-50 text-red-600 p-3 text-xs font-bold border border-red-100">
+                    {error}
+                  </div>
+                )}
 
-              {successMessage && (
-                <div className="bg-green-50 text-green-600 p-3 text-xs font-bold border border-green-100 mb-4">
-                  {successMessage}
-                </div>
-              )}
+                {successMessage && (
+                  <div className="bg-green-50 text-green-600 p-3 text-xs font-bold border border-green-100 mb-4">
+                    {successMessage}
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest mb-2 ml-1" htmlFor="email">
-                  EMAIL
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu@email.com"
-                  className="w-full h-12 bg-gray-50 border border-gray-100 px-4 text-sm text-gray-800 focus:border-[#a21b7e] transition-all outline-none rounded-lg"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest mb-2 ml-1" htmlFor="password">
-                  {isSignUp ? "CRIAR SENHA" : "SENHA DE ACESSO"}
-                </label>
-                <div className="relative">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest mb-2 ml-1" htmlFor="email">
+                    EMAIL
+                  </label>
                   <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full h-12 bg-gray-50 border border-gray-100 px-4 text-sm text-gray-800 focus:border-[#a21b7e] transition-all outline-none rounded-lg"
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    className="w-full h-12 bg-gray-50 border border-gray-100 px-4 text-sm text-gray-800 focus:border-[#a21b7e] placeholder:text-gray-300/70 placeholder:font-light transition-all outline-none rounded-lg"
                     required
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest mb-2 ml-1" htmlFor="password">
+                    {isSignUp ? "CRIAR SENHA" : "SENHA DE ACESSO"}
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full h-12 bg-gray-50 border border-gray-100 px-4 text-sm text-gray-800 focus:border-[#a21b7e] placeholder:text-gray-300/70 placeholder:font-light transition-all outline-none rounded-lg"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className={cn(
+                    "w-full h-14 bg-[#a21b7e] text-white text-sm font-bold shadow-lg shadow-[#a21b7e]/20 hover:bg-[#8e176e] active:scale-[0.98] transition-all flex items-center justify-center gap-2 uppercase tracking-widest mt-8 rounded-lg",
+                    isLoading && "opacity-80"
+                  )}
+                >
+                  {isLoading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    isSignUp ? "Registrar agora" : "Entrar no Console"
+                  )}
+                </button>
+
+                {!isSignUp && (
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    onClick={() => setShowSupport(true)}
+                    className="w-full h-12 border border-gray-100 bg-white text-gray-400 hover:text-[#a21b7e] hover:border-[#a21b7e]/20 text-[10px] font-bold uppercase tracking-widest active:scale-[0.98] transition-all flex items-center justify-center gap-2 rounded-lg mt-3"
                   >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    <HelpCircle size={14} className="shrink-0 animate-pulse" />
+                    <span>Suporte Técnico</span>
                   </button>
+                )}
+              </form>
+            ) : (
+              <div className="animate-fade-in flex flex-col items-center">
+                {/* Header Icon */}
+                <div className="w-14 h-14 bg-purple-50 rounded-full flex items-center justify-center text-[#a21b7e] mb-4">
+                  <HelpCircle size={28} />
                 </div>
+
+                <h3 className="text-base font-bold text-gray-800 tracking-tight text-center">Suporte ProVisual</h3>
+                <p className="text-[11px] text-gray-400 mt-1.5 mb-6 text-center leading-relaxed px-2">
+                  Precisa de ajuda com credenciais ou assistência corporativa? Entre em contato conosco pelos canais abaixo:
+                </p>
+
+                <div className="w-full space-y-3">
+                  {/* WhatsApp Support */}
+                  <a
+                    href="https://wa.me/258843131130"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-between p-3.5 border border-gray-200/70 bg-[#fafafa]/40 rounded-xl hover:bg-white hover:border-[#a21b7e]/25 hover:shadow-sm active:scale-[0.98] transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-emerald-50/80 text-emerald-600 flex items-center justify-center shrink-0">
+                        <MessageSquare size={16} />
+                      </div>
+                      <div className="leading-tight text-left">
+                        <div className="text-xs font-bold text-gray-800">WhatsApp Oficial</div>
+                        <div className="text-[10px] text-gray-400 font-medium mt-0.5">+258 84 313 1130</div>
+                      </div>
+                    </div>
+                    <ExternalLink size={11} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                  </a>
+
+                  {/* Email Support */}
+                  <a
+                    href="mailto:suporte@provisualcorporate.co.mz"
+                    className="w-full flex items-center justify-between p-3.5 border border-gray-200/70 bg-[#fafafa]/40 rounded-xl hover:bg-white hover:border-[#a21b7e]/25 hover:shadow-sm active:scale-[0.98] transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-blue-50/80 text-blue-600 flex items-center justify-center shrink-0">
+                        <Mail size={16} />
+                      </div>
+                      <div className="leading-tight text-left">
+                        <div className="text-xs font-bold text-gray-800">E-mail de Suporte</div>
+                        <div className="text-[10px] text-gray-400 font-medium mt-0.5">suporte@provisualcorporate.co.mz</div>
+                      </div>
+                    </div>
+                    <ExternalLink size={11} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                  </a>
+
+                  {/* Phone Contact */}
+                  <a
+                    href="tel:+258843131130"
+                    className="w-full flex items-center justify-between p-3.5 border border-gray-200/70 bg-[#fafafa]/40 rounded-xl hover:bg-white hover:border-[#a21b7e]/25 hover:shadow-sm active:scale-[0.98] transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-purple-50/80 text-[#a21b7e] flex items-center justify-center shrink-0">
+                        <Phone size={16} />
+                      </div>
+                      <div className="leading-tight text-left">
+                        <div className="text-xs font-bold text-gray-800">Telefone Corporativo</div>
+                        <div className="text-[10px] text-gray-400 font-medium mt-0.5">+258 84 313 1130</div>
+                      </div>
+                    </div>
+                    <ExternalLink size={11} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                  </a>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSupport(false)}
+                  className="mt-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-[#a21b7e] transition-colors active:scale-[0.98]"
+                >
+                  Voltar ao Login
+                </button>
               </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className={cn(
-                  "w-full h-14 bg-[#a21b7e] text-white text-sm font-bold shadow-lg shadow-[#a21b7e]/20 hover:bg-[#8e176e] active:scale-[0.98] transition-all flex items-center justify-center gap-2 uppercase tracking-widest mt-8 rounded-lg",
-                  isLoading && "opacity-80"
-                )}
-              >
-                {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  isSignUp ? "Registrar agora" : "Entrar no Console"
-                )}
-              </button>
-            </form>
-
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-100"></div>
-              </div>
-              <div className="relative flex justify-center text-[9px] uppercase tracking-widest font-bold text-gray-300">
-                <span className="bg-white px-2">Ou acessar com</span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className="w-full h-12 border border-gray-200 bg-white text-gray-600 text-[10px] font-bold uppercase tracking-widest hover:bg-gray-50 transition-all flex items-center justify-center gap-3 active:scale-[0.98] rounded-lg"
-            >
-              <svg className="w-4 h-4 shrink-0 animate-bounce-short" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-              </svg>
-              <span>Acessar com o Google</span>
-            </button>
-          </div>
-
-          <div className="mt-8 text-center">
-            {!isSignUp && (
-              <button 
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-gray-400 text-[10px] font-bold uppercase tracking-widest hover:text-[#a21b7e] transition-colors"
-              >
-                Esqueceu sua senha?
-              </button>
             )}
           </div>
         </motion.div>
