@@ -1,38 +1,149 @@
 import express from "express";
-import { google } from "googleapis";
-import multer from "multer";
-import { Readable } from "stream";
-import fs from "fs";
 import path from "path";
+import multer from "multer";
+import fs from "fs";
+import { Readable } from "stream";
+import { google } from "googleapis";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 
 const app = express();
 app.use(express.json());
 
-// Helper para as chaves do Google
-const getGoogleAuth = () => {
-  let keys;
-  if (process.env.GOOGLE_KEYS) {
-    keys = JSON.parse(process.env.GOOGLE_KEYS);
-  } else {
-    // Fallback local se necessário
+// Inicializar Firebase Firestore para sincronização resiliente de tokens do Google Drive (Vercel Resiliência)
+let db = null;
+try {
+  const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(firebaseConfigPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+    const firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    console.log("Firebase initialized in api/index.js (Vercel)");
+  }
+} catch (err) {
+  console.error("Error initializing Firebase in api/index.js:", err);
+}
+
+// Google Drive Integration
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Utilitário para inicializar o cliente Google Auth (Híbrido)
+async function getGoogleAuth() {
+  
+  // 1. Tentar ler as credenciais OAuth 2.0 pessoais do Silva
+  let oauthKeys = null;
+  const oauthKeysPath = path.join(process.cwd(), "google-oauth.json");
+  const localTokensPath = path.join(process.cwd(), "google-tokens.json");
+  
+  try {
+    if (fs.existsSync(oauthKeysPath)) {
+      oauthKeys = JSON.parse(fs.readFileSync(oauthKeysPath, "utf-8"));
+    }
+  } catch (err) {
+    // Ignorar erro
+  }
+
+  // Se tivermos as credenciais OAuth do Silva
+  if (oauthKeys && oauthKeys.client_id && oauthKeys.client_secret) {
     try {
-      const keyPath = path.join(process.cwd(), 'provisual-corporate-a16cee3d2250.json');
-      keys = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
-    } catch (e) {
-      throw new Error("Google Keys not found");
+      let tokens = null;
+      
+      // Se existir localmente no disco, carrega do disco
+      if (fs.existsSync(localTokensPath)) {
+        tokens = JSON.parse(fs.readFileSync(localTokensPath, "utf-8"));
+      } else if (db) {
+        // Caso contrário, tenta recuperar do Firestore (essencial para persistência na Vercel)
+        try {
+          const docRef = doc(db, "settings", "google_drive_tokens");
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            tokens = docSnap.data();
+            // Salva localmente em cache temporário de arquivo na Vercel (/tmp ou cwd se gravável)
+            try {
+              fs.writeFileSync(localTokensPath, JSON.stringify(tokens, null, 2));
+            } catch (e) {
+              // Algumas plataformas serverless impedem gravação em cwd, tudo bem continuar sem gravar
+            }
+            console.log("Tokens do Google Drive recuperados com sucesso do Firestore no Vercel.");
+          }
+        } catch (dbErr) {
+          console.warn("Erro ao buscar tokens do Firestore no Vercel:", dbErr);
+        }
+      }
+
+      if (tokens) {
+        const oauth2Client = new google.auth.OAuth2(
+          oauthKeys.client_id,
+          oauthKeys.client_secret,
+          "http://localhost:3333/api/drive/auth/callback"
+        );
+        oauth2Client.setCredentials(tokens);
+        
+        // Listener para atualizar tokens automaticamente se expirarem
+        oauth2Client.on('tokens', async (newTokens) => {
+          try {
+            let currentTokens = {};
+            if (fs.existsSync(localTokensPath)) {
+              currentTokens = JSON.parse(fs.readFileSync(localTokensPath, "utf-8"));
+            }
+            const mergedTokens = { ...currentTokens, ...newTokens };
+            
+            try {
+              fs.writeFileSync(localTokensPath, JSON.stringify(mergedTokens, null, 2));
+            } catch (e) {}
+
+            if (db) {
+              try {
+                await setDoc(doc(db, "settings", "google_drive_tokens"), mergedTokens);
+              } catch (dbErr) {
+                console.error("Erro ao atualizar tokens no Firestore do Vercel:", dbErr);
+              }
+            }
+            console.log("Tokens atualizados e salvos no Firestore do Vercel.");
+          } catch (e) {
+            console.error("Erro ao salvar tokens atualizados:", e);
+          }
+        });
+
+        return { auth: oauth2Client, type: "oauth2" };
+      }
+    } catch (err) {
+      console.warn("Erro ao configurar cliente OAuth2 pessoal no Vercel, fazendo fallback para Conta de Serviço:", err);
     }
   }
-  const auth = google.auth.fromJSON(keys);
-  auth.scopes = ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'];
-  return auth;
-};
 
-// Rotas da API
+  // 2. Fallback: Usar a Conta de Serviço padrão (Google API v3)
+  let serviceKeys;
+  if (process.env.GOOGLE_KEYS) {
+    serviceKeys = JSON.parse(process.env.GOOGLE_KEYS);
+  } else {
+    const serviceKeysPath = path.join(process.cwd(), "provisual-corporate-a16cee3d2250.json");
+    if (!fs.existsSync(serviceKeysPath)) {
+      throw new Error("Google Keys not found. Por favor configure a GOOGLE_KEYS env ou o provisual-corporate-a16cee3d2250.json");
+    }
+    serviceKeys = JSON.parse(fs.readFileSync(serviceKeysPath, "utf-8"));
+  }
+
+  const auth = new google.auth.JWT({
+    email: serviceKeys.client_email,
+    key: serviceKeys.private_key,
+    scopes: ['https://www.googleapis.com/auth/drive']
+  });
+
+  return { auth, type: "service_account" };
+}
+
+// ----------------- ROTAS DA API -----------------
+
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", environment: "vercel-serverless", timestamp: new Date().toISOString() });
+});
+
 app.post("/api/drive/list", async (req, res) => {
   const { folderId, filterType } = req.body;
 
   try {
-    const auth = getGoogleAuth();
+    const { auth, type } = await getGoogleAuth();
     const drive = google.drive({ version: 'v3', auth });
 
     let queryStr = (!folderId || folderId === 'root')
@@ -55,28 +166,31 @@ app.post("/api/drive/list", async (req, res) => {
       q: queryStr,
       orderBy: orderByStr,
       fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails)',
-      pageSize: 100
+      pageSize: 100,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
     });
-    res.json(response.data.files);
+    res.json(response.data.files || []);
   } catch (error) {
+    console.error("List Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.get("/api/drive/storage", async (req, res) => {
   try {
-    const auth = getGoogleAuth();
+    const { auth } = await getGoogleAuth();
     const drive = google.drive({ version: 'v3', auth });
     const response = await drive.about.get({
       fields: 'storageQuota'
     });
     res.json(response.data.storageQuota);
   } catch (error) {
+    console.error("Storage Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-const upload = multer({ storage: multer.memoryStorage() });
 app.post("/api/drive/upload", upload.single("file"), async (req, res) => {
   const { folderId } = req.body;
   const file = req.file;
@@ -84,7 +198,7 @@ app.post("/api/drive/upload", upload.single("file"), async (req, res) => {
   if (!file || !folderId) return res.status(400).json({ error: "File and Folder ID are required" });
 
   try {
-    const auth = getGoogleAuth();
+    const { auth } = await getGoogleAuth();
     const drive = google.drive({ version: 'v3', auth });
     
     let response;
@@ -94,23 +208,230 @@ app.post("/api/drive/upload", upload.single("file"), async (req, res) => {
       bufferStream.push(null);
 
       response = await drive.files.create({
-        requestBody: { name: file.originalname, parents: [folderId] },
-        media: { mimeType: file.mimetype, body: bufferStream },
+        requestBody: { 
+          name: file.originalname, 
+          parents: [folderId] 
+        },
+        media: { 
+          mimeType: file.mimetype, 
+          body: bufferStream 
+        },
+        supportsAllDrives: true,
         fields: 'id, name, webViewLink, size, mimeType, createdTime',
       });
     } catch (uploadError) {
-      console.warn("Upload to specific folder failed, falling back to root:", uploadError.message);
+      console.warn("Upload to specific folder failed on Vercel, falling back to root:", uploadError.message);
       const fallbackStream = new Readable();
       fallbackStream.push(file.buffer);
       fallbackStream.push(null);
 
       response = await drive.files.create({
-        requestBody: { name: file.originalname, parents: ['root'] },
-        media: { mimeType: file.mimetype, body: fallbackStream },
+        requestBody: { 
+          name: file.originalname, 
+          parents: ['root'] 
+        },
+        media: { 
+          mimeType: file.mimetype, 
+          body: fallbackStream 
+        },
+        supportsAllDrives: true,
         fields: 'id, name, webViewLink, size, mimeType, createdTime',
       });
     }
     res.json(response.data);
+  } catch (error) {
+    console.error("Upload Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/drive/create-folder", async (req, res) => {
+  const { name, parentId } = req.body;
+  if (!name) return res.status(400).json({ error: "Nome da pasta é obrigatório" });
+
+  try {
+    const { auth } = await getGoogleAuth();
+    const drive = google.drive({ version: 'v3', auth });
+
+    // Normalizar nome para NFC
+    const normalizedName = name.normalize("NFC");
+
+    const fileMetadata = {
+      name: normalizedName,
+      mimeType: "application/vnd.google-apps.folder",
+      parents: (parentId && parentId !== "root") ? [parentId] : []
+    };
+
+    console.log("Vercel: Criando pasta com metadados:", fileMetadata);
+
+    let file;
+    try {
+      const response = await drive.files.create({
+        requestBody: fileMetadata,
+        fields: "id, name",
+        supportsAllDrives: true
+      });
+      file = response.data;
+    } catch (createError) {
+      console.warn("Vercel: Falha ao criar pasta com parentId, tentando sem parents:", createError.message);
+      
+      const fallbackMetadata = {
+        name: normalizedName,
+        mimeType: "application/vnd.google-apps.folder"
+      };
+
+      const response = await drive.files.create({
+        requestBody: fallbackMetadata,
+        fields: "id, name",
+        supportsAllDrives: true
+      });
+      file = response.data;
+    }
+
+    res.json(file);
+  } catch (error) {
+    console.error("Vercel Create Folder Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/drive/delete", async (req, res) => {
+  const { fileId } = req.body;
+  if (!fileId) return res.status(400).json({ error: "ID do arquivo é obrigatório" });
+
+  try {
+    const { auth } = await getGoogleAuth();
+    const drive = google.drive({ version: 'v3', auth });
+
+    // Em vez de excluir permanentemente, movemos para a lixeira (trashed = true)
+    await drive.files.update({
+      fileId: fileId,
+      requestBody: { trashed: true },
+      supportsAllDrives: true
+    });
+
+    res.json({ success: true, message: "Item movido para a lixeira com sucesso." });
+  } catch (error) {
+    console.error("Vercel Delete Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ----------------- ROTAS DE AUTENTICAÇÃO OAUTH 2.0 -----------------
+
+app.get("/api/drive/auth/url", async (req, res) => {
+  const oauthKeysPath = path.join(process.cwd(), "google-oauth.json");
+  try {
+    if (!fs.existsSync(oauthKeysPath)) {
+      return res.status(400).json({ error: "O arquivo google-oauth.json não foi configurado na raiz." });
+    }
+    const oauthKeys = JSON.parse(fs.readFileSync(oauthKeysPath, "utf-8"));
+    
+    if (!oauthKeys.client_id || oauthKeys.client_id.includes("COLE_AQUI") || !oauthKeys.client_secret || oauthKeys.client_secret.includes("COLE_AQUI")) {
+      return res.status(400).json({ error: "Por favor, configure o seu client_id e client_secret do Google Cloud no arquivo google-oauth.json na raiz do projeto." });
+    }
+
+    const oauth2Client = new google.auth.OAuth2(
+      oauthKeys.client_id,
+      oauthKeys.client_secret,
+      "http://localhost:3333/api/drive/auth/callback"
+    );
+
+    const url = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: ["https://www.googleapis.com/auth/drive"]
+    });
+
+    res.json({ url });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/drive/auth/callback", async (req, res) => {
+  const { code } = req.query;
+  if (!code) return res.status(400).send("Código de autorização não fornecido pelo Google.");
+
+  const oauthKeysPath = path.join(process.cwd(), "google-oauth.json");
+  const localTokensPath = path.join(process.cwd(), "google-tokens.json");
+
+  try {
+    if (!fs.existsSync(oauthKeysPath)) {
+      return res.status(400).send("Configuração google-oauth.json ausente.");
+    }
+    const oauthKeys = JSON.parse(fs.readFileSync(oauthKeysPath, "utf-8"));
+    
+    const oauth2Client = new google.auth.OAuth2(
+      oauthKeys.client_id,
+      oauthKeys.client_secret,
+      "http://localhost:3333/api/drive/auth/callback"
+    );
+
+    const { tokens } = await oauth2Client.getToken(code);
+    
+    try {
+      fs.writeFileSync(localTokensPath, JSON.stringify(tokens, null, 2));
+    } catch (e) {}
+
+    // Persistir também no Firestore para resiliência na Vercel
+    if (db) {
+      try {
+        await setDoc(doc(db, "settings", "google_drive_tokens"), tokens);
+        console.log("Tokens de acesso persistidos com sucesso no Firestore.");
+      } catch (dbErr) {
+        console.error("Erro ao salvar tokens no Firestore:", dbErr);
+      }
+    }
+
+    res.send(`
+      <html>
+        <head>
+          <title>Conectado com Sucesso</title>
+          <style>
+            body { font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fafafa; color: #333; text-align: center; padding-top: 100px; }
+            .card { background: white; border: 1px solid #eaeaea; border-radius: 12px; max-width: 500px; margin: 0 auto; padding: 40px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+            h1 { color: #a21b7e; margin-bottom: 20px; font-size: 24px; }
+            p { color: #666; font-size: 15px; line-height: 1.6; }
+            .badge { background: #faf0f8; color: #a21b7e; padding: 6px 16px; border-radius: 20px; font-weight: 600; display: inline-block; margin-top: 15px; font-size: 13px; letter-spacing: 0.5px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>✨ Google Drive Conectado!</h1>
+            <p>O painel <strong>ProVisual Corporate</strong> se conectou com absoluto sucesso à sua conta corporativa.</p>
+            <div class="badge">uploads e cota pessoal habilitados!</div>
+            <p style="margin-top: 30px; font-size: 13px; color: #999;">Esta janela fechará automaticamente...</p>
+          </div>
+          <script>
+            setTimeout(() => { window.close(); }, 3500);
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("Auth Callback Error:", error);
+    res.status(500).send(`Erro ao obter tokens do Google Drive: ${error.message}`);
+  }
+});
+
+app.post("/api/drive/auth/disconnect", async (req, res) => {
+  const localTokensPath = path.join(process.cwd(), "google-tokens.json");
+  try {
+    if (fs.existsSync(localTokensPath)) {
+      fs.unlinkSync(localTokensPath);
+    }
+
+    // Remover também do Firestore para manter sincronização
+    if (db) {
+      try {
+        await deleteDoc(doc(db, "settings", "google_drive_tokens"));
+        console.log("Tokens removidos com sucesso do Firestore.");
+      } catch (dbErr) {
+        console.error("Erro ao deletar tokens do Firestore:", dbErr);
+      }
+    }
+    res.json({ success: true, message: "Google Drive desconectado com sucesso." });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
