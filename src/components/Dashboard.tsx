@@ -745,7 +745,14 @@ export default function Dashboard() {
           });
 
           if (!createResponse.ok) {
-            throw new Error(`Erro ao criar a pasta "${folderName}" no Google Drive.`);
+            let errorMsg = `Erro ao criar a pasta "${folderName}" no Google Drive.`;
+            try {
+              const errData = await createResponse.json();
+              if (errData && errData.error) {
+                errorMsg += ` Detalhes: ${errData.error}`;
+              }
+            } catch (e) {}
+            throw new Error(errorMsg);
           }
 
           const driveFolder = await createResponse.json();
