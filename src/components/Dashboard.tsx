@@ -1247,7 +1247,6 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch User Role
   useEffect(() => {
     const localUserJson = localStorage.getItem("provisual_local_admin");
     if (!currentUser && localUserJson) {
@@ -1272,20 +1271,25 @@ export default function Dashboard() {
       });
       return;
     }
+    
     const fetchProfile = async () => {
-      const userDoc = await getDoc(doc(db, "users", currentUser!.id));
-      if (userDoc.exists()) {
-        setUserProfile(userDoc.data() as UserProfile);
-      } else {
-        setUserProfile({
-          role: "admin",
-          email: currentUser!.email || "admin@provisual.demo",
-          displayName: currentUser!.user_metadata?.displayName || "Silva Chamo"
-        });
+      try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.id));
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data() as UserProfile);
+        } else {
+          setUserProfile({
+            role: "admin",
+            email: currentUser.email || "admin@provisual.demo",
+            displayName: currentUser.user_metadata?.displayName || "Silva Chamo"
+          });
+        }
+      } catch (e) {
+        console.error("Erro ao buscar perfil do usuário", e);
       }
     };
     fetchProfile();
-  }, []);
+  }, [currentUser]);
 
   // Fetch Folders
   useEffect(() => {
@@ -2506,14 +2510,98 @@ export default function Dashboard() {
                                     />
                                     
                                     {/* SUBMENUS (Posicionados à esquerda do principal) */}
-                                    <AnimatePresence>
+                                    
+
+                                    <motion.div
+                                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                      transition={{ duration: 0.1 }}
+                                      className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedFolderId(folder.id);
+                                          if ((folder as any).ownerId === 'google-drive') {
+                                            handleGoogleSync(folder.id, undefined, true);
+                                          }
+                                          setActiveFolderMenuId(null);
+                                        }}
+                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                                        </div>
+                                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                      </button>
+
+                                      <div className="my-1 border-t border-gray-100" />
+
+                                      <button
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
+                                          if (newName && newName.trim() !== folder.name) {
+                                            try {
+                                              setIsProcessingAction(true);
+                                              sessionStorage.setItem('action_in_progress', 'true');
+                                              
+                                              if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
+                                                const renameResponse = await fetch('/api/drive/update', {
+                                                  method: 'POST',
+                                                  headers: { 'Content-Type': 'application/json' },
+                                                  body: JSON.stringify({
+                                                    fileId: folder.id,
+                                                    newName: newName.normalize('NFC')
+                                                  })
+                                                });
+                                                if (!renameResponse.ok) {
+                                                  const errData = await renameResponse.json();
+                                                  throw new Error(errData.error || "Erro no Google Drive");
+                                                }
+                                              }
+                                              await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
+                                              handleActionSuccess();
+                                            } catch (err: any) {
+                                              alert("Erro ao renomear pasta: " + err.message);
+                                              setIsProcessingAction(false);
+                                              sessionStorage.removeItem('action_in_progress');
+                                            }
+                                          }
+                                          setActiveFolderMenuId(null);
+                                        }}
+                                        className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar nome</span>
+                                        </div>
+                                      </button>
+
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
+                                        }}
+                                        className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
+                                        </div>
+                                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                      
+<AnimatePresence>
                                       {activeFolderSubmenu === 'partilhar' && (
                                         <motion.div
                                           initial={{ opacity: 0, scale: 0.95, x: 10 }}
                                           animate={{ opacity: 1, scale: 1, x: 0 }}
                                           exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                           transition={{ duration: 0.1 }}
-                                          className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                                          className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
                                           onClick={(e) => e.stopPropagation()}
                                         >
                                           <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
@@ -2594,7 +2682,7 @@ export default function Dashboard() {
                                           animate={{ opacity: 1, scale: 1, x: 0 }}
                                           exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                           transition={{ duration: 0.1 }}
-                                          className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
+                                          className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
                                           onClick={(e) => e.stopPropagation()}
                                         >
                                           <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
@@ -2688,96 +2776,14 @@ export default function Dashboard() {
                                         </motion.div>
                                       )}
                                     </AnimatePresence>
-
-                                    <motion.div
-                                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                      transition={{ duration: 0.1 }}
-                                      className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedFolderId(folder.id);
-                                          if ((folder as any).ownerId === 'google-drive') {
-                                            handleGoogleSync(folder.id, undefined, true);
-                                          }
-                                          setActiveFolderMenuId(null);
-                                        }}
-                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
-                                        </div>
-                                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                      </button>
-
-                                      <div className="my-1 border-t border-gray-100" />
-
-                                      <button
-                                        onClick={async (e) => {
-                                          e.stopPropagation();
-                                          const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
-                                          if (newName && newName.trim() !== folder.name) {
-                                            try {
-                                              setIsProcessingAction(true);
-                                              sessionStorage.setItem('action_in_progress', 'true');
-                                              
-                                              if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
-                                                const renameResponse = await fetch('/api/drive/update', {
-                                                  method: 'POST',
-                                                  headers: { 'Content-Type': 'application/json' },
-                                                  body: JSON.stringify({
-                                                    fileId: folder.id,
-                                                    newName: newName.normalize('NFC')
-                                                  })
-                                                });
-                                                if (!renameResponse.ok) {
-                                                  const errData = await renameResponse.json();
-                                                  throw new Error(errData.error || "Erro no Google Drive");
-                                                }
-                                              }
-                                              await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
-                                              handleActionSuccess();
-                                            } catch (err: any) {
-                                              alert("Erro ao renomear pasta: " + err.message);
-                                              setIsProcessingAction(false);
-                                              sessionStorage.removeItem('action_in_progress');
-                                            }
-                                          }
-                                          setActiveFolderMenuId(null);
-                                        }}
-                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar nome</span>
-                                        </div>
-                                      </button>
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
-                                        }}
-                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
-                                        </div>
-                                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                      </button>
+</button>
 
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
                                         }}
-                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                       >
                                         <div className="flex items-center gap-3">
                                           <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -2988,14 +2994,98 @@ export default function Dashboard() {
                                 />
                                 
                                 {/* SUBMENUS (Posicionados à esquerda do principal) */}
-                                <AnimatePresence>
+                                
+
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                  transition={{ duration: 0.1 }}
+                                  className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedFolderId(folder.id);
+                                      if ((folder as any).ownerId === 'google-drive') {
+                                        handleGoogleSync(folder.id, undefined, true);
+                                      }
+                                      setActiveFolderMenuId(null);
+                                    }}
+                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                                    </div>
+                                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                  </button>
+
+                                  <div className="my-1 border-t border-gray-100" />
+
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
+                                      if (newName && newName.trim() !== folder.name) {
+                                        try {
+                                          setIsProcessingAction(true);
+                                          sessionStorage.setItem('action_in_progress', 'true');
+                                          
+                                          if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
+                                            const renameResponse = await fetch('/api/drive/update', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({
+                                                fileId: folder.id,
+                                                newName: newName.normalize('NFC')
+                                              })
+                                            });
+                                            if (!renameResponse.ok) {
+                                              const errData = await renameResponse.json();
+                                              throw new Error(errData.error || "Erro no Google Drive");
+                                            }
+                                          }
+                                          await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
+                                          handleActionSuccess();
+                                        } catch (err: any) {
+                                          alert("Erro ao renomear pasta: " + err.message);
+                                          setIsProcessingAction(false);
+                                          sessionStorage.removeItem('action_in_progress');
+                                        }
+                                      }
+                                      setActiveFolderMenuId(null);
+                                    }}
+                                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar nome</span>
+                                    </div>
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
+                                    }}
+                                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
+                                    </div>
+                                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                  
+<AnimatePresence>
                                   {activeFolderSubmenu === 'partilhar' && (
                                     <motion.div
                                       initial={{ opacity: 0, scale: 0.95, x: 10 }}
                                       animate={{ opacity: 1, scale: 1, x: 0 }}
                                       exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                       transition={{ duration: 0.1 }}
-                                      className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                                      className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
@@ -3076,7 +3166,7 @@ export default function Dashboard() {
                                       animate={{ opacity: 1, scale: 1, x: 0 }}
                                       exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                       transition={{ duration: 0.1 }}
-                                      className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
+                                      className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
@@ -3168,96 +3258,14 @@ export default function Dashboard() {
                                     </motion.div>
                                   )}
                                 </AnimatePresence>
-
-                                <motion.div
-                                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  transition={{ duration: 0.1 }}
-                                  className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedFolderId(folder.id);
-                                      if ((folder as any).ownerId === 'google-drive') {
-                                        handleGoogleSync(folder.id, undefined, true);
-                                      }
-                                      setActiveFolderMenuId(null);
-                                    }}
-                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
-                                    </div>
-                                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                  </button>
-
-                                  <div className="my-1 border-t border-gray-100" />
-
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
-                                      if (newName && newName.trim() !== folder.name) {
-                                        try {
-                                          setIsProcessingAction(true);
-                                          sessionStorage.setItem('action_in_progress', 'true');
-                                          
-                                          if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
-                                            const renameResponse = await fetch('/api/drive/update', {
-                                              method: 'POST',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({
-                                                fileId: folder.id,
-                                                newName: newName.normalize('NFC')
-                                              })
-                                            });
-                                            if (!renameResponse.ok) {
-                                              const errData = await renameResponse.json();
-                                              throw new Error(errData.error || "Erro no Google Drive");
-                                            }
-                                          }
-                                          await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
-                                          handleActionSuccess();
-                                        } catch (err: any) {
-                                          alert("Erro ao renomear pasta: " + err.message);
-                                          setIsProcessingAction(false);
-                                          sessionStorage.removeItem('action_in_progress');
-                                        }
-                                      }
-                                      setActiveFolderMenuId(null);
-                                    }}
-                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar nome</span>
-                                    </div>
-                                  </button>
-
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
-                                    }}
-                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
-                                    </div>
-                                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                  </button>
+</button>
 
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
                                     }}
-                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                   >
                                     <div className="flex items-center gap-3">
                                       <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -4090,14 +4098,193 @@ function AssetCard({
               />
               
               {/* SUBMENUS (Posicionados à esquerda do principal) */}
-              <AnimatePresence>
+              
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{ duration: 0.1 }}
+                className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPreview();
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
+                >
+                  <div className="flex items-center gap-3">
+                    <ExternalLink size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                </button>
+
+                <div className="my-1 border-t border-gray-100" />
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    let url = asset.versions[0]?.url || asset.webViewLink;
+                    if (url) {
+                      if (url.includes('drive.google.com')) {
+                        const matchId = url.match(/id=([^&]+)/) || url.match(/\/file\/d\/([^/]+)/);
+                        const fileId = matchId ? matchId[1] : asset.driveId;
+                        if (fileId) {
+                          url = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                        }
+                      }
+                      const iframe = document.createElement('iframe');
+                      iframe.style.display = 'none';
+                      iframe.src = url;
+                      document.body.appendChild(iframe);
+                      setTimeout(() => document.body.removeChild(iframe), 3000);
+                    }
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                >
+                  <Download size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                  <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Transferir</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newName = prompt("Digite o novo nome para o arquivo:", asset.name);
+                    if (newName) {
+                      setShowMenu(false);
+                      runAction(async () => {
+                        // 1. Renomear fisicamente no Google Drive real
+                        if (asset.driveId) {
+                          const updateResponse = await fetch('/api/drive/update', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              fileId: asset.driveId,
+                              newName: newName
+                            })
+                          });
+                          if (!updateResponse.ok) {
+                            const errData = await updateResponse.json();
+                            throw new Error(errData.error || 'Erro ao renomear no Google Drive');
+                          }
+                        }
+
+                        // 2. Atualizar no Firestore
+                        await updateDoc(doc(db, "assets", asset.id), { name: newName });
+                      });
+                    } else {
+                      setShowMenu(false);
+                    }
+                  }}
+                  className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <Pencil size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar o nome</span>
+                  </div>
+                  <span className="text-[10px] text-gray-300 font-mono tracking-tighter group-hover:text-[#a21b7e] transition-colors">⌥⌘E</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    runAction(async () => {
+                      let newDriveId = asset.driveId || "";
+                      let newUrl = asset.versions[0]?.url || asset.webViewLink || "";
+
+                      // 1. Copiar fisicamente no Google Drive real na mesma pasta
+                      if (asset.driveId) {
+                        const copyResponse = await fetch('/api/drive/copy', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            fileId: asset.driveId,
+                            destinationFolderId: asset.folderId || 'root',
+                            newName: `${asset.name} (Cópia)`
+                          })
+                        });
+                        if (!copyResponse.ok) {
+                          const errData = await copyResponse.json();
+                          throw new Error(errData.error || 'Erro ao copiar no Google Drive');
+                        }
+                        const copyData = await copyResponse.json();
+                        newDriveId = copyData.id;
+                        newUrl = copyData.webViewLink;
+                      }
+
+                      // 2. Salvar no Firestore com os novos dados físicos
+                      const newAsset = {
+                        ...asset,
+                        name: `${asset.name} (Cópia)`,
+                        driveId: newDriveId,
+                        versions: [{
+                          quality: "original",
+                          size: asset.versions?.[0]?.size || "0 MB",
+                          url: newUrl
+                        }],
+                        captureDate: new Date(),
+                        createdAt: new Date()
+                      };
+                      delete (newAsset as any).id;
+                      await addDoc(collection(db, "assets"), newAsset);
+                      /* window.location.reload() removed */
+                    });
+                  }}
+                  className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <Copy size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Fazer cópia</span>
+                  </div>
+                  <span className="text-[10px] text-gray-300 font-mono tracking-tighter group-hover:text-[#a21b7e] transition-colors">⌘C ⌘V</span>
+                </button>
+
+                <div className="my-1 border-t border-gray-100" />
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAskGemini(asset);
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold text-violet-600 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <Sparkles size={15} className="text-violet-400 group-hover:text-violet-600 transition-colors shrink-0" />
+                    <span className="group-hover:text-violet-600 transition-colors font-bold text-violet-600">Pedir ao Gemini</span>
+                  </div>
+                  <span className="text-[9px] font-bold text-white bg-blue-600 px-1.5 py-0.5 rounded-full uppercase leading-none scale-90">Novo</span>
+                </button>
+
+                <div className="my-1 border-t border-gray-100" />
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveSubmenu(activeSubmenu === 'partilhar' ? 'none' : 'partilhar');
+                  }}
+                  className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <UserPlus size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                
+<AnimatePresence>
                 {activeSubmenu === 'partilhar' && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95, x: 10 }}
                     animate={{ opacity: 1, scale: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.95, x: 10 }}
                     transition={{ duration: 0.1 }}
-                    className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                    className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
@@ -4193,7 +4380,7 @@ function AssetCard({
                     animate={{ opacity: 1, scale: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.95, x: 10 }}
                     transition={{ duration: 0.1 }}
-                    className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
+                    className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {/* Seção Mover */}
@@ -4388,191 +4575,14 @@ function AssetCard({
                   </motion.div>
                 )}
               </AnimatePresence>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                transition={{ duration: 0.1 }}
-                className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPreview();
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
-                >
-                  <div className="flex items-center gap-3">
-                    <ExternalLink size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
-                  </div>
-                  <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                </button>
-
-                <div className="my-1 border-t border-gray-100" />
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    let url = asset.versions[0]?.url || asset.webViewLink;
-                    if (url) {
-                      if (url.includes('drive.google.com')) {
-                        const matchId = url.match(/id=([^&]+)/) || url.match(/\/file\/d\/([^/]+)/);
-                        const fileId = matchId ? matchId[1] : asset.driveId;
-                        if (fileId) {
-                          url = `https://drive.google.com/uc?export=download&id=${fileId}`;
-                        }
-                      }
-                      const iframe = document.createElement('iframe');
-                      iframe.style.display = 'none';
-                      iframe.src = url;
-                      document.body.appendChild(iframe);
-                      setTimeout(() => document.body.removeChild(iframe), 3000);
-                    }
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                >
-                  <Download size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                  <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Transferir</span>
-                </button>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const newName = prompt("Digite o novo nome para o arquivo:", asset.name);
-                    if (newName) {
-                      setShowMenu(false);
-                      runAction(async () => {
-                        // 1. Renomear fisicamente no Google Drive real
-                        if (asset.driveId) {
-                          const updateResponse = await fetch('/api/drive/update', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              fileId: asset.driveId,
-                              newName: newName
-                            })
-                          });
-                          if (!updateResponse.ok) {
-                            const errData = await updateResponse.json();
-                            throw new Error(errData.error || 'Erro ao renomear no Google Drive');
-                          }
-                        }
-
-                        // 2. Atualizar no Firestore
-                        await updateDoc(doc(db, "assets", asset.id), { name: newName });
-                      });
-                    } else {
-                      setShowMenu(false);
-                    }
-                  }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <Pencil size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar o nome</span>
-                  </div>
-                  <span className="text-[10px] text-gray-300 font-mono tracking-tighter group-hover:text-[#a21b7e] transition-colors">⌥⌘E</span>
-                </button>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMenu(false);
-                    runAction(async () => {
-                      let newDriveId = asset.driveId || "";
-                      let newUrl = asset.versions[0]?.url || asset.webViewLink || "";
-
-                      // 1. Copiar fisicamente no Google Drive real na mesma pasta
-                      if (asset.driveId) {
-                        const copyResponse = await fetch('/api/drive/copy', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            fileId: asset.driveId,
-                            destinationFolderId: asset.folderId || 'root',
-                            newName: `${asset.name} (Cópia)`
-                          })
-                        });
-                        if (!copyResponse.ok) {
-                          const errData = await copyResponse.json();
-                          throw new Error(errData.error || 'Erro ao copiar no Google Drive');
-                        }
-                        const copyData = await copyResponse.json();
-                        newDriveId = copyData.id;
-                        newUrl = copyData.webViewLink;
-                      }
-
-                      // 2. Salvar no Firestore com os novos dados físicos
-                      const newAsset = {
-                        ...asset,
-                        name: `${asset.name} (Cópia)`,
-                        driveId: newDriveId,
-                        versions: [{
-                          quality: "original",
-                          size: asset.versions?.[0]?.size || "0 MB",
-                          url: newUrl
-                        }],
-                        captureDate: new Date(),
-                        createdAt: new Date()
-                      };
-                      delete (newAsset as any).id;
-                      await addDoc(collection(db, "assets"), newAsset);
-                      /* window.location.reload() removed */
-                    });
-                  }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <Copy size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Fazer cópia</span>
-                  </div>
-                  <span className="text-[10px] text-gray-300 font-mono tracking-tighter group-hover:text-[#a21b7e] transition-colors">⌘C ⌘V</span>
-                </button>
-
-                <div className="my-1 border-t border-gray-100" />
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAskGemini(asset);
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold text-violet-600 cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <Sparkles size={15} className="text-violet-400 group-hover:text-violet-600 transition-colors shrink-0" />
-                    <span className="group-hover:text-violet-600 transition-colors font-bold text-violet-600">Pedir ao Gemini</span>
-                  </div>
-                  <span className="text-[9px] font-bold text-white bg-blue-600 px-1.5 py-0.5 rounded-full uppercase leading-none scale-90">Novo</span>
-                </button>
-
-                <div className="my-1 border-t border-gray-100" />
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveSubmenu(activeSubmenu === 'partilhar' ? 'none' : 'partilhar');
-                  }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <UserPlus size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
-                  </div>
-                  <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                </button>
+</button>
 
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setActiveSubmenu(activeSubmenu === 'organizar' ? 'none' : 'organizar');
                   }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -4800,14 +4810,193 @@ function AssetRow({
                 />
                 
                 {/* SUBMENUS (Posicionados à esquerda do principal) */}
-                <AnimatePresence>
+                
+
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPreview();
+                      setShowMenu(false);
+                    }}
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <ExternalLink size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                  </button>
+
+                  <div className="my-1 border-t border-gray-100" />
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      let url = asset.versions[0]?.url || asset.webViewLink;
+                      if (url) {
+                        if (url.includes('drive.google.com')) {
+                          const matchId = url.match(/id=([^&]+)/) || url.match(/\/file\/d\/([^/]+)/);
+                          const fileId = matchId ? matchId[1] : asset.driveId;
+                          if (fileId) {
+                            url = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                          }
+                        }
+                        const iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        iframe.src = url;
+                        document.body.appendChild(iframe);
+                        setTimeout(() => document.body.removeChild(iframe), 3000);
+                      }
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  >
+                    <Download size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Transferir</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const newName = prompt("Digite o novo nome para o arquivo:", asset.name);
+                      if (newName) {
+                        setShowMenu(false);
+                        runAction(async () => {
+                          // 1. Renomear fisicamente no Google Drive real
+                          if (asset.driveId) {
+                            const updateResponse = await fetch('/api/drive/update', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                fileId: asset.driveId,
+                                newName: newName
+                              })
+                            });
+                            if (!updateResponse.ok) {
+                              const errData = await updateResponse.json();
+                              throw new Error(errData.error || 'Erro ao renomear no Google Drive');
+                            }
+                          }
+
+                          // 2. Atualizar no Firestore
+                          await updateDoc(doc(db, "assets", asset.id), { name: newName });
+                        });
+                      } else {
+                        setShowMenu(false);
+                      }
+                    }}
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Pencil size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar o nome</span>
+                    </div>
+                    <span className="text-[10px] text-gray-300 font-mono tracking-tighter group-hover:text-[#a21b7e] transition-colors">⌥⌘E</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMenu(false);
+                      runAction(async () => {
+                        let newDriveId = asset.driveId || "";
+                        let newUrl = asset.versions[0]?.url || asset.webViewLink || "";
+
+                        // 1. Copiar fisicamente no Google Drive real na mesma pasta
+                        if (asset.driveId) {
+                          const copyResponse = await fetch('/api/drive/copy', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              fileId: asset.driveId,
+                              destinationFolderId: asset.folderId || 'root',
+                              newName: `${asset.name} (Cópia)`
+                            })
+                          });
+                          if (!copyResponse.ok) {
+                            const errData = await copyResponse.json();
+                            throw new Error(errData.error || 'Erro ao copiar no Google Drive');
+                          }
+                          const copyData = await copyResponse.json();
+                          newDriveId = copyData.id;
+                          newUrl = copyData.webViewLink;
+                        }
+
+                        // 2. Salvar no Firestore com os novos dados físicos
+                        const newAsset = {
+                          ...asset,
+                          name: `${asset.name} (Cópia)`,
+                          driveId: newDriveId,
+                          versions: [{
+                            quality: "original",
+                            size: asset.versions?.[0]?.size || "0 MB",
+                            url: newUrl
+                          }],
+                          captureDate: new Date(),
+                          createdAt: new Date()
+                        };
+                        delete (newAsset as any).id;
+                        await addDoc(collection(db, "assets"), newAsset);
+                        /* window.location.reload() removed */
+                      });
+                    }}
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Copy size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Fazer cópia</span>
+                    </div>
+                    <span className="text-[10px] text-gray-300 font-mono tracking-tighter group-hover:text-[#a21b7e] transition-colors">⌘C ⌘V</span>
+                  </button>
+
+                  <div className="my-1 border-t border-gray-100" />
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAskGemini(asset);
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold text-violet-600 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Sparkles size={15} className="text-violet-400 group-hover:text-violet-600 transition-colors shrink-0" />
+                      <span className="group-hover:text-violet-600 transition-colors font-bold text-violet-600">Pedir ao Gemini</span>
+                    </div>
+                    <span className="text-[9px] font-bold text-white bg-blue-600 px-1.5 py-0.5 rounded-full uppercase leading-none scale-90">Novo</span>
+                  </button>
+
+                  <div className="my-1 border-t border-gray-100" />
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveSubmenu(activeSubmenu === 'partilhar' ? 'none' : 'partilhar');
+                    }}
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <UserPlus size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                  
+<AnimatePresence>
                   {activeSubmenu === 'partilhar' && (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95, x: 10 }}
                       animate={{ opacity: 1, scale: 1, x: 0 }}
                       exit={{ opacity: 0, scale: 0.95, x: 10 }}
                       transition={{ duration: 0.1 }}
-                      className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                      className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
@@ -4903,7 +5092,7 @@ function AssetRow({
                       animate={{ opacity: 1, scale: 1, x: 0 }}
                       exit={{ opacity: 0, scale: 0.95, x: 10 }}
                       transition={{ duration: 0.1 }}
-                      className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
+                      className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {/* Seção Mover */}
@@ -5098,191 +5287,14 @@ function AssetRow({
                     </motion.div>
                   )}
                 </AnimatePresence>
-
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  transition={{ duration: 0.1 }}
-                  className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPreview();
-                      setShowMenu(false);
-                    }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <ExternalLink size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
-                    </div>
-                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                  </button>
-
-                  <div className="my-1 border-t border-gray-100" />
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      let url = asset.versions[0]?.url || asset.webViewLink;
-                      if (url) {
-                        if (url.includes('drive.google.com')) {
-                          const matchId = url.match(/id=([^&]+)/) || url.match(/\/file\/d\/([^/]+)/);
-                          const fileId = matchId ? matchId[1] : asset.driveId;
-                          if (fileId) {
-                            url = `https://drive.google.com/uc?export=download&id=${fileId}`;
-                          }
-                        }
-                        const iframe = document.createElement('iframe');
-                        iframe.style.display = 'none';
-                        iframe.src = url;
-                        document.body.appendChild(iframe);
-                        setTimeout(() => document.body.removeChild(iframe), 3000);
-                      }
-                      setShowMenu(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                  >
-                    <Download size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Transferir</span>
-                  </button>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const newName = prompt("Digite o novo nome para o arquivo:", asset.name);
-                      if (newName) {
-                        setShowMenu(false);
-                        runAction(async () => {
-                          // 1. Renomear fisicamente no Google Drive real
-                          if (asset.driveId) {
-                            const updateResponse = await fetch('/api/drive/update', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                fileId: asset.driveId,
-                                newName: newName
-                              })
-                            });
-                            if (!updateResponse.ok) {
-                              const errData = await updateResponse.json();
-                              throw new Error(errData.error || 'Erro ao renomear no Google Drive');
-                            }
-                          }
-
-                          // 2. Atualizar no Firestore
-                          await updateDoc(doc(db, "assets", asset.id), { name: newName });
-                        });
-                      } else {
-                        setShowMenu(false);
-                      }
-                    }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Pencil size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar o nome</span>
-                    </div>
-                    <span className="text-[10px] text-gray-300 font-mono tracking-tighter group-hover:text-[#a21b7e] transition-colors">⌥⌘E</span>
-                  </button>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMenu(false);
-                      runAction(async () => {
-                        let newDriveId = asset.driveId || "";
-                        let newUrl = asset.versions[0]?.url || asset.webViewLink || "";
-
-                        // 1. Copiar fisicamente no Google Drive real na mesma pasta
-                        if (asset.driveId) {
-                          const copyResponse = await fetch('/api/drive/copy', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              fileId: asset.driveId,
-                              destinationFolderId: asset.folderId || 'root',
-                              newName: `${asset.name} (Cópia)`
-                            })
-                          });
-                          if (!copyResponse.ok) {
-                            const errData = await copyResponse.json();
-                            throw new Error(errData.error || 'Erro ao copiar no Google Drive');
-                          }
-                          const copyData = await copyResponse.json();
-                          newDriveId = copyData.id;
-                          newUrl = copyData.webViewLink;
-                        }
-
-                        // 2. Salvar no Firestore com os novos dados físicos
-                        const newAsset = {
-                          ...asset,
-                          name: `${asset.name} (Cópia)`,
-                          driveId: newDriveId,
-                          versions: [{
-                            quality: "original",
-                            size: asset.versions?.[0]?.size || "0 MB",
-                            url: newUrl
-                          }],
-                          captureDate: new Date(),
-                          createdAt: new Date()
-                        };
-                        delete (newAsset as any).id;
-                        await addDoc(collection(db, "assets"), newAsset);
-                        /* window.location.reload() removed */
-                      });
-                    }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Copy size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Fazer cópia</span>
-                    </div>
-                    <span className="text-[10px] text-gray-300 font-mono tracking-tighter group-hover:text-[#a21b7e] transition-colors">⌘C ⌘V</span>
-                  </button>
-
-                  <div className="my-1 border-t border-gray-100" />
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAskGemini(asset);
-                      setShowMenu(false);
-                    }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold text-violet-600 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Sparkles size={15} className="text-violet-400 group-hover:text-violet-600 transition-colors shrink-0" />
-                      <span className="group-hover:text-violet-600 transition-colors font-bold text-violet-600">Pedir ao Gemini</span>
-                    </div>
-                    <span className="text-[9px] font-bold text-white bg-blue-600 px-1.5 py-0.5 rounded-full uppercase leading-none scale-90">Novo</span>
-                  </button>
-
-                  <div className="my-1 border-t border-gray-100" />
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveSubmenu(activeSubmenu === 'partilhar' ? 'none' : 'partilhar');
-                    }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <UserPlus size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
-                    </div>
-                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                  </button>
+</button>
 
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setActiveSubmenu(activeSubmenu === 'organizar' ? 'none' : 'organizar');
                     }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
