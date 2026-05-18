@@ -120,7 +120,7 @@ async function startServer() {
       const response = await drive.files.list({
         q: queryStr,
         orderBy: orderByStr,
-        fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails)',
+        fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails, starred, trashed)',
         pageSize: 100,
         includeItemsFromAllDrives: true,
         supportsAllDrives: true

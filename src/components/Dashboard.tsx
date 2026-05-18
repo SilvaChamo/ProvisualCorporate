@@ -38,6 +38,7 @@ import {
   Check,
   FolderDot,
   Key,
+  RefreshCw,
   Mail,
   Folder,
   Eye,
@@ -467,6 +468,7 @@ export default function Dashboard() {
     setViewMode('grid');
   }, [activeTab]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
   const [uploadQueue, setUploadQueue] = useState<{ id: string; name: string; progress: number; status: 'uploading' | 'completed' | 'error' }[]>([]);
@@ -974,7 +976,7 @@ export default function Dashboard() {
             name: file.name,
             date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
             ownerId: "google-drive",
-            parentId: folderId === 'root' ? null : folderId,
+            parentId: file.trashed ? 'trash' : (folderId === 'root' ? null : folderId),
             starred: file.starred || false,
             trashed: file.trashed || false,
             adminToken: "Silva_Chamo_Master_Admin_2026"
@@ -998,7 +1000,7 @@ export default function Dashboard() {
           type: fileType,
           captureDate: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
           uploadDate: serverTimestamp(),
-          folderId: folderId,
+          folderId: file.trashed ? 'trash' : folderId,
           ownerId: "google-drive",
           driveId: file.id,
           thumbnailUrl: file.thumbnailLink || "",
@@ -1232,7 +1234,7 @@ export default function Dashboard() {
     
     // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed
     if (activeTab === 'google_drive' && driveFilterType === 'trashed') {
-      result = result.filter(a => a.trashed === true);
+      result = result.filter(a => a.trashed === true || a.folderId === 'trash');
       if (searchQuery) {
         result = result.filter(a => a && a.name && typeof a.name === 'string' && a.name.toLowerCase().includes(searchQuery.toLowerCase()));
       }
@@ -1245,7 +1247,7 @@ export default function Dashboard() {
     }
     
     // Para todas as outras abas/views, remover itens que estão no lixo
-    result = result.filter(a => !a.trashed);
+    result = result.filter(a => !a.trashed && a.folderId !== 'trash');
 
     // Não exibir imagens nas abas 'google_drive' e 'all' na raiz (apenas quando não houver pasta selecionada)
     if ((activeTab === 'google_drive' || activeTab === 'all') && !selectedFolderId) {
@@ -1289,11 +1291,11 @@ export default function Dashboard() {
 
     // Se estivermos visualizando o Lixo
     if (activeTab === 'google_drive' && driveFilterType === 'trashed') {
-      return result.filter(f => f.trashed === true);
+      return result.filter(f => f.trashed === true || f.parentId === 'trash');
     }
 
     // Remover itens que estão no lixo
-    result = result.filter(f => !f.trashed);
+    result = result.filter(f => !f.trashed && f.parentId !== 'trash');
 
     if (activeTab === 'google_drive') {
       // No Google Drive/Arquivo Provisual, se estivermos na raiz, mostramos as pastas da pasta geral "arquivo"
@@ -1548,6 +1550,17 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-4">
+            {driveStatus && driveStatus.connected && (
+              <div 
+                className="w-9 h-9 rounded-sm bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600 transition-all select-none hover:bg-emerald-100/50 cursor-pointer"
+                title={`Drive Pessoal Ativo: ${driveStatus.email}`}
+              >
+                <div className="relative">
+                  <HardDrive size={18} />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white animate-pulse" />
+                </div>
+              </div>
+            )}
             {userProfile && (
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-3.5 py-1.5 rounded-lg select-none">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
@@ -1636,44 +1649,7 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-                  <div className="flex items-center gap-3">
-            {driveStatus && (
-              <div 
-                className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-sm border text-xs font-semibold h-9 select-none transition-all",
-                  driveStatus.connected 
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100/50" 
-                    : "bg-amber-50 text-amber-700 border-amber-200/80 hover:bg-amber-100/50"
-                )}
-                title={driveStatus.connected ? driveStatus.email : "A usar a Conta de Serviço (Gravação limitada)"}
-              >
-                <div className={cn("w-1.5 h-1.5 rounded-full shrink-0 animate-pulse", driveStatus.connected ? "bg-emerald-500" : "bg-amber-500")} />
-                {driveStatus.connected ? (
-                  <span className="truncate max-w-[140px]">Drive Pessoal Ativo</span>
-                ) : (
-                  <button 
-                    onClick={handleConnectDrive}
-                    className="hover:underline flex items-center gap-1 cursor-pointer bg-transparent border-none text-inherit p-0"
-                  >
-                    <span>Conectar Drive</span>
-                    <ExternalLink size={11} className="shrink-0" />
-                  </button>
-                )}
-              </div>
-            )}
-            {(activeTab === 'all' || activeTab === 'google_drive') && (
-              <button
-                onClick={() => {
-                  const folderId = selectedFolderId || (activeTab === 'google_drive' ? (arquivoFolderId || 'root') : '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
-                  handleGoogleSync(folderId, undefined, false);
-                }}
-                className="flex items-center justify-center gap-2 bg-[#a21b7e]/10 text-[#a21b7e] border border-[#a21b7e]/20 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#a21b7e]/20 transition-all cursor-pointer h-9"
-                title="Sincronizar Arquivos do Google Drive"
-              >
-                <Sparkles size={16} />
-                Sincronizar Drive
-              </button>
-            )}
+          <div className="flex items-center gap-3">
             <div className="relative" ref={uploadMenuRef}>
               <button
                 onClick={() => setIsUploadMenuOpen(!isUploadMenuOpen)}
@@ -1727,7 +1703,7 @@ export default function Dashboard() {
               className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-gray-50 transition-all cursor-pointer h-9"
             >
               <FolderPlus size={16} />
-              Criar nova pasta
+              Nova pasta
             </button>
 
             {/* Botão Selecionar Todos */}
@@ -1754,7 +1730,7 @@ export default function Dashboard() {
 
             <div className="h-5 w-px bg-gray-200 mx-1" />
 
-            <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100">
+            <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100 items-center">
               <button
                 onClick={() => setViewMode("grid")}
                 className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
@@ -1768,6 +1744,33 @@ export default function Dashboard() {
                 <ListIcon size={16} />
               </button>
             </div>
+
+            {/* Botão Sincronizar (Apenas Símbolo que Gira ao Clicar) */}
+            {(activeTab === 'all' || activeTab === 'google_drive') && (
+              <button
+                onClick={async () => {
+                  const folderId = selectedFolderId || (activeTab === 'google_drive' ? (arquivoFolderId || 'root') : '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
+                  setIsSyncing(true);
+                  try {
+                    await handleGoogleSync(folderId, undefined, false);
+                  } finally {
+                    setIsSyncing(false);
+                  }
+                }}
+                className={cn(
+                  "p-1.5 rounded-sm border border-gray-200 bg-white text-gray-600 hover:text-[#a21b7e] hover:border-[#a21b7e]/30 shadow-sm transition-all cursor-pointer h-8 w-8 flex items-center justify-center ml-2",
+                  isSyncing && "text-[#a21b7e] bg-[#a21b7e]/5 border-[#a21b7e]/30"
+                )}
+                title="Sincronizar Arquivos"
+              >
+                <RefreshCw 
+                  size={15} 
+                  className={cn(
+                    isSyncing && "animate-spin"
+                  )} 
+                />
+              </button>
+            )}
           </div>
         </div>
 
@@ -2196,7 +2199,7 @@ export default function Dashboard() {
                                         onClick={async (e) => {
                                           e.stopPropagation();
                                           if (confirm("Tem certeza que deseja mover " + folder.name + " para o lixo?")) {
-                                            await updateDoc(doc(db, "folders", folder.id), { parentId: "trash" });
+                                            await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
                                             window.location.reload();
                                           }
                                           setActiveFolderMenuId(null);
@@ -2455,7 +2458,7 @@ export default function Dashboard() {
                                     onClick={async (e) => {
                                       e.stopPropagation();
                                       if (confirm("Tem certeza que deseja mover " + folder.name + " para o lixo?")) {
-                                        await updateDoc(doc(db, "folders", folder.id), { parentId: "trash" });
+                                        await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
                                         window.location.reload();
                                       }
                                       setActiveFolderMenuId(null);
