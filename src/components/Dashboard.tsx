@@ -39,6 +39,8 @@ import {
   FolderDot,
   Key,
   RefreshCw,
+  Square,
+  CheckSquare,
   Mail,
   Folder,
   Eye,
@@ -1731,12 +1733,16 @@ export default function Dashboard() {
                   }
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-gray-50 transition-all cursor-pointer h-9",
+                  "flex items-center justify-center bg-white border border-gray-200 text-gray-500 rounded-sm shadow-sm hover:bg-gray-50 hover:text-[#a21b7e] hover:border-[#a21b7e]/30 transition-all cursor-pointer h-9 w-9 shrink-0",
                   filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) && "border-[#a21b7e] text-[#a21b7e] bg-[#a21b7e]/5"
                 )}
+                title={filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) ? "Desmarcar Todos" : "Selecionar Todos"}
               >
-                <CheckCircle2 size={16} />
-                {filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) ? "Desmarcar Todos" : "Selecionar Todos"}
+                {filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) ? (
+                  <CheckSquare size={18} />
+                ) : (
+                  <Square size={18} />
+                )}
               </button>
             )}
 

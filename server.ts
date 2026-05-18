@@ -240,12 +240,20 @@ async function startServer() {
 
   // Criar Pasta no Google Drive
   app.post("/api/drive/create-folder", async (req, res) => {
-    const { name, parentId } = req.body;
+    let { name, parentId } = req.body;
     if (!name) return res.status(400).json({ error: "Nome da pasta é obrigatório" });
+
+    // Normalizar unicode (NFC) para evitar erros com acentos (ex: Instruções)
+    name = name.normalize('NFC');
+
+    let cleanParentId = parentId;
+    if (cleanParentId === 'null' || cleanParentId === 'undefined' || cleanParentId === '') {
+      cleanParentId = undefined;
+    }
 
     try {
       console.log('--- Criando Pasta no Drive ---');
-      console.log('Nome:', name, 'Parent ID:', parentId);
+      console.log('Nome:', name, 'Parent ID:', cleanParentId);
 
       const { auth } = await getGoogleAuth();
       const drive = google.drive({ version: 'v3', auth });
@@ -253,17 +261,33 @@ async function startServer() {
       const fileMetadata = {
         name: name,
         mimeType: 'application/vnd.google-apps.folder',
-        parents: parentId ? [parentId === "" || parentId === "root" ? "root" : parentId] : undefined
+        parents: cleanParentId ? [cleanParentId === "root" ? "root" : cleanParentId] : undefined
       };
 
-      const response = await drive.files.create({
-        requestBody: fileMetadata,
-        fields: 'id, name, mimeType, webViewLink, createdTime',
-        supportsAllDrives: true
-      });
+      try {
+        const response = await drive.files.create({
+          requestBody: fileMetadata,
+          fields: 'id, name, mimeType, webViewLink, createdTime',
+          supportsAllDrives: true
+        });
 
-      console.log('Pasta criada com sucesso no Drive:', response.data.id);
-      res.json(response.data);
+        console.log('Pasta criada com sucesso no Drive:', response.data.id);
+        return res.json(response.data);
+      } catch (innerError: any) {
+        // Se falhar por falta de permissões na pasta pai (ex: service account sem acesso à pasta do Silva)
+        if (cleanParentId && (innerError.code === 403 || innerError.code === 404)) {
+          console.warn("Falha ao criar na pasta pai (403/404). Tentando criar na raiz...", innerError.message);
+          fileMetadata.parents = ["root"];
+          const response = await drive.files.create({
+            requestBody: fileMetadata,
+            fields: 'id, name, mimeType, webViewLink, createdTime',
+            supportsAllDrives: true
+          });
+          console.log('Pasta criada com sucesso na Raiz (fallback):', response.data.id);
+          return res.json(response.data);
+        }
+        throw innerError;
+      }
     } catch (error: any) {
       console.error("Erro ao criar pasta no Google Drive:", error);
       res.status(500).json({ error: error.message });
