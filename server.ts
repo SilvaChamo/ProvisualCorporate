@@ -238,6 +238,38 @@ async function startServer() {
     }
   });
 
+  // Criar Pasta no Google Drive
+  app.post("/api/drive/create-folder", async (req, res) => {
+    const { name, parentId } = req.body;
+    if (!name) return res.status(400).json({ error: "Nome da pasta é obrigatório" });
+
+    try {
+      console.log('--- Criando Pasta no Drive ---');
+      console.log('Nome:', name, 'Parent ID:', parentId);
+
+      const { auth } = await getGoogleAuth();
+      const drive = google.drive({ version: 'v3', auth });
+
+      const fileMetadata = {
+        name: name,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: parentId ? [parentId === "" || parentId === "root" ? "root" : parentId] : undefined
+      };
+
+      const response = await drive.files.create({
+        requestBody: fileMetadata,
+        fields: 'id, name, mimeType, webViewLink, createdTime',
+        supportsAllDrives: true
+      });
+
+      console.log('Pasta criada com sucesso no Drive:', response.data.id);
+      res.json(response.data);
+    } catch (error: any) {
+      console.error("Erro ao criar pasta no Google Drive:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Atualizar (Renomear, Mover de pasta ou mover para a Lixeira) no Google Drive
   app.post("/api/drive/update", async (req, res) => {
     const { fileId, newName, addParents, removeParents, trashed, starred } = req.body;

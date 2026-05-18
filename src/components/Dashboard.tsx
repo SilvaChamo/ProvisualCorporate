@@ -35,6 +35,7 @@ import {
   UserPlus,
   Info,
   CheckCircle2,
+  Check,
   FolderDot,
   Key,
   Mail,
@@ -679,9 +680,11 @@ export default function Dashboard() {
     setIsUploading(true);
     setShowUploadQueueCard(true);
 
-    const totalFiles = files.length;
+    const filesArray = Array.from(files) as File[];
+    const totalFiles = filesArray.length;
+
     // Adicionar todos os arquivos à fila de upload
-    const newItems = (Array.from(files) as File[]).map((file, idx) => ({
+    const newItems = filesArray.map((file, idx) => ({
       id: `${Date.now()}-${idx}-${file.name}`,
       name: file.name,
       progress: 0,
@@ -691,16 +694,84 @@ export default function Dashboard() {
     setUploadQueue(newItems);
 
     try {
+      // 1. Identificar e criar pastas recursivamente se for upload de pasta
+      const dirToDriveId: { [path: string]: string } = { "": selectedFolderId || 'root' };
+      const isFolderUpload = filesArray.some(file => file.webkitRelativePath);
+
+      if (isFolderUpload) {
+        const uniqueDirs = new Set<string>();
+        filesArray.forEach(file => {
+          if (file.webkitRelativePath) {
+            const parts = file.webkitRelativePath.split('/');
+            parts.pop(); // Remove o nome do arquivo
+            for (let i = 1; i <= parts.length; i++) {
+              uniqueDirs.add(parts.slice(0, i).join('/'));
+            }
+          }
+        });
+
+        // Ordenar por nível de profundidade (número de barras / segmentos)
+        const sortedDirs = Array.from(uniqueDirs).sort(
+          (a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b)
+        );
+
+        for (const dirPath of sortedDirs) {
+          const segments = dirPath.split('/');
+          const folderName = segments[segments.length - 1];
+          segments.pop();
+          const parentPath = segments.join('/');
+          const parentDriveId = dirToDriveId[parentPath]; // Sempre existe porque ordenamos!
+
+          // Criar pasta no Google Drive físico
+          const createResponse = await fetch('/api/drive/create-folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: folderName, parentId: parentDriveId })
+          });
+
+          if (!createResponse.ok) {
+            throw new Error(`Erro ao criar a pasta "${folderName}" no Google Drive.`);
+          }
+
+          const driveFolder = await createResponse.json();
+          const driveFolderId = driveFolder.id;
+
+          // Guardar no cache de caminhos -> Drive IDs
+          dirToDriveId[dirPath] = driveFolderId;
+
+          // Guardar no Firestore folders
+          await setDoc(doc(db, "folders", driveFolderId), {
+            name: folderName,
+            date: serverTimestamp(),
+            ownerId: "google-drive",
+            parentId: parentDriveId === 'root' ? null : parentDriveId,
+            starred: false,
+            trashed: false,
+            adminToken: "Silva_Chamo_Master_Admin_2026"
+          });
+        }
+      }
+
+      // 2. Fazer upload de cada arquivo
       for (let i = 0; i < totalFiles; i++) {
-        const file = files[i];
+        const file = filesArray[i];
         const currentQueueItem = newItems[i];
 
         // Atualizar progresso inicial do item atual
         setUploadQueue(prev => prev.map(item => item.id === currentQueueItem.id ? { ...item, progress: 15 } : item));
 
+        // Determinar o ID do diretório destino do arquivo
+        let fileFolderId = selectedFolderId || 'root';
+        if (file.webkitRelativePath) {
+          const parts = file.webkitRelativePath.split('/');
+          parts.pop();
+          const dirPath = parts.join('/');
+          fileFolderId = dirToDriveId[dirPath] || fileFolderId;
+        }
+
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("folderId", selectedFolderId || 'root');
+        formData.append("folderId", fileFolderId);
 
         try {
           const response = await fetch('/api/drive/upload', {
@@ -725,7 +796,7 @@ export default function Dashboard() {
             type: fileType,
             captureDate: driveFile.createdTime ? Timestamp.fromDate(new Date(driveFile.createdTime)) : serverTimestamp(),
             uploadDate: serverTimestamp(),
-            folderId: selectedFolderId || null,
+            folderId: fileFolderId === 'root' ? null : fileFolderId,
             ownerId: "google-drive",
             driveId: driveFile.id,
             thumbnailUrl: driveFile.thumbnailLink || "",
@@ -751,10 +822,103 @@ export default function Dashboard() {
       }
     } catch (err: any) {
       console.error("Erro geral no upload:", err);
+      alert("Erro ao enviar pasta/arquivos: " + err.message);
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      window.location.reload();
+    }
+  };
+
+  // Seleção e Ações em Massa
+  const handleToggleBulkSelect = (assetId: string) => {
+    setSelectedAssetIds(prev =>
+      prev.includes(assetId)
+        ? prev.filter(id => id !== assetId)
+        : [...prev, assetId]
+    );
+  };
+
+  const handleBulkMove = async (destinationFolderId: string | null) => {
+    if (selectedAssetIds.length === 0) return;
+    setIsProcessingAction(true);
+    sessionStorage.setItem('action_in_progress', 'true');
+    
+    try {
+      for (const assetId of selectedAssetIds) {
+        const asset = assets.find(a => a.id === assetId);
+        if (!asset) continue;
+        
+        // 1. Atualizar no Google Drive real se aplicável
+        if (asset.driveId) {
+          await fetch('/api/drive/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileId: asset.driveId,
+              addParents: destinationFolderId || 'root',
+              removeParents: asset.folderId === 'root' || asset.folderId === '' || !asset.folderId ? undefined : asset.folderId
+            })
+          });
+        }
+        
+        // 2. Atualizar no Firestore
+        await updateDoc(doc(db, "assets", asset.id), {
+          folderId: destinationFolderId
+        });
+      }
+      
+      setSelectedAssetIds([]);
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      alert("Erro ao mover itens em massa: " + err.message);
+    } finally {
+      setIsProcessingAction(false);
+      sessionStorage.removeItem('action_in_progress');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedAssetIds.length === 0) return;
+    if (!confirm(`Tem certeza que deseja mover os ${selectedAssetIds.length} itens selecionados para a Lixeira?`)) return;
+
+    setIsProcessingAction(true);
+    sessionStorage.setItem('action_in_progress', 'true');
+
+    try {
+      for (const assetId of selectedAssetIds) {
+        const asset = assets.find(a => a.id === assetId);
+        if (!asset) continue;
+
+        // 1. Mover para a Lixeira no Google Drive
+        if (asset.driveId) {
+          await fetch('/api/drive/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileId: asset.driveId,
+              trashed: true
+            })
+          });
+        }
+
+        // 2. Atualizar no Firestore
+        await updateDoc(doc(db, "assets", asset.id), { 
+          folderId: "trash", 
+          trashed: true 
+        });
+      }
+
+      setSelectedAssetIds([]);
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      alert("Erro ao eliminar itens em massa: " + err.message);
+    } finally {
+      setIsProcessingAction(false);
+      sessionStorage.removeItem('action_in_progress');
     }
   };
 
@@ -1566,6 +1730,28 @@ export default function Dashboard() {
               Criar nova pasta
             </button>
 
+            {/* Botão Selecionar Todos */}
+            {filteredAssets.length > 0 && (
+              <button
+                onClick={() => {
+                  const allAssetIds = filteredAssets.map(a => a.id);
+                  const allSelected = allAssetIds.every(id => selectedAssetIds.includes(id));
+                  if (allSelected) {
+                    setSelectedAssetIds(prev => prev.filter(id => !allAssetIds.includes(id)));
+                  } else {
+                    setSelectedAssetIds(prev => Array.from(new Set([...prev, ...allAssetIds])));
+                  }
+                }}
+                className={cn(
+                  "flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-gray-50 transition-all cursor-pointer h-9",
+                  filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) && "border-[#a21b7e] text-[#a21b7e] bg-[#a21b7e]/5"
+                )}
+              >
+                <CheckCircle2 size={16} />
+                {filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) ? "Desmarcar Todos" : "Selecionar Todos"}
+              </button>
+            )}
+
             <div className="h-5 w-px bg-gray-200 mx-1" />
 
             <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100">
@@ -2060,6 +2246,9 @@ export default function Dashboard() {
                               }
                             }}
                             isSelected={selectedAsset?.id === asset.id}
+                            isBulkSelected={selectedAssetIds.includes(asset.id)}
+                            onToggleBulkSelect={() => handleToggleBulkSelect(asset.id)}
+                            hasSelectionActive={selectedAssetIds.length > 0}
                             folders={filteredFolders}
                             onAskGemini={(a) => {
                               setGeminiAsset(a);
@@ -2311,6 +2500,9 @@ export default function Dashboard() {
                         }
                       }}
                       isSelected={selectedAsset?.id === asset.id}
+                      isBulkSelected={selectedAssetIds.includes(asset.id)}
+                      onToggleBulkSelect={() => handleToggleBulkSelect(asset.id)}
+                      hasSelectionActive={selectedAssetIds.length > 0}
                       folders={filteredFolders}
                       onAskGemini={(a) => {
                         setGeminiAsset(a);
@@ -2397,6 +2589,82 @@ export default function Dashboard() {
             </div>
           </motion.div>
         )}
+
+        {/* Barra Flutuante de Ações em Massa */}
+        {selectedAssetIds.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md border border-gray-200/80 shadow-[0_10px_30px_rgba(0,0,0,0.1)] rounded-[12px] px-6 py-4 flex items-center gap-6 z-[100] font-sans"
+          >
+            <div className="flex items-center gap-2 border-r border-gray-200 pr-4">
+              <div className="w-6 h-6 rounded-full bg-[#a21b7e] text-white flex items-center justify-center text-xs font-bold shadow-sm animate-pulse">
+                {selectedAssetIds.length}
+              </div>
+              <span className="text-sm font-bold text-gray-700">
+                {selectedAssetIds.length === 1 ? 'item selecionado' : 'itens selecionados'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Mover para Folder Dropdown Trigger */}
+              <div className="relative group/bulk">
+                <button
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none"
+                >
+                  <FolderIcon size={14} className="text-yellow-500 shrink-0" />
+                  Mover para...
+                  <ChevronDown size={12} className="text-gray-400" />
+                </button>
+
+                {/* Dropdown Menu */}
+                <div className="absolute bottom-[100%] left-0 mb-2 w-52 bg-white border border-gray-200 shadow-lg rounded-md py-1 z-[110] hidden group-hover/bulk:block max-h-60 overflow-y-auto">
+                  <div className="px-3 py-1.5 text-[10px] font-black text-gray-300 uppercase tracking-wider border-b border-gray-100 mb-1">Escolha a pasta destino</div>
+                  
+                  {selectedFolderId !== null && (
+                    <button
+                      onClick={() => handleBulkMove(null)}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#a21b7e]/5 text-left text-xs font-bold text-gray-600 hover:text-[#a21b7e] transition-colors cursor-pointer"
+                    >
+                      <HardDrive size={14} className="text-gray-400" />
+                      Raiz (Meu Drive)
+                    </button>
+                  )}
+
+                  {filteredFolders.map(folder => (
+                    <button
+                      key={folder.id}
+                      onClick={() => handleBulkMove(folder.id)}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#a21b7e]/5 text-left text-xs font-bold text-gray-600 hover:text-[#a21b7e] transition-colors cursor-pointer"
+                    >
+                      <FolderIcon size={14} className="text-yellow-500 shrink-0" />
+                      {folder.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Delete Button */}
+              <button
+                onClick={handleBulkDelete}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-red-50 hover:text-red-600 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none"
+              >
+                <Trash2 size={14} className="text-red-400 shrink-0" />
+                Mover para Lixeira
+              </button>
+
+              {/* Clear Selection */}
+              <button
+                onClick={() => setSelectedAssetIds([])}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none"
+              >
+                Limpar seleção
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Modal de Visualização */}
         <AnimatePresence>
           {previewAsset && (
@@ -2752,9 +3020,24 @@ interface AssetCardProps {
   onAskGemini: (asset: Asset) => void;
   folders: any[];
   onStartAction?: (active: boolean) => void;
+  isBulkSelected?: boolean;
+  onToggleBulkSelect?: () => void;
+  hasSelectionActive?: boolean;
 }
 
-function AssetCard({ asset, onSelect, isSelected, onPreview, isNewlyUploaded = false, onAskGemini, folders, onStartAction }: AssetCardProps) {
+function AssetCard({ 
+  asset, 
+  onSelect, 
+  isSelected, 
+  onPreview, 
+  isNewlyUploaded = false, 
+  onAskGemini, 
+  folders, 
+  onStartAction,
+  isBulkSelected = false,
+  onToggleBulkSelect,
+  hasSelectionActive = false
+}: AssetCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar'>('none');
 
@@ -2785,11 +3068,28 @@ function AssetCard({ asset, onSelect, isSelected, onPreview, isNewlyUploaded = f
       className={cn(
         "aspect-[3/2] relative border transition-all cursor-pointer group rounded-none shadow-sm",
         showMenu ? "overflow-visible z-30" : "overflow-hidden",
-        isSelected
-          ? "border-[#a21b7e] ring-2 ring-[#a21b7e]/10 shadow-lg"
-          : "border-gray-100 hover:border-gray-300"
+        isBulkSelected
+          ? "border-[#a21b7e] ring-2 ring-[#a21b7e]/30 shadow-lg"
+          : (isSelected ? "border-[#a21b7e] ring-2 ring-[#a21b7e]/10 shadow-lg" : "border-gray-100 hover:border-gray-300")
       )}
     >
+      {/* Checkbox de Seleção em Massa */}
+      <div 
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleBulkSelect?.();
+        }}
+        className={cn(
+          "absolute top-2 left-2 z-20 w-5 h-5 rounded-full border bg-white/90 backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer shadow-sm hover:scale-110",
+          isBulkSelected 
+            ? "border-[#a21b7e] bg-[#a21b7e] text-white" 
+            : "border-gray-300 text-transparent hover:border-gray-400",
+          isBulkSelected || hasSelectionActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        )}
+      >
+        <Check size={12} className={cn("stroke-[3]", isBulkSelected ? "block" : "hidden group-hover:block text-gray-400")} />
+      </div>
+
       {/* 3 dots button over the image in the upper right corner */}
       <div className="absolute top-2 right-2 z-20">
         <motion.button 
@@ -3381,9 +3681,24 @@ interface AssetRowProps {
   onAskGemini: (asset: Asset) => void;
   folders: any[];
   onStartAction?: (active: boolean) => void;
+  isBulkSelected?: boolean;
+  onToggleBulkSelect?: () => void;
+  hasSelectionActive?: boolean;
 }
 
-function AssetRow({ asset, onSelect, isSelected, onPreview, isNewlyUploaded = false, onAskGemini, folders, onStartAction }: AssetRowProps) {
+function AssetRow({ 
+  asset, 
+  onSelect, 
+  isSelected, 
+  onPreview, 
+  isNewlyUploaded = false, 
+  onAskGemini, 
+  folders, 
+  onStartAction,
+  isBulkSelected = false,
+  onToggleBulkSelect,
+  hasSelectionActive = false
+}: AssetRowProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar'>('none');
 
@@ -3411,10 +3726,26 @@ function AssetRow({ asset, onSelect, isSelected, onPreview, isNewlyUploaded = fa
       }}
       className={cn(
         "grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible",
-        isSelected && "bg-[#a21b7e]/5 hover:bg-[#a21b7e]/10 border-[#a21b7e]/10"
+        isBulkSelected ? "bg-[#a21b7e]/10 hover:bg-[#a21b7e]/15 border-[#a21b7e]/20" : (isSelected && "bg-[#a21b7e]/5 hover:bg-[#a21b7e]/10 border-[#a21b7e]/10")
       )}
     >
       <div className="col-span-6 flex items-center gap-4">
+        {/* Checkbox de Seleção em Massa */}
+        <div 
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleBulkSelect?.();
+          }}
+          className={cn(
+            "w-5 h-5 rounded-full border flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-sm mr-2",
+            isBulkSelected 
+              ? "border-[#a21b7e] bg-[#a21b7e] text-white" 
+              : "border-gray-300 text-transparent hover:border-gray-400"
+          )}
+        >
+          <Check size={12} className="stroke-[3]" />
+        </div>
+
         {(asset.thumbnailUrl || asset.driveId) && asset.type !== 'folder' ? (
           <div className="w-8 h-8 overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-100 rounded-none">
             <SafeImage
