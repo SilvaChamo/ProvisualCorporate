@@ -54,9 +54,10 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, handleFirestoreError, OperationType } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { auth, db, storage } from "../lib/firebase";
+import { auth, storage } from "../lib/firebase";
 import { signOut } from "firebase/auth";
-import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc } from "../lib/supabase";
+const db = null;
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useRef } from "react";
 import logoHorizontal from "../Logo/logo_horizontal_clean.png";
@@ -1948,7 +1949,6 @@ export default function Dashboard() {
                   )}
                   title="Configurações e Sincronização do Google Drive"
                 >
-                  <HardDrive size={14} className={cn(isSyncing && "text-[#a21b7e]")} />
                   <span>Google Drive</span>
                   <ChevronDown size={12} className={cn("transition-transform duration-200 shrink-0", isDriveDropdownOpen && "rotate-180")} />
                 </button>
@@ -1990,7 +1990,6 @@ export default function Dashboard() {
                             onClick={async (e) => {
                               e.stopPropagation();
                               const folderId = selectedFolderId || (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : (arquivoFolderId || 'root'));
-                              setIsDriveDropdownOpen(false);
                               setIsSyncing(true);
                               try {
                                 await handleGoogleSync(folderId, undefined, false);
@@ -3227,12 +3226,12 @@ export default function Dashboard() {
           )}
         </div>)}
 
-        {/* Upload Progress Overlay (Fixed Bottom Left) - Google Drive style (Layout Claro) */}
+        {/* Upload Progress Overlay (Fixed Bottom Right) - Google Drive style (Layout Claro) */}
         {showUploadQueueCard && uploadQueue.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-8 left-8 bg-white border border-gray-200/80 shadow-[0_0_3px_rgba(0,0,0,0.08)] rounded-[10px] min-w-[280px] max-w-[384px] w-auto z-[100] text-gray-700 overflow-hidden font-sans"
+            className="fixed bottom-8 right-8 bg-white border border-gray-200/80 shadow-[0_10px_30px_rgba(0,0,0,0.08)] rounded-[10px] min-w-[280px] max-w-[384px] w-auto z-[100] text-gray-700 overflow-hidden font-sans"
           >
             <div className="flex items-center justify-between gap-8 px-4 py-3 bg-gray-50 border-b border-gray-100 text-gray-800">
               <span className="font-bold text-xs uppercase tracking-wider shrink-0">
@@ -4279,17 +4278,21 @@ function AssetCard({
                       runAction(async () => {
                         // 1. Mover para a Lixeira fisicamente no Google Drive real
                         if (asset.driveId) {
-                          const updateResponse = await fetch('/api/drive/update', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              fileId: asset.driveId,
-                              trashed: true
-                            })
-                          });
-                          if (!updateResponse.ok) {
-                            const errData = await updateResponse.json();
-                            throw new Error(errData.error || 'Erro ao mover para a lixeira do Google Drive');
+                          try {
+                            const updateResponse = await fetch('/api/drive/update', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                fileId: asset.driveId,
+                                trashed: true
+                              })
+                            });
+                            if (!updateResponse.ok) {
+                              const errData = await updateResponse.json();
+                              console.warn("Erro ao mover no drive:", errData.error);
+                            }
+                          } catch (driveErr) {
+                            console.warn("Falha física ao lixar no Drive, prosseguindo localmente:", driveErr);
                           }
                         }
 
@@ -4960,17 +4963,21 @@ function AssetRow({
                         runAction(async () => {
                           // 1. Mover para a Lixeira fisicamente no Google Drive real
                           if (asset.driveId) {
-                            const updateResponse = await fetch('/api/drive/update', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                fileId: asset.driveId,
-                                trashed: true
-                              })
-                            });
-                            if (!updateResponse.ok) {
-                              const errData = await updateResponse.json();
-                              throw new Error(errData.error || 'Erro ao mover para a lixeira do Google Drive');
+                            try {
+                              const updateResponse = await fetch('/api/drive/update', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  fileId: asset.driveId,
+                                  trashed: true
+                                })
+                              });
+                              if (!updateResponse.ok) {
+                                const errData = await updateResponse.json();
+                                console.warn("Erro ao mover no drive:", errData.error);
+                              }
+                            } catch (driveErr) {
+                              console.warn("Falha física ao lixar no Drive, prosseguindo localmente:", driveErr);
                             }
                           }
 
