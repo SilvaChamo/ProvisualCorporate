@@ -77,11 +77,11 @@ async function fetchWithErrorMessage(url: string, options: RequestInit): Promise
         if (text && text.length < 200) {
           errorMsg = text;
         }
-      } catch {}
+      } catch { }
     }
     throw new Error(errorMsg);
   }
-  
+
   try {
     return await response.json();
   } catch {
@@ -120,16 +120,16 @@ interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
 }
 
 function SafeImage({ thumbnailUrl, driveId, fallbackSize = 'w500', alt, className, ...props }: SafeImageProps) {
-  const initialUrl = driveId 
-    ? `/api/drive/thumbnail?id=${driveId}` 
+  const initialUrl = driveId
+    ? `/api/drive/thumbnail?id=${driveId}`
     : (thumbnailUrl || '');
   const [src, setSrc] = useState(initialUrl);
   const [hasFailedOnce, setHasFailedOnce] = useState(false);
   const [hasFailedAlt, setHasFailedAlt] = useState(false);
 
   useEffect(() => {
-    const newUrl = driveId 
-      ? `/api/drive/thumbnail?id=${driveId}` 
+    const newUrl = driveId
+      ? `/api/drive/thumbnail?id=${driveId}`
       : (thumbnailUrl || '');
     setSrc(newUrl);
     setHasFailedOnce(false);
@@ -390,17 +390,19 @@ export default function ClientDashboard() {
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
   const [activeFolderSubmenu, setActiveFolderSubmenu] = useState<'none' | 'partilhar' | 'organizar'>('none');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean } | null>(null);
-  
+
   // Estado para conexão híbrida pessoal de Google Drive do Silva
-  const [driveStatus, setDriveStatus] = useState<{connected: boolean; email: string; configNeeded: boolean} | null>(null);
+  const [driveStatus, setDriveStatus] = useState<{ connected: boolean; email: string; configNeeded: boolean } | null>(null);
   const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
-  
+
   // Estados para Gestão de Contas de Acesso dos Clientes
   const [accounts, setAccounts] = useState<any[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [newAccountEmail, setNewAccountEmail] = useState("");
+  const [newAccountResponsible, setNewAccountResponsible] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountLogo, setNewAccountLogo] = useState("");
   const [newAccountPassword, setNewAccountPassword] = useState("");
   const [newAccountRole, setNewAccountRole] = useState<"admin" | "cliente">("cliente");
   const [accountError, setAccountError] = useState<string | null>(null);
@@ -411,7 +413,7 @@ export default function ClientDashboard() {
   // Estados para as janelas interativas reais dos arquivos (sem bonecos!)
   const [geminiAsset, setGeminiAsset] = useState<Asset | null>(null);
   const [geminiQuestion, setGeminiQuestion] = useState("");
-  const [geminiAnswers, setGeminiAnswers] = useState<Array<{role: 'user' | 'gemini', text: string}>>([]);
+  const [geminiAnswers, setGeminiAnswers] = useState<Array<{ role: 'user' | 'gemini', text: string }>>([]);
   const [isGeminiLoading, setIsGeminiLoading] = useState(false);
   const [shareAsset, setShareAsset] = useState<Asset | null>(null);
   const [organizeAsset, setOrganizeAsset] = useState<Asset | null>(null);
@@ -427,27 +429,27 @@ export default function ClientDashboard() {
   const arquivoFolder = useMemo(() => {
     if (!folders || !Array.isArray(folders)) return null;
     // 1. Tentar busca exata por "arquivo" na raiz
-    let found = folders.find(f => 
-      f && f.name && typeof f.name === 'string' && 
-      f.name.trim().toLowerCase() === 'arquivo' && 
-      (!(f as any).parentId || (f as any).parentId === 'root' || (f as any).parentId === '') && 
+    let found = folders.find(f =>
+      f && f.name && typeof f.name === 'string' &&
+      f.name.trim().toLowerCase() === 'arquivo' &&
+      (!(f as any).parentId || (f as any).parentId === 'root' || (f as any).parentId === '') &&
       !(f as any).trashed
     );
     if (found) return found;
 
     // 2. Fallback: buscar pasta que contenha "arquivo" no nome na raiz
-    found = folders.find(f => 
-      f && f.name && typeof f.name === 'string' && 
-      f.name.toLowerCase().includes('arquivo') && 
-      (!(f as any).parentId || (f as any).parentId === 'root' || (f as any).parentId === '') && 
+    found = folders.find(f =>
+      f && f.name && typeof f.name === 'string' &&
+      f.name.toLowerCase().includes('arquivo') &&
+      (!(f as any).parentId || (f as any).parentId === 'root' || (f as any).parentId === '') &&
       !(f as any).trashed
     );
     if (found) return found;
 
     // 3. Fallback final: se não achou na raiz, buscar qualquer pasta chamada "arquivo" no sistema
-    return folders.find(f => 
-      f && f.name && typeof f.name === 'string' && 
-      f.name.trim().toLowerCase() === 'arquivo' && 
+    return folders.find(f =>
+      f && f.name && typeof f.name === 'string' &&
+      f.name.trim().toLowerCase() === 'arquivo' &&
       !(f as any).trashed
     );
   }, [folders]);
@@ -619,12 +621,55 @@ export default function ClientDashboard() {
   };
 
   // Gestão de Contas de Acesso dos Clientes (Criar ou Editar)
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAccountError("A imagem selecionada é muito grande. Escolha uma imagem de até 5MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        const MAX_DIM = 200;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+          setNewAccountLogo(compressedBase64);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setAccountError(null);
     setAccountSuccess(null);
 
-    if (!newAccountEmail || !newAccountName || !newAccountPassword) {
+    if (!newAccountEmail || !newAccountResponsible || !newAccountName || !newAccountPassword) {
       setAccountError("Preencha todos os campos obrigatórios.");
       return;
     }
@@ -635,13 +680,14 @@ export default function ClientDashboard() {
     }
 
     setIsCreatingAccount(true);
+    const displayNameValue = `${newAccountResponsible.trim()}|${newAccountName.trim()}|${newAccountLogo.trim()}`;
 
     try {
       if (editingAccount) {
         // MODO EDIÇÃO: Atualizar documento existente no Firestore
         await setDoc(doc(db, "users", editingAccount.id), {
           email: newAccountEmail.trim().toLowerCase(),
-          displayName: newAccountName.trim(),
+          displayName: displayNameValue,
           password: newAccountPassword,
           role: newAccountRole,
           adminToken: "Silva_Chamo_Master_Admin_2026"
@@ -661,11 +707,11 @@ export default function ClientDashboard() {
 
         // Gerar ID de usuário
         const generatedUid = "client_" + Math.random().toString(36).substring(2, 11);
-        
+
         // Salvar conta no Firestore na coleção "users"
         await setDoc(doc(db, "users", generatedUid), {
           email: newAccountEmail.trim().toLowerCase(),
-          displayName: newAccountName.trim(),
+          displayName: displayNameValue,
           password: newAccountPassword, // Senha salva para login resiliente local
           role: newAccountRole,
           clientId: generatedUid, // ID do cliente para filtrar seus arquivos
@@ -677,10 +723,12 @@ export default function ClientDashboard() {
       }
 
       setNewAccountEmail("");
+      setNewAccountResponsible("");
       setNewAccountName("");
+      setNewAccountLogo("");
       setNewAccountPassword("");
       setNewAccountRole("cliente");
-      
+
       // Fechar modal após 1.5s
       setTimeout(() => {
         setIsAddAccountModalOpen(false);
@@ -698,7 +746,21 @@ export default function ClientDashboard() {
   const handleEditClick = (account: any) => {
     setEditingAccount(account);
     setNewAccountEmail(account.email);
-    setNewAccountName(account.displayName || "");
+    const rawName = String(account.displayName || "");
+    const parts = rawName.split('|');
+    if (parts.length === 3) {
+      setNewAccountResponsible(parts[0]);
+      setNewAccountName(parts[1]);
+      setNewAccountLogo(parts[2] || "");
+    } else if (parts.length === 2) {
+      setNewAccountResponsible("");
+      setNewAccountName(parts[0]);
+      setNewAccountLogo(parts[1] || "");
+    } else {
+      setNewAccountResponsible("");
+      setNewAccountName(rawName);
+      setNewAccountLogo("");
+    }
     setNewAccountPassword(account.password || "");
     setNewAccountRole(account.role || "cliente");
     setAccountError(null);
@@ -710,7 +772,9 @@ export default function ClientDashboard() {
     setIsAddAccountModalOpen(false);
     setEditingAccount(null);
     setNewAccountEmail("");
+    setNewAccountResponsible("");
     setNewAccountName("");
+    setNewAccountLogo("");
     setNewAccountPassword("");
     setNewAccountRole("cliente");
     setAccountError(null);
@@ -730,9 +794,9 @@ export default function ClientDashboard() {
   };
 
   // Auth logout
-  const handleLogout = async () => { 
+  const handleLogout = async () => {
     localStorage.removeItem("provisual_local_admin");
-    await signOut(auth); 
+    await signOut(auth);
     window.location.href = "/login";
   };
 
@@ -815,7 +879,7 @@ export default function ClientDashboard() {
               if (errData && errData.error) {
                 errorMsg += ` Detalhes: ${errData.error}`;
               }
-            } catch (e) {}
+            } catch (e) { }
             throw new Error(errorMsg);
           }
 
@@ -931,12 +995,12 @@ export default function ClientDashboard() {
     if (selectedAssetIds.length === 0) return;
     setIsProcessingAction(true);
     sessionStorage.setItem('action_in_progress', 'true');
-    
+
     try {
       for (const assetId of selectedAssetIds) {
         const asset = assets.find(a => a.id === assetId);
         if (!asset) continue;
-        
+
         // 1. Atualizar no Google Drive real se aplicável
         if (asset.driveId) {
           await fetch('/api/drive/update', {
@@ -949,13 +1013,13 @@ export default function ClientDashboard() {
             })
           });
         }
-        
+
         // 2. Atualizar no Firestore
         await updateDoc(doc(db, "assets", asset.id), {
           folderId: destinationFolderId
         });
       }
-      
+
       setSelectedAssetIds([]);
     } catch (err: any) {
       console.error(err);
@@ -991,9 +1055,9 @@ export default function ClientDashboard() {
         }
 
         // 2. Atualizar no Firestore
-        await updateDoc(doc(db, "assets", asset.id), { 
-          folderId: "trash", 
-          trashed: true 
+        await updateDoc(doc(db, "assets", asset.id), {
+          folderId: "trash",
+          trashed: true
         });
       }
 
@@ -1013,7 +1077,7 @@ export default function ClientDashboard() {
       return;
     }
     const folderId = targetFolderId || 'root';
-    
+
     // Se a aba ativa for 'all' (Dados do Cliente), mantemos a aba ativa como 'all' para consistência de navegação.
     // Caso contrário, alteramos para a aba 'google_drive'.
     if (!isBackground) {
@@ -1023,7 +1087,7 @@ export default function ClientDashboard() {
       }
       setSelectedFolderId(folderId === 'root' ? null : folderId);
     }
-    
+
     if (!isBackground) {
       setIsUploading(true);
       setUploadProgress(10);
@@ -1046,7 +1110,7 @@ export default function ClientDashboard() {
 
       // Converter arquivos do Drive para o formato do nosso sistema
       for (const file of driveFiles) {
-        const isFolder = file.mimeType === 'application/vnd.google-apps.folder' || 
+        const isFolder = file.mimeType === 'application/vnd.google-apps.folder' ||
           (file.mimeType === 'application/vnd.google-apps.shortcut' && file.shortcutDetails?.targetMimeType === 'application/vnd.google-apps.folder');
         const extension = file.name.split('.').pop()?.toLowerCase() || '';
         const isRaw = ['cr2', 'cr3', 'nef', 'arw', 'dng', 'raf', 'orf'].includes(extension);
@@ -1271,8 +1335,8 @@ export default function ClientDashboard() {
     if (folderId === null) return true; // A raiz 'Meu Arquivo' é sempre acessível
 
     // Achar todas as pastas raiz permitidas ao cliente
-    const allowedClientRootFolders = folders.filter(f => 
-      f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' && 
+    const allowedClientRootFolders = folders.filter(f =>
+      f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' &&
       (
         f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
         f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
@@ -1384,16 +1448,16 @@ export default function ClientDashboard() {
 
   const filteredAssets = useMemo(() => {
     let result = assets;
-    
+
     // Filtrar por clientId ou pasta permitida se for cliente (ver apenas seus próprios arquivos)
     if (userProfile?.role === 'cliente' && auth.currentUser?.uid) {
-      result = result.filter(a => 
-        (a as any).clientId === auth.currentUser?.uid || 
+      result = result.filter(a =>
+        (a as any).clientId === auth.currentUser?.uid ||
         ((a as any).clientId === userProfile.clientId) ||
         isFolderAllowedForClient(a.folderId)
       );
     }
-    
+
     // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed
     if (activeTab === 'google_drive' && driveFilterType === 'trashed') {
       result = result.filter(a => a.trashed === true || a.folderId === 'trash');
@@ -1402,7 +1466,7 @@ export default function ClientDashboard() {
       }
       return result;
     }
-    
+
     // Para Meu Drive e Gestão de Clientes na raiz, exibir arquivos normalmente
     // Removemos o filtro estrito que ocultava os arquivos carregados na raiz
 
@@ -1418,10 +1482,10 @@ export default function ClientDashboard() {
         result = result.filter(a => (a as any).ownerId === 'google-drive' && a.starred === true);
       } else if (driveFilterType === 'recent') {
         result = result.filter(a => (a as any).ownerId === 'google-drive')
-                       .sort((a, b) => b.uploadDate.getTime() - a.uploadDate.getTime());
+          .sort((a, b) => b.uploadDate.getTime() - a.uploadDate.getTime());
       } else {
-        result = result.filter(a => 
-          (a as any).ownerId === 'google-drive' && 
+        result = result.filter(a =>
+          (a as any).ownerId === 'google-drive' &&
           (a.folderId === arquivoFolderId || (!a.folderId && !arquivoFolderId))
         );
       }
@@ -1465,8 +1529,8 @@ export default function ClientDashboard() {
       if (selectedFolderId === null) {
         if (userProfile?.role === 'cliente') {
           // Filtrar para mostrar apenas a pasta correspondente a este cliente
-          result = result.filter(f => 
-            f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' && 
+          result = result.filter(f =>
+            f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' &&
             (
               f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
               f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
@@ -1515,7 +1579,7 @@ export default function ClientDashboard() {
     // Fallbacks inteligentes para manter consistência mesmo se a conta de serviço retornar dados vazios/nulos
     const fallbackLimitBytes = 15 * 1024 * 1024 * 1024; // 15 GB padrão do Drive
     const fallbackUsageBytes = localUsageBytes > 0 ? localUsageBytes : 1.24 * 1024 * 1024 * 1024; // 1.24 GB realista
-    
+
     if (!storageQuota) {
       const limitGB = (fallbackLimitBytes / 1024 / 1024 / 1024).toFixed(2);
       const usageGB = (fallbackUsageBytes / 1024 / 1024 / 1024).toFixed(2);
@@ -1525,11 +1589,11 @@ export default function ClientDashboard() {
 
     const limit = parseInt(storageQuota.limit) || fallbackLimitBytes;
     const usage = parseInt(storageQuota.usage) || localUsageBytes || fallbackUsageBytes;
-    
+
     const limitGB = (limit / 1024 / 1024 / 1024).toFixed(2);
     const usageGB = (usage / 1024 / 1024 / 1024).toFixed(2);
     const percent = Math.min(100, Math.round((usage / limit) * 100)) || 0;
-    
+
     return { limit: `${limitGB} GB`, usage: `${usageGB} GB`, percent };
   }, [storageQuota, localUsageBytes]);
 
@@ -1540,7 +1604,7 @@ export default function ClientDashboard() {
     // Se nenhuma pasta estiver selecionada, mostramos o rótulo da aba correspondente
     if (!selectedFolderId) {
       if (activeTab === 'all') {
-        const label = userProfile?.role === 'cliente' ? 'Meu Arquivo' : 'Dados do Cliente';
+        const label = "Meu Arquivo";
         list.push({ id: null, name: label, type: 'all' });
       } else if (activeTab === 'google_drive') {
         list.push({ id: 'google_drive_root', name: 'Arquivo Provisual', type: 'drive_root' });
@@ -1558,7 +1622,7 @@ export default function ClientDashboard() {
     } else {
       // Se há uma pasta selecionada, adicionamos o ponto de partida (raiz) no início dos breadcrumbs
       if (activeTab === 'all') {
-        const label = userProfile?.role === 'cliente' ? 'Meu Arquivo' : 'Dados do Cliente';
+        const label = "Meu Arquivo";
         list.push({ id: null, name: label, type: 'all' });
       } else if (activeTab === 'google_drive') {
         list.push({ id: null, name: 'Arquivo Provisual', type: 'all' });
@@ -1567,7 +1631,7 @@ export default function ClientDashboard() {
       const path: { id: string; name: string; type: 'folder' }[] = [];
       let currentId = selectedFolderId;
       let visited = new Set<string>();
-      
+
       while (currentId && currentId !== '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' && currentId !== arquivoFolderId && !visited.has(currentId)) {
         visited.add(currentId);
         const folder = folders.find(f => f.id === currentId);
@@ -1617,17 +1681,10 @@ export default function ClientDashboard() {
             Navegação
           </h3>
           <nav className="space-y-0.5">
-            {userProfile?.role === 'admin' && (
-              <SidebarItem
-                icon={<Users size={20} />}
-                label="Contas de Acesso"
-                active={activeTab === 'contas_acesso'}
-                onClick={() => { setActiveTab('contas_acesso'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
-              />
-            )}
+
             <SidebarItem
               icon={<Database size={20} />}
-              label={userProfile?.role === 'cliente' ? 'Meu Arquivo' : 'Dados do Cliente'}
+              label="Meu Arquivo"
               active={activeTab === 'all'}
               onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); handleGoogleSync('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG', undefined, true); }}
             />
@@ -1650,71 +1707,44 @@ export default function ClientDashboard() {
               onClick={() => { setActiveTab('document'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
             />
 
-            {userProfile?.role === 'admin' && (
-              <>
-                <div className="my-5" />
-                <h3 className="text-[13px] font-black text-[#a21b7e] uppercase tracking-[0.08em] px-3 py-2.5 mb-2 bg-[#a21b7e]/5 rounded-sm">
-                  Arquivo Provisual
-                </h3>
 
-                <SidebarItem
-                  icon={<HardDrive size={20} />}
-                  label="Meu Drive"
-                  active={activeTab === 'google_drive' && driveFilterType === null}
-                  onClick={() => { setActiveTab('google_drive'); handleGoogleSync('root'); setVisibleImagesCount(10); }}
-                />
-                <SidebarItem
-                  icon={<Users size={20} />}
-                  label="Partilhados Comigo"
-                  active={activeTab === 'google_drive' && driveFilterType === 'sharedWithMe'}
-                  onClick={() => { setActiveTab('google_drive'); handleGoogleSync(undefined, 'sharedWithMe'); setVisibleImagesCount(10); }}
-                />
-                <SidebarItem
-                  icon={<Clock size={20} />}
-                  label="Recentes"
-                  active={activeTab === 'google_drive' && driveFilterType === 'recent'}
-                  onClick={() => { setActiveTab('google_drive'); handleGoogleSync(undefined, 'recent'); setVisibleImagesCount(10); }}
-                />
-                <SidebarItem
-                  icon={<Star size={20} />}
-                  label="Com Estrela"
-                  active={activeTab === 'google_drive' && driveFilterType === 'starred'}
-                  onClick={() => { setActiveTab('google_drive'); handleGoogleSync(undefined, 'starred'); setVisibleImagesCount(10); }}
-                />
-                <SidebarItem
-                  icon={<Trash2 size={20} />}
-                  label="Lixo"
-                  active={activeTab === 'google_drive' && driveFilterType === 'trashed'}
-                  onClick={() => { setActiveTab('google_drive'); handleGoogleSync(undefined, 'trashed'); setVisibleImagesCount(10); }}
-                />
-              </>
-            )}
           </nav>
         </div>
 
-        {/* Armazenamento progress bar (no rodapé da sidebar, com as cores da Provisual e dados reais) */}
-        <div className="p-4 bg-[#a21b7e]/5 border-t border-[#a21b7e]/10 shrink-0">
-          <div className="flex items-center gap-2 mb-2 text-xs font-bold text-[#a21b7e]">
-            <Cloud size={16} />
-            <span>Armazenamento</span>
-          </div>
-          <div className="w-full bg-[#a21b7e]/10 h-2 rounded-full overflow-hidden mb-2">
-            <div 
-              className="bg-[#a21b7e] h-full rounded-full transition-all duration-500" 
-              style={{ width: `${storageInfo.percent}%` }}
-            />
-          </div>
-          <div className="text-[10px] text-gray-600 font-bold mb-3">
-            {storageInfo.usage} de {storageInfo.limit} usados ({storageInfo.percent}%)
-          </div>
-          <a
-            href="https://one.google.com/about/plans"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block text-center w-full py-1.5 text-[10px] font-black text-white hover:text-white bg-[#a21b7e] hover:bg-[#8e176e] border border-transparent rounded-sm transition-all uppercase tracking-wider cursor-pointer shadow-sm"
-          >
-            Obter mais espaço
-          </a>
+        {/* Dados da Empresa Cliente no Rodapé */}
+        <div className="p-3 bg-[#a21b7e]/5 border-t border-[#a21b7e]/10 shrink-0 flex items-center gap-3 w-full">
+          {(() => {
+            const parsed = (() => {
+              const rawName = userProfile?.displayName || "";
+              if (rawName.includes('|')) {
+                const parts = rawName.split('|');
+                return { name: parts[0], logo: parts[1] };
+              }
+              return { name: rawName, logo: "" };
+            })();
+
+            return (
+              <>
+                <div className="w-10 h-10 rounded-full bg-white border border-[#a21b7e]/10 shadow-sm flex items-center justify-center overflow-hidden shrink-0">
+                  {parsed.logo ? (
+                    <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain animate-in fade-in duration-300" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-[#a21b7e]/20 to-[#b12a84]/20 text-[#a21b7e] text-sm font-black font-sans uppercase">
+                      {parsed.name ? parsed.name.charAt(0) : "C"}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col min-w-0 leading-tight">
+                  <span className="text-[11px] font-black text-gray-700 tracking-wide block uppercase truncate" title={parsed.name || "Cliente Corporativo"}>
+                    {parsed.name || "Cliente Corporativo"}
+                  </span>
+                  <span className="text-[9px] font-semibold text-[#a21b7e]/70 tracking-wider block uppercase mt-0.5">
+                    Área Exclusiva
+                  </span>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </aside>
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
@@ -1738,9 +1768,15 @@ export default function ClientDashboard() {
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-3.5 py-1.5 rounded-lg select-none">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                 <div className="flex flex-col items-start leading-none">
-                  <span className="text-[11px] text-gray-800 font-bold max-w-[160px] truncate mb-0.5" title={userProfile.displayName || userProfile.email}>
+                  <span className="text-[11px] text-gray-800 font-bold max-w-[160px] truncate mb-0.5" title={(() => {
+                    const rawName = userProfile.displayName || "";
+                    return rawName.includes('|') ? rawName.split('|')[0] : rawName;
+                  })()}>
                     Olá, {(() => {
-                      const name = userProfile.displayName || "";
+                      let name = userProfile.displayName || "";
+                      if (name.includes('|')) {
+                        name = name.split('|')[0];
+                      }
                       if (!name) {
                         const emailPrefix = userProfile.email.split('@')[0];
                         return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
@@ -1759,17 +1795,7 @@ export default function ClientDashboard() {
               </div>
             )}
 
-            {driveStatus && driveStatus.connected && (
-              <div 
-                className="w-9 h-9 rounded-sm bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600 transition-all select-none hover:bg-emerald-100/50 cursor-pointer shrink-0"
-                title={`Drive Pessoal Ativo: ${driveStatus.email}`}
-              >
-                <div className="relative">
-                  <HardDrive size={18} />
-                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white animate-pulse" />
-                </div>
-              </div>
-            )}
+
 
             <button
               onClick={handleLogout}
@@ -1785,29 +1811,16 @@ export default function ClientDashboard() {
         <div className="bg-white px-8 py-3 flex items-center justify-between border-b border-gray-100 z-10">
           <div className="flex items-center gap-2 text-sm font-medium">
             {selectedAsset ? (
-              <div className="flex items-center gap-4 animate-in fade-in slide-in-from-left-2">
+              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
                 <button
                   onClick={() => setSelectedAsset(null)}
-                  className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400"
+                  className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 mr-1"
                 >
                   <Plus className="rotate-45" size={20} />
                 </button>
-                <span className="text-sm font-bold text-[#a21b7e] bg-[#a21b7e]/5 px-3 py-1 rounded-full border border-[#a21b7e]/10">
-                  1 item selecionado
+                <span className="text-sm font-bold text-[#a21b7e] bg-[#a21b7e]/5 px-3 py-1 rounded-full border border-[#a21b7e]/10 truncate max-w-[200px]" title={selectedAsset.name}>
+                  {selectedAsset.name}
                 </span>
-                <div className="h-4 w-px bg-gray-200 mx-2" />
-                <button className="flex items-center gap-2 text-gray-600 hover:text-[#a21b7e] transition-colors font-bold text-xs uppercase tracking-widest">
-                  <Download size={16} />
-                  Baixar
-                </button>
-                <button className="flex items-center gap-2 text-gray-600 hover:text-[#a21b7e] transition-colors font-bold text-xs uppercase tracking-widest">
-                  <Share2 size={16} />
-                  Partilhar
-                </button>
-                <button className="flex items-center gap-2 text-red-500 hover:text-red-600 transition-colors font-bold text-xs uppercase tracking-widest">
-                  <Trash2 size={16} />
-                  Excluir
-                </button>
               </div>
             ) : (
               <div className="flex items-center gap-1 text-xs font-medium text-gray-500 max-w-full overflow-x-auto whitespace-nowrap no-scrollbar select-none">
@@ -1835,104 +1848,6 @@ export default function ClientDashboard() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {userProfile?.role === 'admin' && (
-            <div className="relative" ref={uploadMenuRef}>
-              <button
-                onClick={() => {
-                  if (userProfile?.role === 'cliente') {
-                    if (fileInputRef.current) {
-                      fileInputRef.current.removeAttribute("webkitdirectory");
-                      fileInputRef.current.removeAttribute("directory");
-                      fileInputRef.current.click();
-                    }
-                  } else {
-                    setIsUploadMenuOpen(!isUploadMenuOpen);
-                  }
-                }}
-                className="flex items-center justify-center gap-2 bg-[#a21b7e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer h-9"
-              >
-                <Upload size={16} />
-                Carregar
-                {userProfile?.role === 'admin' && <ChevronDown size={14} />}
-              </button>
-              
-              {isUploadMenuOpen && userProfile?.role === 'admin' && (
-                <div className="absolute left-1/2 -translate-x-1/2 mt-1.5 bg-white border border-gray-200/80 rounded-sm shadow-[0_0_3px_rgba(0,0,0,0.08)] z-50 py-1.5 w-44 text-left text-gray-700 font-sans cursor-default animate-in fade-in slide-in-from-top-2 duration-100">
-                  <button
-                    onClick={() => {
-                      if (fileInputRef.current) {
-                        fileInputRef.current.removeAttribute("webkitdirectory");
-                        fileInputRef.current.removeAttribute("directory");
-                        fileInputRef.current.click();
-                      }
-                      setIsUploadMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 hover:text-[#a21b7e] transition-all text-left text-xs font-semibold text-gray-700 cursor-pointer bg-transparent hover:bg-transparent group"
-                  >
-                    <FileUp size={14} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span>Carregar ficheiro</span>
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      if (fileInputRef.current) {
-                        fileInputRef.current.setAttribute("webkitdirectory", "true");
-                        fileInputRef.current.setAttribute("directory", "true");
-                        fileInputRef.current.click();
-                        setTimeout(() => {
-                          fileInputRef.current?.removeAttribute("webkitdirectory");
-                          fileInputRef.current?.removeAttribute("directory");
-                        }, 1000);
-                      }
-                      setIsUploadMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 hover:text-[#a21b7e] transition-all text-left text-xs font-semibold text-gray-700 cursor-pointer bg-transparent hover:bg-transparent group"
-                  >
-                    <FolderUp size={14} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span>Carregar pasta</span>
-                  </button>
-                </div>
-              )}
-            </div>
-            )}
-            {userProfile?.role === 'admin' && (
-              <button
-                onClick={handleCreateFolder}
-                className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-gray-50 transition-all cursor-pointer h-9"
-              >
-                <FolderPlus size={16} />
-                Nova pasta
-              </button>
-            )}
-
-            {/* Botão Selecionar Todos - Apenas para Admins */}
-            {userProfile?.role === 'admin' && filteredAssets.length > 0 && (
-              <button
-                onClick={() => {
-                  const allAssetIds = filteredAssets.map(a => a.id);
-                  const allSelected = allAssetIds.every(id => selectedAssetIds.includes(id));
-                  if (allSelected) {
-                    setSelectedAssetIds(prev => prev.filter(id => !allAssetIds.includes(id)));
-                  } else {
-                    setSelectedAssetIds(prev => Array.from(new Set([...prev, ...allAssetIds])));
-                  }
-                }}
-                className={cn(
-                  "flex items-center justify-center bg-white border border-gray-200 text-gray-500 rounded-sm shadow-sm hover:bg-gray-50 hover:text-[#a21b7e] hover:border-[#a21b7e]/30 transition-all cursor-pointer h-9 w-9 shrink-0",
-                  filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) && "border-[#a21b7e] text-[#a21b7e] bg-[#a21b7e]/5"
-                )}
-                title={filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) ? "Desmarcar Todos" : "Selecionar Todos"}
-              >
-                {filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) ? (
-                  <CheckSquare size={18} />
-                ) : (
-                  <Square size={18} />
-                )}
-              </button>
-            )}
-
-            <div className="h-5 w-px bg-gray-200 mx-1" />
-
             <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100 items-center">
               <button
                 onClick={() => setViewMode("grid")}
@@ -1966,8 +1881,8 @@ export default function ClientDashboard() {
                 <AnimatePresence>
                   {isDriveDropdownOpen && (
                     <>
-                      <div 
-                        className="fixed inset-0 z-30" 
+                      <div
+                        className="fixed inset-0 z-30"
                         onClick={() => setIsDriveDropdownOpen(false)}
                       />
                       <motion.div
@@ -2116,13 +2031,45 @@ export default function ClientDashboard() {
                               createdDateStr = format(account.createdAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
                             } else if (account.createdAt instanceof Date) {
                               createdDateStr = format(account.createdAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+                            } else if (typeof account.createdAt === 'string') {
+                              const parsedDate = new Date(account.createdAt);
+                              if (!isNaN(parsedDate.getTime())) {
+                                createdDateStr = format(parsedDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+                              }
                             }
                           }
 
                           return (
-                            <tr key={account.id} className="hover:bg-gray-50/50 transition-colors">
+                            <tr key={account.id || account.uid || Math.random().toString()} className="hover:bg-gray-50/50 transition-colors">
                               <td className="px-6 py-4 font-bold text-gray-800">
-                                {account.displayName || "Sem Nome"}
+                                {(() => {
+                                  const rawName = String(account.displayName || "");
+                                  const parts = rawName.split('|');
+                                  const parsed = parts.length === 3
+                                    ? { responsible: parts[0], name: parts[1], logo: parts[2] }
+                                    : (parts.length === 2 
+                                      ? { responsible: "", name: parts[0], logo: parts[1] }
+                                      : { responsible: "", name: rawName, logo: "" });
+                                  return (
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
+                                        {parsed.logo ? (
+                                          <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain" />
+                                        ) : (
+                                          <span className="text-[10px] font-black text-gray-400 uppercase">
+                                            {parsed.name ? parsed.name.charAt(0) : "C"}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <span className="font-bold text-gray-800">{parsed.name || "Sem Nome"}</span>
+                                        {parsed.responsible && (
+                                          <span className="text-[10px] font-normal text-gray-400">Resp: {parsed.responsible}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               <td className="px-6 py-4 font-medium text-gray-600">
                                 <span className="flex items-center gap-2 mt-1 select-all">
@@ -2138,8 +2085,8 @@ export default function ClientDashboard() {
                               <td className="px-6 py-4">
                                 <span className={cn(
                                   "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                                  account.role === 'admin' 
-                                    ? "bg-purple-50 text-[#a21b7e] border border-purple-100" 
+                                  account.role === 'admin'
+                                    ? "bg-purple-50 text-[#a21b7e] border border-purple-100"
                                     : "bg-blue-50 text-blue-600 border border-blue-100"
                                 )}>
                                   {account.role === 'admin' ? "Administrador" : "Cliente"}
@@ -2210,23 +2157,57 @@ export default function ClientDashboard() {
                       </div>
                     )}
 
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Nome do Cliente / Empresa</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Silva Chamo Lda"
-                        value={newAccountName}
-                        onChange={(e) => setNewAccountName(e.target.value)}
-                        className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
-                        required
-                      />
+                    <div className="flex gap-4 items-stretch">
+                      {/* Lado Esquerdo: Nome do Responsável e Nome da Empresa (80% da largura, empilhados) */}
+                      <div className="flex-1 flex flex-col gap-3 justify-center">
+                        <input
+                          type="text"
+                          placeholder="Nome do responsável"
+                          value={newAccountResponsible}
+                          onChange={(e) => setNewAccountResponsible(e.target.value)}
+                          className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                          required
+                        />
+                        <input
+                          type="text"
+                          placeholder="Nome da empresa"
+                          value={newAccountName}
+                          onChange={(e) => setNewAccountName(e.target.value)}
+                          className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                          required
+                        />
+                      </div>
+                      
+                      {/* Lado Direito: Caixa de Upload da Foto/Logo (20% da largura, cobrindo a altura dos dois campos) */}
+                      <div className="w-[88px] shrink-0">
+                        <label className="relative block w-[88px] h-[88px] border-2 border-dashed border-gray-200 hover:border-[#a21b7e] rounded-lg cursor-pointer overflow-hidden transition-all bg-gray-50 group">
+                          {newAccountLogo ? (
+                            <>
+                              <img src={newAccountLogo} alt="Logo" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition-all">
+                                Alterar
+                              </div>
+                            </>
+                          ) : (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-[#a21b7e] transition-all">
+                              <Upload size={18} />
+                              <span className="text-[10px] font-bold mt-1">Logo</span>
+                            </div>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">E-mail de Acesso</label>
                       <input
                         type="email"
-                        placeholder="Ex: cliente@provisual.com"
+                        placeholder="Email de acesso"
                         value={newAccountEmail}
                         onChange={(e) => setNewAccountEmail(e.target.value)}
                         className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
@@ -2235,11 +2216,10 @@ export default function ClientDashboard() {
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Senha de Acesso</label>
                       <div className="flex gap-2">
                         <input
                           type="text"
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder="Senha de Acesso (Ex: @P#s$9w!K%)"
                           value={newAccountPassword}
                           onChange={(e) => setNewAccountPassword(e.target.value)}
                           className="block flex-1 px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50 font-mono"
@@ -2248,9 +2228,21 @@ export default function ClientDashboard() {
                         <button
                           type="button"
                           onClick={() => {
-                            // Gerar nova senha numérica
-                            const randomPass = Math.floor(100000 + Math.random() * 900000).toString();
-                            setNewAccountPassword(randomPass);
+                            const chars = "abcdefghijklmnopqrstuvwxyz";
+                            const caps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                            const nums = "0123456789";
+                            const syms = "@#!$%&*";
+                            let pass = "";
+                            pass += chars[Math.floor(Math.random() * chars.length)];
+                            pass += caps[Math.floor(Math.random() * caps.length)];
+                            pass += nums[Math.floor(Math.random() * nums.length)];
+                            pass += syms[Math.floor(Math.random() * syms.length)];
+                            const allChars = chars + caps + nums + syms;
+                            for (let i = 0; i < 4; i++) {
+                              pass += allChars[Math.floor(Math.random() * allChars.length)];
+                            }
+                            const shuffled = pass.split("").sort(() => 0.5 - Math.random()).join("");
+                            setNewAccountPassword(shuffled);
                           }}
                           className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold transition-all cursor-pointer border border-gray-200 shrink-0"
                         >
@@ -2260,7 +2252,6 @@ export default function ClientDashboard() {
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Perfil de Acesso</label>
                       <select
                         value={newAccountRole}
                         onChange={(e) => setNewAccountRole(e.target.value as any)}
@@ -2293,996 +2284,996 @@ export default function ClientDashboard() {
             )}
           </div>
         ) : (
-          <div 
+          <div
             className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 relative"
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setContextMenu({
-              x: e.clientX,
-              y: e.clientY,
-              visible: true
-            });
-          }}
-        >
-          {!foldersLoaded || !assetsLoaded ? (
-            <div className="h-full w-full flex flex-col items-center justify-center bg-gray-50 min-h-[400px] animate-in fade-in duration-300">
-              <div className="relative w-12 h-12 flex items-center justify-center">
-                <div className="absolute inset-0 border-4 border-gray-200 rounded-full" />
-                <div className="absolute inset-0 border-4 border-[#a21b7e] border-t-transparent rounded-full animate-spin" />
-              </div>
-              <p className="text-xs font-semibold text-gray-500 mt-4 tracking-wide uppercase">Carregando...</p>
-            </div>
-          ) : filteredAssets.length === 0 && filteredFolders.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center p-20 text-center">
-              <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
-                <Search size={48} className="text-gray-100" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-800 mb-2">Nada por aqui...</h3>
-              <p className="text-sm text-gray-400 max-w-xs">
-                Sua pasta está vazia ou nenhum arquivo corresponde à sua busca.
-              </p>
-            </div>
-          ) : (
-            <>
-              {viewMode === "grid" ? (
-                <div className="p-8 flex flex-col gap-8 bg-gray-50 min-h-full w-full">
-                  {/* Grid de Pastas */}
-                  {(activeTab === 'all' || activeTab === 'google_drive') && filteredFolders.length > 0 && (
-                    <div className="w-full flex flex-col gap-3">
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
-                        {filteredFolders.map(folder => (
-                          <div
-                            key={folder.id}
-                            onClick={() => {
-                              setSelectedFolderId(folder.id);
-                              if ((folder as any).ownerId === 'google-drive') {
-                                handleGoogleSync(folder.id, undefined, true);
-                              }
-                            }}
-                            onContextMenu={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
-                            }}
-                            className="flex items-center justify-between p-4 bg-white border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group shadow-sm relative overflow-visible rounded-lg"
-                          >
-                            <div className="flex items-center gap-3 truncate">
-                              <FolderIcon size={20} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} className="shrink-0 animate-in fade-in" />
-                              <span className="text-xs font-bold text-gray-700 truncate uppercase">{folder.name}</span>
-                            </div>
-                            
-                            <div className="relative overflow-visible">
-                              <motion.button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
-                                  setActiveFolderSubmenu('none');
-                                }}
-                                whileHover={{ scale: 1.25 }}
-                                whileTap={{ scale: 0.95 }}
-                                className="text-gray-400 hover:text-gray-600 p-1 transition-colors cursor-pointer"
-                              >
-                                <MoreVertical size={16} />
-                              </motion.button>
-
-                              <AnimatePresence>
-                                {activeFolderMenuId === folder.id && (
-                                  <>
-                                    <div 
-                                      className="fixed inset-0 z-30" 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveFolderMenuId(null);
-                                        setActiveFolderSubmenu('none');
-                                      }}
-                                    />
-                                    
-                                    {/* SUBMENUS (Posicionados à esquerda do principal) */}
-                                    <AnimatePresence>
-                                      {activeFolderSubmenu === 'partilhar' && (
-                                        <motion.div
-                                          initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                          animate={{ opacity: 1, scale: 1, x: 0 }}
-                                          exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                          transition={{ duration: 0.1 }}
-                                          className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
-                                          
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                              if (item) {
-                                                if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                  onDistribute(item);
-                                                } else if (typeof setItemToDistribute !== 'undefined') {
-                                                  setItemToDistribute(item);
-                                                  setDistributeModalOpen(true);
-                                                }
-                                                if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                              }
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                                          </button>
-                                          
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                              window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira a pasta *${folder.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
-                                              setActiveFolderMenuId(null);
-                                              setActiveFolderSubmenu('none');
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
-                                          </button>
-
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                              window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
-                                              setActiveFolderMenuId(null);
-                                              setActiveFolderSubmenu('none');
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
-                                          </button>
-
-                                          <div className="my-1 border-t border-gray-100" />
-
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                              navigator.clipboard.writeText(shareUrl);
-                                              alert("Link de partilha da pasta copiado para a área de transferência!");
-                                              setActiveFolderMenuId(null);
-                                              setActiveFolderSubmenu('none');
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
-                                          </button>
-                                        </motion.div>
-                                      )}
-
-                                      {activeFolderSubmenu === 'organizar' && (
-                                        <motion.div
-                                          initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                          animate={{ opacity: 1, scale: 1, x: 0 }}
-                                          exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                          transition={{ duration: 0.1 }}
-                                          className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-                                          
-                                          {folder.parentId !== "" && folder.parentId !== null && (
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveFolderMenuId(null);
-                                                setActiveFolderSubmenu('none');
-                                                setIsProcessingAction(true);
-                                                sessionStorage.setItem('action_in_progress', 'true');
-                                                (async () => {
-                                                  try {
-                                                    if (folder.id.length > 20) {
-                                                      const moveResponse = await fetch('/api/drive/update', {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({
-                                                          fileId: folder.id,
-                                                          addParents: 'root',
-                                                          removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                        })
-                                                      });
-                                                      if (!moveResponse.ok) {
-                                                        const errData = await moveResponse.json();
-                                                        throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                      }
-                                                    }
-                                                    await updateDoc(doc(db, "folders", folder.id), { parentId: null });
-                                                    alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
-                                                    setIsProcessingAction(false);
-                                                    sessionStorage.removeItem('action_in_progress');
-                                                  } catch (err: any) {
-                                                    alert("Erro ao mover pasta: " + err.message);
-                                                    setIsProcessingAction(false);
-                                                    sessionStorage.removeItem('action_in_progress');
-                                                  }
-                                                })();
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                            >
-                                              <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                                            </button>
-                                          )}
-
-                                          {folders.filter(f => f.id !== folder.id && f.id !== folder.parentId).map(f => (
-                                            <button
-                                              key={f.id}
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveFolderMenuId(null);
-                                                setActiveFolderSubmenu('none');
-                                                setIsProcessingAction(true);
-                                                sessionStorage.setItem('action_in_progress', 'true');
-                                                (async () => {
-                                                  try {
-                                                    if (folder.id.length > 20) {
-                                                      const moveResponse = await fetch('/api/drive/update', {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({
-                                                          fileId: folder.id,
-                                                          addParents: f.id,
-                                                          removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                        })
-                                                      });
-                                                      if (!moveResponse.ok) {
-                                                        const errData = await moveResponse.json();
-                                                        throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                      }
-                                                    }
-                                                    await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
-                                                    alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
-                                                    setIsProcessingAction(false);
-                                                    sessionStorage.removeItem('action_in_progress');
-                                                  } catch (err: any) {
-                                                    alert("Erro ao mover pasta: " + err.message);
-                                                    setIsProcessingAction(false);
-                                                    sessionStorage.removeItem('action_in_progress');
-                                                  }
-                                                })();
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                            >
-                                              <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{f.name}</span>
-                                            </button>
-                                          ))}
-                                        </motion.div>
-                                      )}
-                                    </AnimatePresence>
-
-                                    <motion.div
-                                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                      transition={{ duration: 0.1 }}
-                                      className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedFolderId(folder.id);
-                                          if ((folder as any).ownerId === 'google-drive') {
-                                            handleGoogleSync(folder.id, undefined, true);
-                                          }
-                                          setActiveFolderMenuId(null);
-                                        }}
-                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
-                                        </div>
-                                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                      </button>
-
-                                      <div className="my-1 border-t border-gray-100" />
-
-                                      <button
-                                        onClick={async (e) => {
-                                          e.stopPropagation();
-                                          const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
-                                          if (newName && newName.trim() !== folder.name) {
-                                            try {
-                                              setIsProcessingAction(true);
-                                              sessionStorage.setItem('action_in_progress', 'true');
-                                              
-                                              if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
-                                                const renameResponse = await fetch('/api/drive/update', {
-                                                  method: 'POST',
-                                                  headers: { 'Content-Type': 'application/json' },
-                                                  body: JSON.stringify({
-                                                    fileId: folder.id,
-                                                    newName: newName.normalize('NFC')
-                                                  })
-                                                });
-                                                if (!renameResponse.ok) {
-                                                  const errData = await renameResponse.json();
-                                                  throw new Error(errData.error || "Erro no Google Drive");
-                                                }
-                                              }
-                                              await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
-                                              handleActionSuccess();
-                                            } catch (err: any) {
-                                              alert("Erro ao renomear pasta: " + err.message);
-                                              setIsProcessingAction(false);
-                                              sessionStorage.removeItem('action_in_progress');
-                                            }
-                                          }
-                                          setActiveFolderMenuId(null);
-                                        }}
-                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar nome</span>
-                                        </div>
-                                      </button>
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
-                                        }}
-                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
-                                        </div>
-                                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                      </button>
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
-                                        }}
-                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
-                                        </div>
-                                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                      </button>
-
-                                      <div className="px-3.5 py-2">
-                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
-                                        <div className="flex gap-1.5 items-center">
-                                          {[
-                                            "#e2b13c", // Padrão Gold
-                                            "#a21b7e", // Vinho Provisual
-                                            "#3b82f6", // Azul
-                                            "#10b981", // Verde
-                                            "#ef4444", // Vermelho
-                                            "#8b5cf6", // Roxo
-                                          ].map((color) => (
-                                            <button
-                                              key={color}
-                                              onClick={async (e) => {
-                                                e.stopPropagation();
-                                                try {
-                                                  await updateDoc(doc(db, "folders", folder.id), { color });
-                                                  handleActionSuccess();
-                                                } catch (err) {
-                                                  console.error("Erro ao mudar cor da pasta:", err);
-                                                }
-                                                setActiveFolderMenuId(null);
-                                              }}
-                                              style={{ backgroundColor: color }}
-                                              className={cn(
-                                                "w-4 h-4 rounded-full border border-gray-100 hover:scale-125 transition-all cursor-pointer",
-                                                (folder.color || "#e2b13c") === color ? "border-gray-800 scale-110 shadow-sm" : "border-transparent"
-                                              )}
-                                            />
-                                          ))}
-                                        </div>
-                                      </div>
-
-                                      <div className="my-1 border-t border-gray-100" />
-
-                                      <button
-                                        onClick={async (e) => {
-                                          e.stopPropagation();
-                                          if (confirm("Tem certeza que deseja mover a pasta " + folder.name + " para o lixo?")) {
-                                            try {
-                                              setIsProcessingAction(true);
-                                              sessionStorage.setItem('action_in_progress', 'true');
-                                              
-                                              // Mover fisicamente no Google Drive
-                                              if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
-                                                const trashResponse = await fetch('/api/drive/update', {
-                                                  method: 'POST',
-                                                  headers: { 'Content-Type': 'application/json' },
-                                                  body: JSON.stringify({
-                                                    fileId: folder.id,
-                                                    trashed: true
-                                                  })
-                                                });
-                                                if (!trashResponse.ok) {
-                                                  const errData = await trashResponse.json();
-                                                  console.warn("Erro ao lixo no drive:", errData.error);
-                                                }
-                                              }
-                                              await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
-                                              setIsProcessingAction(false);
-                                              sessionStorage.removeItem('action_in_progress');
-                                            } catch (err: any) {
-                                              alert("Erro ao mover para o lixo: " + err.message);
-                                              setIsProcessingAction(false);
-                                              sessionStorage.removeItem('action_in_progress');
-                                            }
-                                          }
-                                          setActiveFolderMenuId(null);
-                                        }}
-                                        className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-red-50 group transition-colors text-left text-[13px] font-bold text-red-600 cursor-pointer"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <Trash2 size={15} className="text-red-400 group-hover:text-red-600 transition-colors shrink-0" />
-                                          <span className="text-red-600 group-hover:text-red-700 transition-colors">Mover para o lixo</span>
-                                        </div>
-                                      </button>
-                                    </motion.div>
-                                  </>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Grid de Arquivos / Fotos */}
-                  {filteredAssets.length > 0 && (
-                    <div className="w-full flex flex-col gap-3">
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
-                        {displayedAssets.map(asset => (
-                          <AssetCard
-                      key={asset.id}
-                      asset={asset}
-                      onDistribute={(item) => { setItemToDistribute(item); setDistributeModalOpen(true); }}
-                            isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
-                            onSelect={() => {
-                              if (asset.type === 'folder') {
-                                setSelectedFolderId(asset.driveId || asset.id);
-                                handleGoogleSync(asset.driveId || asset.id, undefined, true);
-                              } else {
-                                setPreviewAsset(asset);
-                              }
-                            }}
-                            onPreview={() => {
-                              if (asset.type === 'folder') {
-                                setSelectedFolderId(asset.driveId || asset.id);
-                                handleGoogleSync(asset.driveId || asset.id, undefined, true);
-                              } else {
-                                setPreviewAsset(asset);
-                              }
-                            }}
-                            isSelected={selectedAsset?.id === asset.id}
-                            isBulkSelected={selectedAssetIds.includes(asset.id)}
-                            onToggleBulkSelect={() => handleToggleBulkSelect(asset.id)}
-                            hasSelectionActive={selectedAssetIds.length > 0}
-                            folders={filteredFolders}
-                            onAskGemini={(a) => {
-                              setGeminiAsset(a);
-                              const initialText = `Olá! Sou o Gemini. Analisei o arquivo **${a.name}** (${a.type}). Ele está guardado com sucesso na ProVisual Corporate e integrado com o seu Google Drive. Posso extrair textos, gerar resumos ou dar insights sobre este arquivo. O que gostaria de saber?`;
-                              setGeminiAnswers([{ role: 'gemini', text: initialText }]);
-                              setGeminiQuestion("");
-                            }}
-                            onStartAction={(active) => {
-                              setIsProcessingAction(active);
-                              if (active) {
-                                sessionStorage.setItem('action_in_progress', 'true');
-                              } else {
-                                sessionStorage.removeItem('action_in_progress');
-                              }
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                visible: true
+              });
+            }}
+          >
+            {!foldersLoaded || !assetsLoaded ? (
+              <div className="h-full w-full flex flex-col items-center justify-center bg-gray-50 min-h-[400px] animate-in fade-in duration-300">
+                <div className="relative w-12 h-12 flex items-center justify-center">
+                  <div className="absolute inset-0 border-4 border-gray-200 rounded-full" />
+                  <div className="absolute inset-0 border-4 border-[#a21b7e] border-t-transparent rounded-full animate-spin" />
                 </div>
-              ) : (
-                <div className="flex flex-col">
-                  {/* List Header */}
-                  <div className="sticky top-0 grid grid-cols-12 px-8 py-3 bg-gray-100 border-b border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-widest z-10">
-                    <div className="col-span-6">Nome do arquivo</div>
-                    <div className="col-span-2">Tipo</div>
-                    <div className="col-span-2">Modificação</div>
-                    <div className="col-span-2 text-right pr-4">Tamanho</div>
-                  </div>
+                <p className="text-xs font-semibold text-gray-500 mt-4 tracking-wide uppercase">Carregando...</p>
+              </div>
+            ) : filteredAssets.length === 0 && filteredFolders.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center p-20 text-center">
+                <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
+                  <Search size={48} className="text-gray-100" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">Nada por aqui...</h3>
+                <p className="text-sm text-gray-400 max-w-xs">
+                  Sua pasta está vazia ou nenhum arquivo corresponde à sua busca.
+                </p>
+              </div>
+            ) : (
+              <>
+                {viewMode === "grid" ? (
+                  <div className="p-8 flex flex-col gap-8 bg-gray-50 min-h-full w-full">
+                    {/* Grid de Pastas */}
+                    {(activeTab === 'all' || activeTab === 'google_drive') && filteredFolders.length > 0 && (
+                      <div className="w-full flex flex-col gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+                          {filteredFolders.map(folder => (
+                            <div
+                              key={folder.id}
+                              onClick={() => {
+                                setSelectedFolderId(folder.id);
+                                if ((folder as any).ownerId === 'google-drive') {
+                                  handleGoogleSync(folder.id, undefined, true);
+                                }
+                              }}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
+                              }}
+                              className="flex items-center justify-between p-4 bg-white border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group shadow-sm relative overflow-visible rounded-lg"
+                            >
+                              <div className="flex items-center gap-3 truncate">
+                                <FolderIcon size={20} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} className="shrink-0 animate-in fade-in" />
+                                <span className="text-xs font-bold text-gray-700 truncate uppercase">{folder.name}</span>
+                              </div>
 
-                  {/* Folders in List - Only show in 'All Files' or 'Google Drive' view */}
-                  {(activeTab === 'all' || activeTab === 'google_drive') && filteredFolders.map(folder => (
-                    <div
-                      key={folder.id}
-                      onClick={() => {
-                        setSelectedFolderId(folder.id);
-                        if ((folder as any).ownerId === 'google-drive') {
-                          handleGoogleSync(folder.id, undefined, true);
-                        }
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
-                      }}
-                      className="grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible"
-                    >
-                      <div className="col-span-6 flex items-center gap-4">
-                        <FolderIcon size={24} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} />
-                        <span className="text-sm font-bold text-gray-700">{folder.name}</span>
-                      </div>
-                      <div className="col-span-2 text-[10px] font-black text-gray-300 uppercase">Pasta</div>
-                      <div className="col-span-2 text-xs text-gray-400 font-medium">
-                        {format(folder.date, "dd/MM/yyyy")}
-                      </div>
-                      <div className="col-span-2 text-right pr-4 text-xs text-gray-300 flex items-center justify-end gap-3 relative overflow-visible">
-                        <span>-</span>
-                        <div className="relative overflow-visible">
-                          <motion.button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
-                              setActiveFolderSubmenu('none');
-                            }}
-                            whileHover={{ scale: 1.25 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="text-gray-400 hover:text-gray-600 p-1 transition-colors cursor-pointer"
-                          >
-                            <MoreVertical size={16} />
-                          </motion.button>
-
-                          <AnimatePresence>
-                            {activeFolderMenuId === folder.id && (
-                              <>
-                                <div 
-                                  className="fixed inset-0 z-30" 
+                              <div className="relative overflow-visible">
+                                <motion.button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setActiveFolderMenuId(null);
+                                    setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
                                     setActiveFolderSubmenu('none');
                                   }}
-                                />
-                                
-                                {/* SUBMENUS (Posicionados à esquerda do principal) */}
+                                  whileHover={{ scale: 1.25 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  className="text-gray-400 hover:text-gray-600 p-1 transition-colors cursor-pointer"
+                                >
+                                  <MoreVertical size={16} />
+                                </motion.button>
+
                                 <AnimatePresence>
-                                  {activeFolderSubmenu === 'partilhar' && (
-                                    <motion.div
-                                      initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                                      exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                      transition={{ duration: 0.1 }}
-                                      className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
-                                          
+                                  {activeFolderMenuId === folder.id && (
+                                    <>
+                                      <div
+                                        className="fixed inset-0 z-30"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveFolderMenuId(null);
+                                          setActiveFolderSubmenu('none');
+                                        }}
+                                      />
+
+                                      {/* SUBMENUS (Posicionados à esquerda do principal) */}
+                                      <AnimatePresence>
+                                        {activeFolderSubmenu === 'partilhar' && (
+                                          <motion.div
+                                            initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            transition={{ duration: 0.1 }}
+                                            className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
+
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
+                                                if (item) {
+                                                  if (typeof onDistribute !== 'undefined' && onDistribute) {
+                                                    onDistribute(item);
+                                                  } else if (typeof setItemToDistribute !== 'undefined') {
+                                                    setItemToDistribute(item);
+                                                    setDistributeModalOpen(true);
+                                                  }
+                                                  if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
+                                                  if (typeof setShowMenu !== 'undefined') setShowMenu(false);
+                                                  if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
+                                                  if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
+                                                }
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
+                                            </button>
+
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                                window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira a pasta *${folder.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
+                                                setActiveFolderMenuId(null);
+                                                setActiveFolderSubmenu('none');
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
+                                            </button>
+
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                                window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
+                                                setActiveFolderMenuId(null);
+                                                setActiveFolderSubmenu('none');
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
+                                            </button>
+
+                                            <div className="my-1 border-t border-gray-100" />
+
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                                navigator.clipboard.writeText(shareUrl);
+                                                alert("Link de partilha da pasta copiado para a área de transferência!");
+                                                setActiveFolderMenuId(null);
+                                                setActiveFolderSubmenu('none');
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
+                                            </button>
+                                          </motion.div>
+                                        )}
+
+                                        {activeFolderSubmenu === 'organizar' && (
+                                          <motion.div
+                                            initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            transition={{ duration: 0.1 }}
+                                            className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
+
+                                            {folder.parentId !== "" && folder.parentId !== null && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setActiveFolderMenuId(null);
+                                                  setActiveFolderSubmenu('none');
+                                                  setIsProcessingAction(true);
+                                                  sessionStorage.setItem('action_in_progress', 'true');
+                                                  (async () => {
+                                                    try {
+                                                      if (folder.id.length > 20) {
+                                                        const moveResponse = await fetch('/api/drive/update', {
+                                                          method: 'POST',
+                                                          headers: { 'Content-Type': 'application/json' },
+                                                          body: JSON.stringify({
+                                                            fileId: folder.id,
+                                                            addParents: 'root',
+                                                            removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
+                                                          })
+                                                        });
+                                                        if (!moveResponse.ok) {
+                                                          const errData = await moveResponse.json();
+                                                          throw new Error(errData.error || 'Erro ao mover no Google Drive');
+                                                        }
+                                                      }
+                                                      await updateDoc(doc(db, "folders", folder.id), { parentId: null });
+                                                      alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
+                                                      setIsProcessingAction(false);
+                                                      sessionStorage.removeItem('action_in_progress');
+                                                    } catch (err: any) {
+                                                      alert("Erro ao mover pasta: " + err.message);
+                                                      setIsProcessingAction(false);
+                                                      sessionStorage.removeItem('action_in_progress');
+                                                    }
+                                                  })();
+                                                }}
+                                                className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                              >
+                                                <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
+                                              </button>
+                                            )}
+
+                                            {folders.filter(f => f.id !== folder.id && f.id !== folder.parentId).map(f => (
+                                              <button
+                                                key={f.id}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setActiveFolderMenuId(null);
+                                                  setActiveFolderSubmenu('none');
+                                                  setIsProcessingAction(true);
+                                                  sessionStorage.setItem('action_in_progress', 'true');
+                                                  (async () => {
+                                                    try {
+                                                      if (folder.id.length > 20) {
+                                                        const moveResponse = await fetch('/api/drive/update', {
+                                                          method: 'POST',
+                                                          headers: { 'Content-Type': 'application/json' },
+                                                          body: JSON.stringify({
+                                                            fileId: folder.id,
+                                                            addParents: f.id,
+                                                            removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
+                                                          })
+                                                        });
+                                                        if (!moveResponse.ok) {
+                                                          const errData = await moveResponse.json();
+                                                          throw new Error(errData.error || 'Erro ao mover no Google Drive');
+                                                        }
+                                                      }
+                                                      await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
+                                                      alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
+                                                      setIsProcessingAction(false);
+                                                      sessionStorage.removeItem('action_in_progress');
+                                                    } catch (err: any) {
+                                                      alert("Erro ao mover pasta: " + err.message);
+                                                      setIsProcessingAction(false);
+                                                      sessionStorage.removeItem('action_in_progress');
+                                                    }
+                                                  })();
+                                                }}
+                                                className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                              >
+                                                <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{f.name}</span>
+                                              </button>
+                                            ))}
+                                          </motion.div>
+                                        )}
+                                      </AnimatePresence>
+
+                                      <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                        transition={{ duration: 0.1 }}
+                                        className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedFolderId(folder.id);
+                                            if ((folder as any).ownerId === 'google-drive') {
+                                              handleGoogleSync(folder.id, undefined, true);
+                                            }
+                                            setActiveFolderMenuId(null);
+                                          }}
+                                          className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                                          </div>
+                                          <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                        </button>
+
+                                        <div className="my-1 border-t border-gray-100" />
+
+                                        <button
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
+                                            if (newName && newName.trim() !== folder.name) {
+                                              try {
+                                                setIsProcessingAction(true);
+                                                sessionStorage.setItem('action_in_progress', 'true');
+
+                                                if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
+                                                  const renameResponse = await fetch('/api/drive/update', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                      fileId: folder.id,
+                                                      newName: newName.normalize('NFC')
+                                                    })
+                                                  });
+                                                  if (!renameResponse.ok) {
+                                                    const errData = await renameResponse.json();
+                                                    throw new Error(errData.error || "Erro no Google Drive");
+                                                  }
+                                                }
+                                                await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
+                                                handleActionSuccess();
+                                              } catch (err: any) {
+                                                alert("Erro ao renomear pasta: " + err.message);
+                                                setIsProcessingAction(false);
+                                                sessionStorage.removeItem('action_in_progress');
+                                              }
+                                            }
+                                            setActiveFolderMenuId(null);
+                                          }}
+                                          className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar nome</span>
+                                          </div>
+                                        </button>
+
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
+                                          }}
+                                          className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
+                                          </div>
+                                          <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                        </button>
+
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
+                                          }}
+                                          className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
+                                          </div>
+                                          <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                        </button>
+
+                                        <div className="px-3.5 py-2">
+                                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
+                                          <div className="flex gap-1.5 items-center">
+                                            {[
+                                              "#e2b13c", // Padrão Gold
+                                              "#a21b7e", // Vinho Provisual
+                                              "#3b82f6", // Azul
+                                              "#10b981", // Verde
+                                              "#ef4444", // Vermelho
+                                              "#8b5cf6", // Roxo
+                                            ].map((color) => (
+                                              <button
+                                                key={color}
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  try {
+                                                    await updateDoc(doc(db, "folders", folder.id), { color });
+                                                    handleActionSuccess();
+                                                  } catch (err) {
+                                                    console.error("Erro ao mudar cor da pasta:", err);
+                                                  }
+                                                  setActiveFolderMenuId(null);
+                                                }}
+                                                style={{ backgroundColor: color }}
+                                                className={cn(
+                                                  "w-4 h-4 rounded-full border border-gray-100 hover:scale-125 transition-all cursor-pointer",
+                                                  (folder.color || "#e2b13c") === color ? "border-gray-800 scale-110 shadow-sm" : "border-transparent"
+                                                )}
+                                              />
+                                            ))}
+                                          </div>
+                                        </div>
+
+                                        <div className="my-1 border-t border-gray-100" />
+
+                                        <button
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (confirm("Tem certeza que deseja mover a pasta " + folder.name + " para o lixo?")) {
+                                              try {
+                                                setIsProcessingAction(true);
+                                                sessionStorage.setItem('action_in_progress', 'true');
+
+                                                // Mover fisicamente no Google Drive
+                                                if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
+                                                  const trashResponse = await fetch('/api/drive/update', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                      fileId: folder.id,
+                                                      trashed: true
+                                                    })
+                                                  });
+                                                  if (!trashResponse.ok) {
+                                                    const errData = await trashResponse.json();
+                                                    console.warn("Erro ao lixo no drive:", errData.error);
+                                                  }
+                                                }
+                                                await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
+                                                setIsProcessingAction(false);
+                                                sessionStorage.removeItem('action_in_progress');
+                                              } catch (err: any) {
+                                                alert("Erro ao mover para o lixo: " + err.message);
+                                                setIsProcessingAction(false);
+                                                sessionStorage.removeItem('action_in_progress');
+                                              }
+                                            }
+                                            setActiveFolderMenuId(null);
+                                          }}
+                                          className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-red-50 group transition-colors text-left text-[13px] font-bold text-red-600 cursor-pointer"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <Trash2 size={15} className="text-red-400 group-hover:text-red-600 transition-colors shrink-0" />
+                                            <span className="text-red-600 group-hover:text-red-700 transition-colors">Mover para o lixo</span>
+                                          </div>
+                                        </button>
+                                      </motion.div>
+                                    </>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Grid de Arquivos / Fotos */}
+                    {filteredAssets.length > 0 && (
+                      <div className="w-full flex flex-col gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+                          {displayedAssets.map(asset => (
+                            <AssetCard
+                              key={asset.id}
+                              asset={asset}
+                              onDistribute={(item) => { setItemToDistribute(item); setDistributeModalOpen(true); }}
+                              isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
+                              onSelect={() => {
+                                if (asset.type === 'folder') {
+                                  setSelectedFolderId(asset.driveId || asset.id);
+                                  handleGoogleSync(asset.driveId || asset.id, undefined, true);
+                                } else {
+                                  setPreviewAsset(asset);
+                                }
+                              }}
+                              onPreview={() => {
+                                if (asset.type === 'folder') {
+                                  setSelectedFolderId(asset.driveId || asset.id);
+                                  handleGoogleSync(asset.driveId || asset.id, undefined, true);
+                                } else {
+                                  setPreviewAsset(asset);
+                                }
+                              }}
+                              isSelected={selectedAsset?.id === asset.id}
+                              isBulkSelected={selectedAssetIds.includes(asset.id)}
+                              onToggleBulkSelect={() => handleToggleBulkSelect(asset.id)}
+                              hasSelectionActive={selectedAssetIds.length > 0}
+                              folders={filteredFolders}
+                              onAskGemini={(a) => {
+                                setGeminiAsset(a);
+                                const initialText = `Olá! Sou o Gemini. Analisei o arquivo **${a.name}** (${a.type}). Ele está guardado com sucesso na ProVisual Corporate e integrado com o seu Google Drive. Posso extrair textos, gerar resumos ou dar insights sobre este arquivo. O que gostaria de saber?`;
+                                setGeminiAnswers([{ role: 'gemini', text: initialText }]);
+                                setGeminiQuestion("");
+                              }}
+                              onStartAction={(active) => {
+                                setIsProcessingAction(active);
+                                if (active) {
+                                  sessionStorage.setItem('action_in_progress', 'true');
+                                } else {
+                                  sessionStorage.removeItem('action_in_progress');
+                                }
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    {/* List Header */}
+                    <div className="sticky top-0 grid grid-cols-12 px-8 py-3 bg-gray-100 border-b border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-widest z-10">
+                      <div className="col-span-6">Nome do arquivo</div>
+                      <div className="col-span-2">Tipo</div>
+                      <div className="col-span-2">Modificação</div>
+                      <div className="col-span-2 text-right pr-4">Tamanho</div>
+                    </div>
+
+                    {/* Folders in List - Only show in 'All Files' or 'Google Drive' view */}
+                    {(activeTab === 'all' || activeTab === 'google_drive') && filteredFolders.map(folder => (
+                      <div
+                        key={folder.id}
+                        onClick={() => {
+                          setSelectedFolderId(folder.id);
+                          if ((folder as any).ownerId === 'google-drive') {
+                            handleGoogleSync(folder.id, undefined, true);
+                          }
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
+                        }}
+                        className="grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible"
+                      >
+                        <div className="col-span-6 flex items-center gap-4">
+                          <FolderIcon size={24} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} />
+                          <span className="text-sm font-bold text-gray-700">{folder.name}</span>
+                        </div>
+                        <div className="col-span-2 text-[10px] font-black text-gray-300 uppercase">Pasta</div>
+                        <div className="col-span-2 text-xs text-gray-400 font-medium">
+                          {format(folder.date, "dd/MM/yyyy")}
+                        </div>
+                        <div className="col-span-2 text-right pr-4 text-xs text-gray-300 flex items-center justify-end gap-3 relative overflow-visible">
+                          <span>-</span>
+                          <div className="relative overflow-visible">
+                            <motion.button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
+                                setActiveFolderSubmenu('none');
+                              }}
+                              whileHover={{ scale: 1.25 }}
+                              whileTap={{ scale: 0.95 }}
+                              className="text-gray-400 hover:text-gray-600 p-1 transition-colors cursor-pointer"
+                            >
+                              <MoreVertical size={16} />
+                            </motion.button>
+
+                            <AnimatePresence>
+                              {activeFolderMenuId === folder.id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-30"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveFolderMenuId(null);
+                                      setActiveFolderSubmenu('none');
+                                    }}
+                                  />
+
+                                  {/* SUBMENUS (Posicionados à esquerda do principal) */}
+                                  <AnimatePresence>
+                                    {activeFolderSubmenu === 'partilhar' && (
+                                      <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                        transition={{ duration: 0.1 }}
+                                        className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
+
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
+                                            if (item) {
+                                              if (typeof onDistribute !== 'undefined' && onDistribute) {
+                                                onDistribute(item);
+                                              } else if (typeof setItemToDistribute !== 'undefined') {
+                                                setItemToDistribute(item);
+                                                setDistributeModalOpen(true);
+                                              }
+                                              if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
+                                              if (typeof setShowMenu !== 'undefined') setShowMenu(false);
+                                              if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
+                                              if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
+                                            }
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
+                                        </button>
+
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira a pasta *${folder.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
+                                            setActiveFolderMenuId(null);
+                                            setActiveFolderSubmenu('none');
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
+                                        </button>
+
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                            window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
+                                            setActiveFolderMenuId(null);
+                                            setActiveFolderSubmenu('none');
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
+                                        </button>
+
+                                        <div className="my-1 border-t border-gray-100" />
+
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                            navigator.clipboard.writeText(shareUrl);
+                                            alert("Link de partilha da pasta copiado para a área de transferência!");
+                                            setActiveFolderMenuId(null);
+                                            setActiveFolderSubmenu('none');
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
+                                        </button>
+                                      </motion.div>
+                                    )}
+
+                                    {activeFolderSubmenu === 'organizar' && (
+                                      <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                        transition={{ duration: 0.1 }}
+                                        className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
+
+                                        {folder.parentId !== "" && folder.parentId !== null && (
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                              if (item) {
-                                                if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                  onDistribute(item);
-                                                } else if (typeof setItemToDistribute !== 'undefined') {
-                                                  setItemToDistribute(item);
-                                                  setDistributeModalOpen(true);
+                                              setActiveFolderMenuId(null);
+                                              setActiveFolderSubmenu('none');
+                                              setIsProcessingAction(true);
+                                              sessionStorage.setItem('action_in_progress', 'true');
+                                              (async () => {
+                                                try {
+                                                  if (folder.id.length > 20) {
+                                                    const moveResponse = await fetch('/api/drive/update', {
+                                                      method: 'POST',
+                                                      headers: { 'Content-Type': 'application/json' },
+                                                      body: JSON.stringify({
+                                                        fileId: folder.id,
+                                                        addParents: 'root',
+                                                        removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
+                                                      })
+                                                    });
+                                                    if (!moveResponse.ok) {
+                                                      const errData = await moveResponse.json();
+                                                      throw new Error(errData.error || 'Erro ao mover no Google Drive');
+                                                    }
+                                                  }
+                                                  await updateDoc(doc(db, "folders", folder.id), { parentId: null });
+                                                  alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
+                                                  handleActionSuccess();
+                                                } catch (err: any) {
+                                                  alert("Erro ao mover pasta: " + err.message);
+                                                  setIsProcessingAction(false);
+                                                  sessionStorage.removeItem('action_in_progress');
                                                 }
-                                                if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                              }
+                                              })();
                                             }}
                                             className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
                                           >
-                                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
+                                            <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
                                           </button>
-                                      
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira a pasta *${folder.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
-                                          setActiveFolderMenuId(null);
-                                          setActiveFolderSubmenu('none');
-                                        }}
-                                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                      >
-                                        <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
-                                      </button>
+                                        )}
 
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                          window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
-                                          setActiveFolderMenuId(null);
-                                          setActiveFolderSubmenu('none');
-                                        }}
-                                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                      >
-                                        <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
-                                      </button>
+                                        {folders.filter(f => f.id !== folder.id && f.id !== folder.parentId).map(f => (
+                                          <button
+                                            key={f.id}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveFolderMenuId(null);
+                                              setActiveFolderSubmenu('none');
+                                              setIsProcessingAction(true);
+                                              sessionStorage.setItem('action_in_progress', 'true');
+                                              (async () => {
+                                                try {
+                                                  if (folder.id.length > 20) {
+                                                    const moveResponse = await fetch('/api/drive/update', {
+                                                      method: 'POST',
+                                                      headers: { 'Content-Type': 'application/json' },
+                                                      body: JSON.stringify({
+                                                        fileId: folder.id,
+                                                        addParents: f.id,
+                                                        removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
+                                                      })
+                                                    });
+                                                    if (!moveResponse.ok) {
+                                                      const errData = await moveResponse.json();
+                                                      throw new Error(errData.error || 'Erro ao mover no Google Drive');
+                                                    }
+                                                  }
+                                                  await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
+                                                  alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
+                                                  handleActionSuccess();
+                                                } catch (err: any) {
+                                                  alert("Erro ao mover pasta: " + err.message);
+                                                  setIsProcessingAction(false);
+                                                  sessionStorage.removeItem('action_in_progress');
+                                                }
+                                              })();
+                                            }}
+                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                          >
+                                            <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{f.name}</span>
+                                          </button>
+                                        ))}
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
 
-                                      <div className="my-1 border-t border-gray-100" />
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                          navigator.clipboard.writeText(shareUrl);
-                                          alert("Link de partilha da pasta copiado para a área de transferência!");
-                                          setActiveFolderMenuId(null);
-                                          setActiveFolderSubmenu('none');
-                                        }}
-                                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                      >
-                                        <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
-                                      </button>
-                                    </motion.div>
-                                  )}
-
-                                  {activeFolderSubmenu === 'organizar' && (
-                                    <motion.div
-                                      initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                                      exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                      transition={{ duration: 0.1 }}
-                                      className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
-                                      onClick={(e) => e.stopPropagation()}
+                                  <motion.div
+                                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                    transition={{ duration: 0.1 }}
+                                    className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedFolderId(folder.id);
+                                        if ((folder as any).ownerId === 'google-drive') {
+                                          handleGoogleSync(folder.id, undefined, true);
+                                        }
+                                        setActiveFolderMenuId(null);
+                                      }}
+                                      className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
                                     >
-                                      <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-                                      
-                                      {folder.parentId !== "" && folder.parentId !== null && (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFolderMenuId(null);
-                                            setActiveFolderSubmenu('none');
+                                      <div className="flex items-center gap-3">
+                                        <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                                      </div>
+                                      <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                    </button>
+
+                                    <div className="my-1 border-t border-gray-100" />
+
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
+                                        if (newName && newName.trim() !== folder.name) {
+                                          try {
                                             setIsProcessingAction(true);
                                             sessionStorage.setItem('action_in_progress', 'true');
-                                            (async () => {
-                                              try {
-                                                if (folder.id.length > 20) {
-                                                  const moveResponse = await fetch('/api/drive/update', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({
-                                                      fileId: folder.id,
-                                                      addParents: 'root',
-                                                      removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                    })
-                                                  });
-                                                  if (!moveResponse.ok) {
-                                                    const errData = await moveResponse.json();
-                                                    throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                  }
-                                                }
-                                                await updateDoc(doc(db, "folders", folder.id), { parentId: null });
-                                                alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
-                                                handleActionSuccess();
-                                              } catch (err: any) {
-                                                alert("Erro ao mover pasta: " + err.message);
-                                                setIsProcessingAction(false);
-                                                sessionStorage.removeItem('action_in_progress');
-                                              }
-                                            })();
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                        >
-                                          <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                                        </button>
-                                      )}
 
-                                      {folders.filter(f => f.id !== folder.id && f.id !== folder.parentId).map(f => (
-                                        <button
-                                          key={f.id}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFolderMenuId(null);
-                                            setActiveFolderSubmenu('none');
+                                            if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
+                                              const renameResponse = await fetch('/api/drive/update', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                  fileId: folder.id,
+                                                  newName: newName.normalize('NFC')
+                                                })
+                                              });
+                                              if (!renameResponse.ok) {
+                                                const errData = await renameResponse.json();
+                                                throw new Error(errData.error || "Erro no Google Drive");
+                                              }
+                                            }
+                                            await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
+                                            handleActionSuccess();
+                                          } catch (err: any) {
+                                            alert("Erro ao renomear pasta: " + err.message);
+                                            setIsProcessingAction(false);
+                                            sessionStorage.removeItem('action_in_progress');
+                                          }
+                                        }
+                                        setActiveFolderMenuId(null);
+                                      }}
+                                      className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar nome</span>
+                                      </div>
+                                    </button>
+
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
+                                      }}
+                                      className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
+                                      </div>
+                                      <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                    </button>
+
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
+                                      }}
+                                      className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
+                                      </div>
+                                      <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                                    </button>
+
+                                    <div className="px-3.5 py-2">
+                                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
+                                      <div className="flex gap-1.5 items-center">
+                                        {[
+                                          "#e2b13c", // Padrão Gold
+                                          "#a21b7e", // Vinho Provisual
+                                          "#3b82f6", // Azul
+                                          "#10b981", // Verde
+                                          "#ef4444", // Vermelho
+                                          "#8b5cf6", // Roxo
+                                        ].map((color) => (
+                                          <button
+                                            key={color}
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              try {
+                                                await updateDoc(doc(db, "folders", folder.id), { color });
+                                                handleActionSuccess();
+                                              } catch (err) {
+                                                console.error("Erro ao mudar cor da pasta:", err);
+                                              }
+                                              setActiveFolderMenuId(null);
+                                            }}
+                                            style={{ backgroundColor: color }}
+                                            className={cn(
+                                              "w-4 h-4 rounded-full border border-gray-100 hover:scale-125 transition-all cursor-pointer",
+                                              (folder.color || "#e2b13c") === color ? "border-gray-800 scale-110 shadow-sm" : "border-transparent"
+                                            )}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <div className="my-1 border-t border-gray-100" />
+
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (confirm("Tem certeza que deseja mover a pasta " + folder.name + " para o lixo?")) {
+                                          try {
                                             setIsProcessingAction(true);
                                             sessionStorage.setItem('action_in_progress', 'true');
-                                            (async () => {
-                                              try {
-                                                if (folder.id.length > 20) {
-                                                  const moveResponse = await fetch('/api/drive/update', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({
-                                                      fileId: folder.id,
-                                                      addParents: f.id,
-                                                      removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                    })
-                                                  });
-                                                  if (!moveResponse.ok) {
-                                                    const errData = await moveResponse.json();
-                                                    throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                  }
-                                                }
-                                                await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
-                                                alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
-                                                handleActionSuccess();
-                                              } catch (err: any) {
-                                                alert("Erro ao mover pasta: " + err.message);
-                                                setIsProcessingAction(false);
-                                                sessionStorage.removeItem('action_in_progress');
+
+                                            // Mover fisicamente no Google Drive
+                                            if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
+                                              const trashResponse = await fetch('/api/drive/update', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                  fileId: folder.id,
+                                                  trashed: true
+                                                })
+                                              });
+                                              if (!trashResponse.ok) {
+                                                const errData = await trashResponse.json();
+                                                console.warn("Erro ao lixo no drive:", errData.error);
                                               }
-                                            })();
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                        >
-                                          <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{f.name}</span>
-                                        </button>
-                                      ))}
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
-
-                                <motion.div
-                                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  transition={{ duration: 0.1 }}
-                                  className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_10px_rgba(0,0,0,0.06)] z-40 py-1.5 text-left text-gray-700 font-sans cursor-default"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedFolderId(folder.id);
-                                      if ((folder as any).ownerId === 'google-drive') {
-                                        handleGoogleSync(folder.id, undefined, true);
-                                      }
-                                      setActiveFolderMenuId(null);
-                                    }}
-                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
-                                    </div>
-                                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                  </button>
-
-                                  <div className="my-1 border-t border-gray-100" />
-
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
-                                      if (newName && newName.trim() !== folder.name) {
-                                        try {
-                                          setIsProcessingAction(true);
-                                          sessionStorage.setItem('action_in_progress', 'true');
-                                          
-                                          if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
-                                            const renameResponse = await fetch('/api/drive/update', {
-                                              method: 'POST',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({
-                                                fileId: folder.id,
-                                                newName: newName.normalize('NFC')
-                                              })
-                                            });
-                                            if (!renameResponse.ok) {
-                                              const errData = await renameResponse.json();
-                                              throw new Error(errData.error || "Erro no Google Drive");
                                             }
+                                            await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
+                                            handleActionSuccess();
+                                          } catch (err: any) {
+                                            alert("Erro ao mover para o lixo: " + err.message);
+                                            setIsProcessingAction(false);
+                                            sessionStorage.removeItem('action_in_progress');
                                           }
-                                          await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
-                                          handleActionSuccess();
-                                        } catch (err: any) {
-                                          alert("Erro ao renomear pasta: " + err.message);
-                                          setIsProcessingAction(false);
-                                          sessionStorage.removeItem('action_in_progress');
                                         }
-                                      }
-                                      setActiveFolderMenuId(null);
-                                    }}
-                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Mudar nome</span>
-                                    </div>
-                                  </button>
-
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
-                                    }}
-                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
-                                    </div>
-                                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                  </button>
-
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
-                                    }}
-                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
-                                    </div>
-                                    <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                  </button>
-
-                                  <div className="px-3.5 py-2">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
-                                    <div className="flex gap-1.5 items-center">
-                                      {[
-                                        "#e2b13c", // Padrão Gold
-                                        "#a21b7e", // Vinho Provisual
-                                        "#3b82f6", // Azul
-                                        "#10b981", // Verde
-                                        "#ef4444", // Vermelho
-                                        "#8b5cf6", // Roxo
-                                      ].map((color) => (
-                                        <button
-                                          key={color}
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            try {
-                                              await updateDoc(doc(db, "folders", folder.id), { color });
-                                              handleActionSuccess();
-                                            } catch (err) {
-                                              console.error("Erro ao mudar cor da pasta:", err);
-                                            }
-                                            setActiveFolderMenuId(null);
-                                          }}
-                                          style={{ backgroundColor: color }}
-                                          className={cn(
-                                            "w-4 h-4 rounded-full border border-gray-100 hover:scale-125 transition-all cursor-pointer",
-                                            (folder.color || "#e2b13c") === color ? "border-gray-800 scale-110 shadow-sm" : "border-transparent"
-                                          )}
-                                        />
-                                      ))}
-                                    </div>
-                                  </div>
-
-                                  <div className="my-1 border-t border-gray-100" />
-
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      if (confirm("Tem certeza que deseja mover a pasta " + folder.name + " para o lixo?")) {
-                                        try {
-                                          setIsProcessingAction(true);
-                                          sessionStorage.setItem('action_in_progress', 'true');
-                                          
-                                          // Mover fisicamente no Google Drive
-                                          if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
-                                            const trashResponse = await fetch('/api/drive/update', {
-                                              method: 'POST',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({
-                                                fileId: folder.id,
-                                                trashed: true
-                                              })
-                                            });
-                                            if (!trashResponse.ok) {
-                                              const errData = await trashResponse.json();
-                                              console.warn("Erro ao lixo no drive:", errData.error);
-                                            }
-                                          }
-                                          await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
-                                          handleActionSuccess();
-                                        } catch (err: any) {
-                                          alert("Erro ao mover para o lixo: " + err.message);
-                                          setIsProcessingAction(false);
-                                          sessionStorage.removeItem('action_in_progress');
-                                        }
-                                      }
-                                      setActiveFolderMenuId(null);
-                                    }}
-                                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-red-50 group transition-colors text-left text-[13px] font-bold text-red-600 cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Trash2 size={15} className="text-red-400 group-hover:text-red-600 transition-colors shrink-0" />
-                                      <span className="text-red-600 group-hover:text-red-700 transition-colors">Mover para o lixo</span>
-                                    </div>
-                                  </button>
-                                </motion.div>
-                              </>
-                            )}
-                          </AnimatePresence>
+                                        setActiveFolderMenuId(null);
+                                      }}
+                                      className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-red-50 group transition-colors text-left text-[13px] font-bold text-red-600 cursor-pointer"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <Trash2 size={15} className="text-red-400 group-hover:text-red-600 transition-colors shrink-0" />
+                                        <span className="text-red-600 group-hover:text-red-700 transition-colors">Mover para o lixo</span>
+                                      </div>
+                                    </button>
+                                  </motion.div>
+                                </>
+                              )}
+                            </AnimatePresence>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
 
-                  {/* Assets (Files & Folders from Drive) in List */}
-                  {displayedAssets.map(asset => (
-                    <AssetRow
-                      key={asset.id}
-                      asset={asset}
-                      onDistribute={(item) => { setItemToDistribute(item); setDistributeModalOpen(true); }}
-                      isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
-                      onSelect={() => {
-                        if (asset.type === 'folder') {
-                          setSelectedFolderId(asset.driveId || asset.id);
-                          handleGoogleSync(asset.driveId || asset.id, undefined, true);
-                        } else {
-                          setPreviewAsset(asset); // Abrir visualização no clique simples
-                        }
-                      }}
-                      onPreview={() => {
-                        if (asset.type === 'folder') {
-                          setSelectedFolderId(asset.driveId || asset.id);
-                          handleGoogleSync(asset.driveId || asset.id, undefined, true);
-                        } else {
-                          setPreviewAsset(asset);
-                        }
-                      }}
-                      isSelected={selectedAsset?.id === asset.id}
-                      isBulkSelected={selectedAssetIds.includes(asset.id)}
-                      onToggleBulkSelect={() => handleToggleBulkSelect(asset.id)}
-                      hasSelectionActive={selectedAssetIds.length > 0}
-                      folders={filteredFolders}
-                      onAskGemini={(a) => {
-                        setGeminiAsset(a);
-                        const initialText = `Olá! Sou o Gemini. Analisei o arquivo **${a.name}** (${a.type}). Ele está guardado com sucesso na ProVisual Corporate e integrado com o seu Google Drive. Posso extrair textos, gerar resumos ou dar insights sobre este arquivo. O que gostaria de saber?`;
-                        setGeminiAnswers([{ role: 'gemini', text: initialText }]);
-                        setGeminiQuestion("");
-                      }}
-                      onStartAction={(active) => {
-                        setIsProcessingAction(active);
-                        if (active) {
-                          sessionStorage.setItem('action_in_progress', 'true');
-                        } else {
-                          sessionStorage.removeItem('action_in_progress');
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-          {activeTab === 'image' && filteredAssets.length > visibleImagesCount && (
-            <div className="flex justify-center my-8 pb-10 w-full">
-              <button
-                onClick={() => setVisibleImagesCount(prev => prev + 10)}
-                className="flex items-center gap-2 bg-[#a21b7e] text-white px-6 py-3 rounded-md text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer select-none"
-              >
-                <Plus size={18} />
-                Carregar mais imagens
-              </button>
-            </div>
-          )}
-        </div>)}
+                    {/* Assets (Files & Folders from Drive) in List */}
+                    {displayedAssets.map(asset => (
+                      <AssetRow
+                        key={asset.id}
+                        asset={asset}
+                        onDistribute={(item) => { setItemToDistribute(item); setDistributeModalOpen(true); }}
+                        isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
+                        onSelect={() => {
+                          if (asset.type === 'folder') {
+                            setSelectedFolderId(asset.driveId || asset.id);
+                            handleGoogleSync(asset.driveId || asset.id, undefined, true);
+                          } else {
+                            setPreviewAsset(asset); // Abrir visualização no clique simples
+                          }
+                        }}
+                        onPreview={() => {
+                          if (asset.type === 'folder') {
+                            setSelectedFolderId(asset.driveId || asset.id);
+                            handleGoogleSync(asset.driveId || asset.id, undefined, true);
+                          } else {
+                            setPreviewAsset(asset);
+                          }
+                        }}
+                        isSelected={selectedAsset?.id === asset.id}
+                        isBulkSelected={selectedAssetIds.includes(asset.id)}
+                        onToggleBulkSelect={() => handleToggleBulkSelect(asset.id)}
+                        hasSelectionActive={selectedAssetIds.length > 0}
+                        folders={filteredFolders}
+                        onAskGemini={(a) => {
+                          setGeminiAsset(a);
+                          const initialText = `Olá! Sou o Gemini. Analisei o arquivo **${a.name}** (${a.type}). Ele está guardado com sucesso na ProVisual Corporate e integrado com o seu Google Drive. Posso extrair textos, gerar resumos ou dar insights sobre este arquivo. O que gostaria de saber?`;
+                          setGeminiAnswers([{ role: 'gemini', text: initialText }]);
+                          setGeminiQuestion("");
+                        }}
+                        onStartAction={(active) => {
+                          setIsProcessingAction(active);
+                          if (active) {
+                            sessionStorage.setItem('action_in_progress', 'true');
+                          } else {
+                            sessionStorage.removeItem('action_in_progress');
+                          }
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {activeTab === 'image' && filteredAssets.length > visibleImagesCount && (
+              <div className="flex justify-center my-8 pb-10 w-full">
+                <button
+                  onClick={() => setVisibleImagesCount(prev => prev + 10)}
+                  className="flex items-center gap-2 bg-[#a21b7e] text-white px-6 py-3 rounded-md text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer select-none"
+                >
+                  <Plus size={18} />
+                  Carregar mais imagens
+                </button>
+              </div>
+            )}
+          </div>)}
 
         {/* Upload Progress Overlay (Fixed Bottom Right) - Google Drive style (Layout Claro) */}
         {showUploadQueueCard && uploadQueue.length > 0 && (
@@ -3293,19 +3284,19 @@ export default function ClientDashboard() {
           >
             <div className="flex items-center justify-between gap-8 px-4 py-3 bg-gray-50 border-b border-gray-100 text-gray-800">
               <span className="font-bold text-xs uppercase tracking-wider shrink-0">
-                {uploadQueue.some(item => item.status === 'uploading') 
+                {uploadQueue.some(item => item.status === 'uploading')
                   ? `Carregando ${uploadQueue.filter(item => item.status === 'uploading').length} ${uploadQueue.filter(item => item.status === 'uploading').length === 1 ? 'item' : 'itens'}...`
                   : `${uploadQueue.filter(item => item.status === 'completed').length} ${uploadQueue.filter(item => item.status === 'completed').length === 1 ? 'upload concluído' : 'uploads concluídos'}`
                 }
               </span>
-              <button 
+              <button
                 onClick={() => setShowUploadQueueCard(false)}
                 className="w-6 h-6 rounded-full hover:bg-gray-200/50 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors cursor-pointer shrink-0"
               >
                 <Plus className="rotate-45" size={16} />
               </button>
             </div>
-            
+
             <div className="max-h-60 overflow-y-auto divide-y divide-gray-50">
               {uploadQueue.map((item) => (
                 <div key={item.id} className="flex items-center justify-between gap-6 px-4 py-3 text-xs bg-white">
@@ -3319,7 +3310,7 @@ export default function ClientDashboard() {
                     )}
                     <span className="truncate font-semibold text-gray-700" title={item.name}>{item.name}</span>
                   </div>
-                  
+
                   <div className="flex items-center gap-2 shrink-0">
                     {item.status === 'uploading' && (
                       <span className="text-[10px] text-gray-400 font-bold">{item.progress}%</span>
@@ -3368,7 +3359,7 @@ export default function ClientDashboard() {
                 {/* Dropdown Menu */}
                 <div className="absolute bottom-[100%] left-0 mb-2 w-52 bg-white border border-gray-200 shadow-lg rounded-md py-1 z-[110] hidden group-hover/bulk:block max-h-60 overflow-y-auto">
                   <div className="px-3 py-1.5 text-[10px] font-black text-gray-300 uppercase tracking-wider border-b border-gray-100 mb-1">Escolha a pasta destino</div>
-                  
+
                   {selectedFolderId !== null && (
                     <button
                       onClick={() => handleBulkMove(null)}
@@ -3448,7 +3439,7 @@ export default function ClientDashboard() {
                       <p className="text-[10px] text-violet-200">Análise de Contexto: {geminiAsset.name}</p>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setGeminiAsset(null)}
                     className="p-1 hover:bg-white/10 rounded-md transition-colors text-white/80 hover:text-white cursor-pointer"
                   >
@@ -3459,12 +3450,12 @@ export default function ClientDashboard() {
                 {/* Área de Mensagens */}
                 <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3 bg-gray-50/50">
                   {geminiAnswers.map((ans, idx) => (
-                    <div 
-                      key={idx} 
+                    <div
+                      key={idx}
                       className={cn(
                         "max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300",
-                        ans.role === 'user' 
-                          ? "bg-violet-600 text-white self-end rounded-tr-none" 
+                        ans.role === 'user'
+                          ? "bg-violet-600 text-white self-end rounded-tr-none"
                           : "bg-white text-gray-700 border border-gray-100 self-start rounded-tl-none"
                       )}
                     >
@@ -3482,11 +3473,11 @@ export default function ClientDashboard() {
                 </div>
 
                 {/* Caixa de Entrada */}
-                <form 
+                <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (!geminiQuestion.trim() || isGeminiLoading) return;
-                    
+
                     const q = geminiQuestion;
                     setGeminiAnswers(prev => [...prev, { role: 'user', text: q }]);
                     setGeminiQuestion("");
@@ -3496,7 +3487,7 @@ export default function ClientDashboard() {
                     setTimeout(() => {
                       let reply = "";
                       const lowerQ = q.toLowerCase();
-                      
+
                       if (lowerQ.includes("resum") || lowerQ.includes("sobre") || lowerQ.includes("contexto") || lowerQ.includes("analis")) {
                         reply = `Este ficheiro "${geminiAsset.name}" é do tipo ${geminiAsset.type}. O Gemini identificou que ele representa um elemento de valor no repositório da ProVisual Corporate. A integridade visual dele está perfeita e está sincronizado de forma ótima.`;
                       } else if (lowerQ.includes("tamanho") || lowerQ.includes("peso") || lowerQ.includes("kb") || lowerQ.includes("mb") || lowerQ.includes("dimens")) {
@@ -3513,14 +3504,14 @@ export default function ClientDashboard() {
                   }}
                   className="p-3 border-t border-gray-100 bg-white flex gap-2 items-center"
                 >
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={geminiQuestion}
                     onChange={(e) => setGeminiQuestion(e.target.value)}
                     placeholder="Faça uma pergunta ao Gemini sobre o arquivo..."
                     className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 text-gray-700 font-sans"
                   />
-                  <button 
+                  <button
                     type="submit"
                     className="bg-violet-600 hover:bg-violet-700 text-white rounded-md px-4 py-2 text-xs font-bold transition-colors cursor-pointer shrink-0"
                   >
@@ -3576,7 +3567,7 @@ export default function ClientDashboard() {
                 {selectedAsset.type}
               </div>
             </div>
- 
+
             <div className="mb-6">
               <h4 className="font-bold text-sm text-gray-800 mb-1 truncate" title={selectedAsset.name}>
                 {selectedAsset.name}
@@ -3592,7 +3583,7 @@ export default function ClientDashboard() {
                 </span>
               </div>
             </div>
- 
+
             <div className="space-y-4">
               <div>
                 <h5 className="text-[8px] font-bold text-gray-300 uppercase tracking-[0.2em] mb-2">Entregas</h5>
@@ -3612,7 +3603,7 @@ export default function ClientDashboard() {
                   ))}
                 </div>
               </div>
- 
+
               <div className="pt-4 border-t border-gray-50">
                 <button className="w-full flex items-center justify-center gap-2 bg-[#a21b7e] text-white py-2.5 rounded-lg font-bold shadow-md shadow-[#a21b7e]/10 hover:bg-[#8e176e] transition-all">
                   <ArrowBigUpDash size={16} />
@@ -3626,7 +3617,7 @@ export default function ClientDashboard() {
 
       {/* Floating custom context menu for page container right-click */}
       {contextMenu && contextMenu.visible && (
-        <div 
+        <div
           style={{ top: contextMenu.y, left: contextMenu.x }}
           className="fixed bg-[#1e1f20] border border-[#2d2e30] rounded-xl shadow-2xl z-50 py-2 w-56 text-left text-gray-200 font-sans cursor-default animate-in fade-in zoom-in-95 duration-100"
           onClick={(e) => e.stopPropagation()}
@@ -3645,7 +3636,7 @@ export default function ClientDashboard() {
             <FileUp size={15} className="text-gray-400" />
             <span>Carregar ficheiro</span>
           </button>
-          
+
           <button
             onClick={() => {
               if (fileInputRef.current) {
@@ -3724,22 +3715,36 @@ export default function ClientDashboard() {
 
                 <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2">Selecione o Cliente</label>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                  {accounts.filter(a => a.role === 'cliente').map(client => (
-                    <button
-                      key={client.uid}
-                      onClick={() => setSelectedClientId(client.uid)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedClientId === client.uid ? 'border-[#a21b7e] bg-[#a21b7e]/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
-                    >
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#a21b7e] to-[#d14faa] flex items-center justify-center text-white text-xs font-bold shrink-0">
-                        {(client.displayName || client.email)?.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-700">{client.displayName || 'Cliente'}</p>
-                        <p className="text-xs text-gray-400">{client.email}</p>
-                      </div>
-                      {selectedClientId === client.uid && <CheckCircle2 size={16} className="text-[#a21b7e] ml-auto shrink-0" />}
-                    </button>
-                  ))}
+                  {accounts.filter(a => a.role === 'cliente').map(client => {
+                    const rawName = client.displayName || "";
+                    const parsed = rawName.includes('|') 
+                      ? { name: rawName.split('|')[0], logo: rawName.split('|')[1] } 
+                      : { name: rawName, logo: "" };
+
+                    return (
+                      <button
+                        key={client.id}
+                        type="button"
+                        onClick={() => setSelectedClientId(client.id)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedClientId === client.id ? 'border-[#a21b7e] bg-[#a21b7e]/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
+                      >
+                        <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
+                          {parsed.logo ? (
+                            <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain" />
+                          ) : (
+                            <span className="text-[10px] font-black text-[#a21b7e] uppercase">
+                              {parsed.name ? parsed.name.charAt(0) : "C"}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-gray-700 font-sans">{parsed.name || 'Cliente'}</p>
+                          <p className="text-xs text-gray-400 font-sans">{client.email}</p>
+                        </div>
+                        {selectedClientId === client.id && <CheckCircle2 size={16} className="text-[#a21b7e] ml-auto shrink-0" />}
+                      </button>
+                    );
+                  })}
                   {accounts.filter(a => a.role === 'cliente').length === 0 && (
                     <div className="p-4 text-center border border-dashed border-gray-200 rounded-xl bg-gray-50 text-gray-500 text-sm">
                       Nenhum cliente cadastrado. Adicione um na aba "Gestão de Clientes".
@@ -3854,17 +3859,17 @@ interface AssetCardProps {
   isBulkSelected?: boolean;
   onToggleBulkSelect?: () => void;
   hasSelectionActive?: boolean;
-  onDistribute?: (item: {id: string, type: string, currentName: string}) => void;
+  onDistribute?: (item: { id: string, type: string, currentName: string }) => void;
 }
 
-function AssetCard({ 
-  asset, 
-  onSelect, 
-  isSelected, 
-  onPreview, 
-  isNewlyUploaded = false, 
-  onAskGemini, 
-  folders, 
+function AssetCard({
+  asset,
+  onSelect,
+  isSelected,
+  onPreview,
+  isNewlyUploaded = false,
+  onAskGemini,
+  folders,
   onStartAction,
   isBulkSelected = false,
   onToggleBulkSelect,
@@ -3907,15 +3912,15 @@ function AssetCard({
       )}
     >
       {/* Checkbox de Seleção em Massa */}
-      <div 
+      <div
         onClick={(e) => {
           e.stopPropagation();
           onToggleBulkSelect?.();
         }}
         className={cn(
           "absolute top-2 left-2 z-20 w-5 h-5 rounded-full border bg-white/90 backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer shadow-sm hover:scale-110",
-          isBulkSelected 
-            ? "border-[#a21b7e] bg-[#a21b7e] text-white" 
+          isBulkSelected
+            ? "border-[#a21b7e] bg-[#a21b7e] text-white"
             : "border-gray-300 text-transparent hover:border-gray-400",
           isBulkSelected || hasSelectionActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         )}
@@ -3925,7 +3930,7 @@ function AssetCard({
 
       {/* 3 dots button over the image in the upper right corner */}
       <div className="absolute top-2 right-2 z-20">
-        <motion.button 
+        <motion.button
           onClick={(e) => {
             e.stopPropagation();
             setShowMenu(!showMenu);
@@ -3941,15 +3946,15 @@ function AssetCard({
           {showMenu && (
             <>
               {/* Invisible click-catcher to dismiss the menu */}
-              <div 
-                className="fixed inset-0 z-30" 
+              <div
+                className="fixed inset-0 z-30"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowMenu(false);
                   setActiveSubmenu('none');
                 }}
               />
-              
+
               {/* SUBMENUS (Posicionados à esquerda do principal) */}
               <AnimatePresence>
                 {activeSubmenu === 'partilhar' && (
@@ -3962,30 +3967,30 @@ function AssetCard({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
-                                          
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                              if (item) {
-                                                if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                  onDistribute(item);
-                                                } else if (typeof setItemToDistribute !== 'undefined') {
-                                                  setItemToDistribute(item);
-                                                  setDistributeModalOpen(true);
-                                                }
-                                                if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                              }
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                                          </button>
-                    
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
+                        if (item) {
+                          if (typeof onDistribute !== 'undefined' && onDistribute) {
+                            onDistribute(item);
+                          } else if (typeof setItemToDistribute !== 'undefined') {
+                            setItemToDistribute(item);
+                            setDistributeModalOpen(true);
+                          }
+                          if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
+                          if (typeof setShowMenu !== 'undefined') setShowMenu(false);
+                          if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
+                          if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                    >
+                      <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                      <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
+                    </button>
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -4059,7 +4064,7 @@ function AssetCard({
                   >
                     {/* Seção Mover */}
                     <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-                    
+
                     {asset.folderId !== "" && asset.folderId !== "root" && (
                       <button
                         onClick={(e) => {
@@ -4543,17 +4548,17 @@ interface AssetRowProps {
   isBulkSelected?: boolean;
   onToggleBulkSelect?: () => void;
   hasSelectionActive?: boolean;
-  onDistribute?: (item: {id: string, type: string, currentName: string}) => void;
+  onDistribute?: (item: { id: string, type: string, currentName: string }) => void;
 }
 
-function AssetRow({ 
-  asset, 
-  onSelect, 
-  isSelected, 
-  onPreview, 
-  isNewlyUploaded = false, 
-  onAskGemini, 
-  folders, 
+function AssetRow({
+  asset,
+  onSelect,
+  isSelected,
+  onPreview,
+  isNewlyUploaded = false,
+  onAskGemini,
+  folders,
   onStartAction,
   isBulkSelected = false,
   onToggleBulkSelect,
@@ -4593,15 +4598,15 @@ function AssetRow({
     >
       <div className="col-span-6 flex items-center gap-4">
         {/* Checkbox de Seleção em Massa */}
-        <div 
+        <div
           onClick={(e) => {
             e.stopPropagation();
             onToggleBulkSelect?.();
           }}
           className={cn(
             "w-5 h-5 rounded-full border flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-sm mr-2",
-            isBulkSelected 
-              ? "border-[#a21b7e] bg-[#a21b7e] text-white" 
+            isBulkSelected
+              ? "border-[#a21b7e] bg-[#a21b7e] text-white"
               : "border-gray-300 text-transparent hover:border-gray-400"
           )}
         >
@@ -4634,9 +4639,9 @@ function AssetRow({
       </div>
       <div className="col-span-2 text-right pr-4 text-xs text-gray-500 font-mono flex items-center justify-end gap-3 relative overflow-visible">
         <span>{asset.versions[0]?.size || "0 MB"}</span>
-        
+
         <div className="relative overflow-visible">
-          <motion.button 
+          <motion.button
             onClick={(e) => {
               e.stopPropagation();
               setShowMenu(!showMenu);
@@ -4651,15 +4656,15 @@ function AssetRow({
           <AnimatePresence>
             {showMenu && (
               <>
-                <div 
-                  className="fixed inset-0 z-30" 
+                <div
+                  className="fixed inset-0 z-30"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowMenu(false);
                     setActiveSubmenu('none');
                   }}
                 />
-                
+
                 {/* SUBMENUS (Posicionados à esquerda do principal) */}
                 <AnimatePresence>
                   {activeSubmenu === 'partilhar' && (
@@ -4672,30 +4677,30 @@ function AssetRow({
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
-                                          
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                              if (item) {
-                                                if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                  onDistribute(item);
-                                                } else if (typeof setItemToDistribute !== 'undefined') {
-                                                  setItemToDistribute(item);
-                                                  setDistributeModalOpen(true);
-                                                }
-                                                if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                              }
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                                          </button>
-                      
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
+                          if (item) {
+                            if (typeof onDistribute !== 'undefined' && onDistribute) {
+                              onDistribute(item);
+                            } else if (typeof setItemToDistribute !== 'undefined') {
+                              setItemToDistribute(item);
+                              setDistributeModalOpen(true);
+                            }
+                            if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
+                            if (typeof setShowMenu !== 'undefined') setShowMenu(false);
+                            if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
+                            if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
+                          }
+                        }}
+                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                      >
+                        <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
+                      </button>
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -4769,7 +4774,7 @@ function AssetRow({
                     >
                       {/* Seção Mover */}
                       <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-                      
+
                       {asset.folderId !== "" && asset.folderId !== "root" && (
                         <button
                           onClick={(e) => {

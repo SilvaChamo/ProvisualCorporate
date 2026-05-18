@@ -48,6 +48,8 @@ function mapToSnakeCase(table: string, data: any): any {
     delete result.versions;
     delete result.trashed;
     delete result.starred;
+    delete result.created_at;
+    delete result.createdAt;
   }
   if (table === 'folders') {
     delete result.admin_token;

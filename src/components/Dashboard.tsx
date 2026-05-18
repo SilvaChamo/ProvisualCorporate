@@ -400,7 +400,9 @@ export default function Dashboard() {
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [newAccountEmail, setNewAccountEmail] = useState("");
+  const [newAccountResponsible, setNewAccountResponsible] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountLogo, setNewAccountLogo] = useState("");
   const [newAccountPassword, setNewAccountPassword] = useState("");
   const [newAccountRole, setNewAccountRole] = useState<"admin" | "cliente">("cliente");
   const [accountError, setAccountError] = useState<string | null>(null);
@@ -619,12 +621,55 @@ export default function Dashboard() {
   };
 
   // Gestão de Contas de Acesso dos Clientes (Criar ou Editar)
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAccountError("A imagem selecionada é muito grande. Escolha uma imagem de até 5MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        const MAX_DIM = 200;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+          setNewAccountLogo(compressedBase64);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setAccountError(null);
     setAccountSuccess(null);
 
-    if (!newAccountEmail || !newAccountName || !newAccountPassword) {
+    if (!newAccountEmail || !newAccountResponsible || !newAccountName || !newAccountPassword) {
       setAccountError("Preencha todos os campos obrigatórios.");
       return;
     }
@@ -635,13 +680,14 @@ export default function Dashboard() {
     }
 
     setIsCreatingAccount(true);
+    const displayNameValue = `${newAccountResponsible.trim()}|${newAccountName.trim()}|${newAccountLogo.trim()}`;
 
     try {
       if (editingAccount) {
         // MODO EDIÇÃO: Atualizar documento existente no Firestore
         await setDoc(doc(db, "users", editingAccount.id), {
           email: newAccountEmail.trim().toLowerCase(),
-          displayName: newAccountName.trim(),
+          displayName: displayNameValue,
           password: newAccountPassword,
           role: newAccountRole,
           adminToken: "Silva_Chamo_Master_Admin_2026"
@@ -665,7 +711,7 @@ export default function Dashboard() {
         // Salvar conta no Firestore na coleção "users"
         await setDoc(doc(db, "users", generatedUid), {
           email: newAccountEmail.trim().toLowerCase(),
-          displayName: newAccountName.trim(),
+          displayName: displayNameValue,
           password: newAccountPassword, // Senha salva para login resiliente local
           role: newAccountRole,
           clientId: generatedUid, // ID do cliente para filtrar seus arquivos
@@ -677,7 +723,9 @@ export default function Dashboard() {
       }
 
       setNewAccountEmail("");
+      setNewAccountResponsible("");
       setNewAccountName("");
+      setNewAccountLogo("");
       setNewAccountPassword("");
       setNewAccountRole("cliente");
       
@@ -695,10 +743,44 @@ export default function Dashboard() {
     }
   };
 
+  const generateStrongPassword = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyz";
+    const caps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const nums = "0123456789";
+    const syms = "@#!$%&*";
+    let pass = "";
+    // Garantir pelo menos um caractere de cada conjunto obrigatório
+    pass += chars[Math.floor(Math.random() * chars.length)];
+    pass += caps[Math.floor(Math.random() * caps.length)];
+    pass += nums[Math.floor(Math.random() * nums.length)];
+    pass += syms[Math.floor(Math.random() * syms.length)];
+    // Completar o restante até atingir 10 caracteres
+    const allChars = chars + caps + nums + syms;
+    for (let i = 0; i < 6; i++) {
+      pass += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    // Misturar aleatoriamente a ordem dos caracteres
+    return pass.split("").sort(() => 0.5 - Math.random()).join("");
+  };
+
   const handleEditClick = (account: any) => {
     setEditingAccount(account);
     setNewAccountEmail(account.email);
-    setNewAccountName(account.displayName || "");
+    const rawName = String(account.displayName || "");
+    const parts = rawName.split('|');
+    if (parts.length === 3) {
+      setNewAccountResponsible(parts[0]);
+      setNewAccountName(parts[1]);
+      setNewAccountLogo(parts[2] || "");
+    } else if (parts.length === 2) {
+      setNewAccountResponsible("");
+      setNewAccountName(parts[0]);
+      setNewAccountLogo(parts[1] || "");
+    } else {
+      setNewAccountResponsible("");
+      setNewAccountName(rawName);
+      setNewAccountLogo("");
+    }
     setNewAccountPassword(account.password || "");
     setNewAccountRole(account.role || "cliente");
     setAccountError(null);
@@ -710,7 +792,9 @@ export default function Dashboard() {
     setIsAddAccountModalOpen(false);
     setEditingAccount(null);
     setNewAccountEmail("");
+    setNewAccountResponsible("");
     setNewAccountName("");
+    setNewAccountLogo("");
     setNewAccountPassword("");
     setNewAccountRole("cliente");
     setAccountError(null);
@@ -1540,7 +1624,7 @@ export default function Dashboard() {
     // Se nenhuma pasta estiver selecionada, mostramos o rótulo da aba correspondente
     if (!selectedFolderId) {
       if (activeTab === 'all') {
-        const label = userProfile?.role === 'cliente' ? 'Meu Arquivo' : 'Dados do Cliente';
+        const label = "Meu Arquivo";
         list.push({ id: null, name: label, type: 'all' });
       } else if (activeTab === 'google_drive') {
         list.push({ id: 'google_drive_root', name: 'Arquivo Provisual', type: 'drive_root' });
@@ -1558,7 +1642,7 @@ export default function Dashboard() {
     } else {
       // Se há uma pasta selecionada, adicionamos o ponto de partida (raiz) no início dos breadcrumbs
       if (activeTab === 'all') {
-        const label = userProfile?.role === 'cliente' ? 'Meu Arquivo' : 'Dados do Cliente';
+        const label = "Meu Arquivo";
         list.push({ id: null, name: label, type: 'all' });
       } else if (activeTab === 'google_drive') {
         list.push({ id: null, name: 'Arquivo Provisual', type: 'all' });
@@ -1627,7 +1711,7 @@ export default function Dashboard() {
             )}
             <SidebarItem
               icon={<Database size={20} />}
-              label={userProfile?.role === 'cliente' ? 'Meu Arquivo' : 'Dados do Cliente'}
+              label="Meu Arquivo"
               active={activeTab === 'all'}
               onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); handleGoogleSync('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG', undefined, true); }}
             />
@@ -2072,8 +2156,8 @@ export default function Dashboard() {
                     setAccountSuccess(null);
                     setNewAccountEmail("");
                     setNewAccountName("");
-                    // Gerar uma senha forte de 6 dígitos numéricos aleatórios por padrão para o cliente
-                    const randomPass = Math.floor(100000 + Math.random() * 900000).toString();
+                    // Gerar uma senha forte com letras maiúsculas/minúsculas, números e símbolos
+                    const randomPass = generateStrongPassword();
                     setNewAccountPassword(randomPass);
                     setNewAccountRole("cliente");
                     setIsAddAccountModalOpen(true);
@@ -2091,49 +2175,72 @@ export default function Dashboard() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                        <th className="px-6 py-4">Nome do Cliente / Empresa</th>
-                        <th className="px-6 py-4">E-mail de Acesso</th>
-                        <th className="px-6 py-4">Senha de Acesso</th>
-                        <th className="px-6 py-4">Perfil</th>
-                        <th className="px-6 py-4">Data de Criação</th>
-                        <th className="px-6 py-4 text-right">Ações</th>
+                        <th className="px-4 py-3">Nome do Cliente / Empresa</th>
+                        <th className="px-4 py-3">ID do Cliente</th>
+                        <th className="px-4 py-3">E-mail de Acesso</th>
+                        <th className="px-4 py-3">Senha de Acesso</th>
+                        <th className="px-4 py-3">Perfil</th>
+                        <th className="px-4 py-3 text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
                       {accounts.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
+                          <td colSpan={6} className="px-4 py-12 text-center text-gray-400 italic">
                             Nenhuma conta cadastrada no portal. Clique em "Criar Conta de Acesso" para começar!
                           </td>
                         </tr>
                       ) : (
                         accounts.map((account) => {
-                          let createdDateStr = "—";
-                          if (account.createdAt) {
-                            if (typeof account.createdAt.toDate === 'function') {
-                              createdDateStr = format(account.createdAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-                            } else if (account.createdAt instanceof Date) {
-                              createdDateStr = format(account.createdAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-                            }
-                          }
-
                           return (
-                            <tr key={account.id} className="hover:bg-gray-50/50 transition-colors">
-                              <td className="px-6 py-4 font-bold text-gray-800">
-                                {account.displayName || "Sem Nome"}
+                            <tr key={account.id || account.uid || Math.random().toString()} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-4 py-3 font-bold text-gray-800">
+                                {(() => {
+                                  const rawName = String(account.displayName || "");
+                                  const parts = rawName.split('|');
+                                  const parsed = parts.length === 3
+                                    ? { responsible: parts[0], name: parts[1], logo: parts[2] }
+                                    : (parts.length === 2 
+                                      ? { responsible: "", name: parts[0], logo: parts[1] }
+                                      : { responsible: "", name: rawName, logo: "" });
+                                  return (
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
+                                        {parsed.logo ? (
+                                          <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain" />
+                                        ) : (
+                                          <span className="text-[10px] font-black text-gray-400 uppercase">
+                                            {parsed.name ? parsed.name.charAt(0) : "C"}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <span className="font-bold text-gray-800">{parsed.name || "Sem Nome"}</span>
+                                        {parsed.responsible && (
+                                          <span className="text-[10px] font-normal text-gray-400">Resp: {parsed.responsible}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </td>
-                              <td className="px-6 py-4 font-medium text-gray-600">
+                              <td className="px-4 py-3 font-mono text-xs text-gray-500">
+                                <span className="bg-[#a21b7e]/5 text-[#a21b7e] border border-[#a21b7e]/10 px-2 py-0.5 rounded font-bold select-all">
+                                  {account.clientId || account.id}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 font-medium text-gray-600">
                                 <span className="flex items-center gap-2 mt-1 select-all">
                                   <Mail size={14} className="text-gray-400" />
                                   {account.email}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 font-mono text-gray-800">
+                              <td className="px-4 py-3 font-mono text-gray-800">
                                 <span className="bg-gray-100 border border-gray-200 px-2.5 py-1 rounded text-xs select-all">
                                   {account.password || "—"}
                                 </span>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-4 py-3">
                                 <span className={cn(
                                   "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
                                   account.role === 'admin' 
@@ -2143,10 +2250,7 @@ export default function Dashboard() {
                                   {account.role === 'admin' ? "Administrador" : "Cliente"}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 text-xs text-gray-400">
-                                {createdDateStr}
-                              </td>
-                              <td className="px-6 py-4 text-right space-x-2">
+                              <td className="px-4 py-3 text-right space-x-2">
                                 <button
                                   onClick={() => handleEditClick(account)}
                                   className="p-2 bg-purple-50 hover:bg-purple-100 text-[#a21b7e] rounded-md transition-all cursor-pointer inline-flex items-center justify-center border border-purple-100"
@@ -2194,7 +2298,7 @@ export default function Dashboard() {
                     </button>
                   </div>
 
-                  <form onSubmit={handleSaveAccount} className="p-6 space-y-4">
+                  <form onSubmit={handleSaveAccount} className="p-6 space-y-3">
                     {accountError && (
                       <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-xs flex items-center gap-2">
                         <AlertCircle size={16} />
@@ -2208,68 +2312,92 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Nome do Cliente / Empresa</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Silva Chamo Lda"
-                        value={newAccountName}
-                        onChange={(e) => setNewAccountName(e.target.value)}
-                        className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">E-mail de Acesso</label>
-                      <input
-                        type="email"
-                        placeholder="Ex: cliente@provisual.com"
-                        value={newAccountEmail}
-                        onChange={(e) => setNewAccountEmail(e.target.value)}
-                        className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Senha de Acesso</label>
-                      <div className="flex gap-2">
+                    <div className="flex gap-2 items-stretch">
+                      {/* Lado Esquerdo: Nome do Responsável e Nome da Empresa (80% da largura, empilhados com gap-2) */}
+                      <div className="flex-1 flex flex-col gap-2 justify-center">
                         <input
                           type="text"
-                          placeholder="Mínimo 6 caracteres"
-                          value={newAccountPassword}
-                          onChange={(e) => setNewAccountPassword(e.target.value)}
-                          className="block flex-1 px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50 font-mono"
+                          placeholder="Nome do responsável"
+                          value={newAccountResponsible}
+                          onChange={(e) => setNewAccountResponsible(e.target.value)}
+                          className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
                           required
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            // Gerar nova senha numérica
-                            const randomPass = Math.floor(100000 + Math.random() * 900000).toString();
-                            setNewAccountPassword(randomPass);
-                          }}
-                          className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold transition-all cursor-pointer border border-gray-200 shrink-0"
-                        >
-                          Gerar
-                        </button>
+                        <input
+                          type="text"
+                          placeholder="Nome da empresa"
+                          value={newAccountName}
+                          onChange={(e) => setNewAccountName(e.target.value)}
+                          className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                          required
+                        />
+                      </div>
+                      
+                      {/* Lado Direito: Caixa de Upload da Foto/Logo (20% da largura, cobrindo a altura dos dois campos) */}
+                      <div className="w-[88px] shrink-0">
+                        <label className="relative block w-[88px] h-[88px] border-2 border-dashed border-gray-200 hover:border-[#a21b7e] rounded-lg cursor-pointer overflow-hidden transition-all bg-gray-50 group">
+                          {newAccountLogo ? (
+                            <>
+                              <img src={newAccountLogo} alt="Logo" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition-all">
+                                Alterar
+                              </div>
+                            </>
+                          ) : (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-[#a21b7e] transition-all">
+                              <Upload size={18} />
+                              <span className="text-[10px] font-bold mt-1">Logo</span>
+                            </div>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            className="hidden"
+                          />
+                        </label>
                       </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Perfil de Acesso</label>
-                      <select
-                        value={newAccountRole}
-                        onChange={(e) => setNewAccountRole(e.target.value as any)}
-                        className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                    <input
+                      type="email"
+                      placeholder="Email de acesso"
+                      value={newAccountEmail}
+                      onChange={(e) => setNewAccountEmail(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                      required
+                    />
+
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Senha de Acesso (Ex: @P#s$9w!K%)"
+                        value={newAccountPassword}
+                        onChange={(e) => setNewAccountPassword(e.target.value)}
+                        className="block flex-1 px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50 font-mono"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewAccountPassword(generateStrongPassword());
+                        }}
+                        className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold transition-all cursor-pointer border border-gray-200 shrink-0"
                       >
-                        <option value="cliente">Cliente (Acesso de visualização de arquivos)</option>
-                        <option value="admin">Administrador (Gestão completa do portal)</option>
-                      </select>
+                        Gerar Senha
+                      </button>
                     </div>
 
-                    <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
+                    <select
+                      value={newAccountRole}
+                      onChange={(e) => setNewAccountRole(e.target.value as any)}
+                      className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                    >
+                      <option value="cliente">Cliente (Acesso de visualização de arquivos)</option>
+                      <option value="admin">Administrador (Gestão completa do portal)</option>
+                    </select>
+
+                    <div className="flex gap-2 pt-4 border-t border-gray-200">
                       <button
                         type="button"
                         onClick={handleCloseAccountModal}
@@ -3722,22 +3850,36 @@ export default function Dashboard() {
 
                 <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2">Selecione o Cliente</label>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                  {accounts.filter(a => a.role === 'cliente').map(client => (
-                    <button
-                      key={client.uid}
-                      onClick={() => setSelectedClientId(client.uid)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedClientId === client.uid ? 'border-[#a21b7e] bg-[#a21b7e]/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
-                    >
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#a21b7e] to-[#d14faa] flex items-center justify-center text-white text-xs font-bold shrink-0">
-                        {(client.displayName || client.email)?.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-700">{client.displayName || 'Cliente'}</p>
-                        <p className="text-xs text-gray-400">{client.email}</p>
-                      </div>
-                      {selectedClientId === client.uid && <CheckCircle2 size={16} className="text-[#a21b7e] ml-auto shrink-0" />}
-                    </button>
-                  ))}
+                  {accounts.filter(a => a.role === 'cliente').map(client => {
+                    const rawName = client.displayName || "";
+                    const parsed = rawName.includes('|') 
+                      ? { name: rawName.split('|')[0], logo: rawName.split('|')[1] } 
+                      : { name: rawName, logo: "" };
+
+                    return (
+                      <button
+                        key={client.id}
+                        type="button"
+                        onClick={() => setSelectedClientId(client.id)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedClientId === client.id ? 'border-[#a21b7e] bg-[#a21b7e]/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
+                      >
+                        <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
+                          {parsed.logo ? (
+                            <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain" />
+                          ) : (
+                            <span className="text-[10px] font-black text-[#a21b7e] uppercase">
+                              {parsed.name ? parsed.name.charAt(0) : "C"}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-gray-700 font-sans">{parsed.name || 'Cliente'}</p>
+                          <p className="text-xs text-gray-400 font-sans">{client.email}</p>
+                        </div>
+                        {selectedClientId === client.id && <CheckCircle2 size={16} className="text-[#a21b7e] ml-auto shrink-0" />}
+                      </button>
+                    );
+                  })}
                   {accounts.filter(a => a.role === 'cliente').length === 0 && (
                     <div className="p-4 text-center border border-dashed border-gray-200 rounded-xl bg-gray-50 text-gray-500 text-sm">
                       Nenhum cliente cadastrado. Adicione um na aba "Gestão de Clientes".
