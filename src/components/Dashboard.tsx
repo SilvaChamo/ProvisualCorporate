@@ -534,7 +534,7 @@ export default function Dashboard() {
   };
 
   const isDataLoading = !foldersLoaded || !assetsLoaded;
-  const showSkeleton = isDataLoading && !isActionReloading;
+  const showSkeleton = false;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const uploadMenuRef = useRef<HTMLDivElement>(null);
@@ -816,7 +816,7 @@ export default function Dashboard() {
         formData.append("folderId", fileFolderId);
 
         try {
-          const response = await fetch('/api/drive/upload', {
+          const response = await fetch(`${process.env.VITE_API_BASE || 'http://localhost:3333'}/api/drive/upload`, {
             method: 'POST',
             body: formData
           });
@@ -870,7 +870,7 @@ export default function Dashboard() {
       setIsUploading(false);
       setUploadProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      window.location.reload();
+      // Removido window.location.reload() para permitir que os uploads continuem sem travar/recarregar a tela!
     }
   };
 
@@ -1071,6 +1071,33 @@ export default function Dashboard() {
             }
           } else {
             await addDoc(collection(db, "assets"), assetData);
+          }
+        }
+      }
+
+      // 1. Identificar arquivos no Firebase para esta pasta que foram apagados ou movidos do Drive
+      const currentDbAssets = assets.filter(a => a.folderId === (folderId === 'root' ? null : folderId));
+      const driveFileIds = driveFiles.map((f: any) => f.id);
+      for (const dbAsset of currentDbAssets) {
+        if (dbAsset.driveId && !driveFileIds.includes(dbAsset.driveId)) {
+          try {
+            await deleteDoc(doc(db, "assets", dbAsset.id));
+            console.log(`[Limpeza Sincronizada] Removido arquivo fantasma no Firestore: ${dbAsset.name}`);
+          } catch (err) {
+            console.warn("Erro ao limpar arquivo fantasma no Firestore:", err);
+          }
+        }
+      }
+
+      // 2. Identificar subpastas no Firebase para esta pasta que foram apagadas ou movidas do Drive
+      const currentDbFolders = folders.filter(f => f.parentId === (folderId === 'root' ? null : folderId));
+      for (const dbFolder of currentDbFolders) {
+        if (dbFolder.id && !driveFileIds.includes(dbFolder.id) && (dbFolder as any).ownerId === 'google-drive') {
+          try {
+            await deleteDoc(doc(db, "folders", dbFolder.id));
+            console.log(`[Limpeza Sincronizada] Removido pasta fantasma no Firestore: ${dbFolder.name}`);
+          } catch (err) {
+            console.warn("Erro ao limpar pasta fantasma no Firestore:", err);
           }
         }
       }
@@ -1333,18 +1360,11 @@ export default function Dashboard() {
       return result;
     }
     
-    // Para Meu Drive e Gestão de Clientes na raiz, exibir APENAS pastas (ou seja, retornar zero arquivos soltos)
-    if ((activeTab === 'all' || activeTab === 'google_drive') && !selectedFolderId) {
-      return [];
-    }
-    
+    // Para Meu Drive e Gestão de Clientes na raiz, exibir arquivos normalmente
+    // Removemos o filtro estrito que ocultava os arquivos carregados na raiz
+
     // Para todas as outras abas/views, remover itens que estão no lixo
     result = result.filter(a => !a.trashed && a.folderId !== 'trash');
-
-    // Não exibir imagens nas abas 'google_drive' e 'all' na raiz (apenas quando não houver pasta selecionada)
-    if ((activeTab === 'google_drive' || activeTab === 'all') && !selectedFolderId) {
-      result = result.filter(a => a.type !== 'image');
-    }
 
     if (selectedFolderId) {
       // Se for uma pasta do Google Drive, o ID dela no Firestore será o ID do Google
@@ -1525,6 +1545,7 @@ export default function Dashboard() {
       setSelectedFolderId(null);
       setActiveTab('all');
       setDriveFilterType(null);
+      handleGoogleSync('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG', undefined, true);
     } else if (item.type === 'drive_root') {
       handleGoogleSync(undefined, undefined, true);
     } else if (item.type === 'folder') {
@@ -1563,7 +1584,7 @@ export default function Dashboard() {
               icon={<Database size={20} />}
               label={userProfile?.role === 'cliente' ? 'Meu Arquivo' : 'Dados do Cliente'}
               active={activeTab === 'all'}
-              onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
+              onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); handleGoogleSync('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG', undefined, true); }}
             />
             <SidebarItem
               icon={<ImageIcon size={20} />}
@@ -1932,8 +1953,8 @@ export default function Dashboard() {
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
+                              const folderId = selectedFolderId || (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : (arquivoFolderId || 'root'));
                               setIsDriveDropdownOpen(false);
-                              const folderId = selectedFolderId || (arquivoFolderId || 'root');
                               setIsSyncing(true);
                               try {
                                 await handleGoogleSync(folderId, undefined, false);
@@ -2239,8 +2260,14 @@ export default function Dashboard() {
             });
           }}
         >
-          {showSkeleton ? (
-            <SkeletonView viewMode={viewMode} activeTab={activeTab} />
+          {isDataLoading && !isActionReloading ? (
+            <div className="h-full w-full flex flex-col items-center justify-center bg-gray-50 min-h-[400px] animate-in fade-in duration-300">
+              <div className="relative w-12 h-12 flex items-center justify-center">
+                <div className="absolute inset-0 border-4 border-gray-200 rounded-full" />
+                <div className="absolute inset-0 border-4 border-[#a21b7e] border-t-transparent rounded-full animate-spin" />
+              </div>
+              <p className="text-xs font-semibold text-gray-500 mt-4 tracking-wide uppercase">Carregando...</p>
+            </div>
           ) : filteredAssets.length === 0 && filteredFolders.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center p-20 text-center">
               <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
@@ -3161,12 +3188,12 @@ export default function Dashboard() {
           )}
         </div>)}
 
-        {/* Upload Progress Overlay (Fixed Bottom Right) - Google Drive style (Layout Claro) */}
+        {/* Upload Progress Overlay (Fixed Bottom Left) - Google Drive style (Layout Claro) */}
         {showUploadQueueCard && uploadQueue.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-8 right-8 bg-white border border-gray-200/80 shadow-[0_0_3px_rgba(0,0,0,0.08)] rounded-[10px] min-w-[280px] max-w-[384px] w-auto z-[100] text-gray-700 overflow-hidden font-sans"
+            className="fixed bottom-8 left-8 bg-white border border-gray-200/80 shadow-[0_0_3px_rgba(0,0,0,0.08)] rounded-[10px] min-w-[280px] max-w-[384px] w-auto z-[100] text-gray-700 overflow-hidden font-sans"
           >
             <div className="flex items-center justify-between gap-8 px-4 py-3 bg-gray-50 border-b border-gray-100 text-gray-800">
               <span className="font-bold text-xs uppercase tracking-wider shrink-0">
