@@ -1,21 +1,24 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
+import ClientDashboard from "./components/ClientDashboard";
 import { useState, useEffect } from "react";
 import { auth } from "./lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
 export default function App() {
   const [user, setUser] = useState<any | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Verifica primeiro se há um login local de emergência no localStorage
+    // 1. Check for local login (corporate accounts managed in the admin panel)
     const localUserJson = localStorage.getItem("provisual_local_admin");
     if (localUserJson) {
       try {
         const localUser = JSON.parse(localUserJson);
         setUser(localUser);
+        setUserRole(localUser.role || "cliente");
         setLoading(false);
         return;
       } catch (e) {
@@ -23,9 +26,11 @@ export default function App() {
       }
     }
 
-    // 2. Se não houver, escuta o Firebase Auth
+    // 2. Otherwise listen to Firebase Auth
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      // Firebase Auth users are always admins (registered via sign-up form)
+      setUserRole(currentUser ? "admin" : null);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -39,19 +44,49 @@ export default function App() {
     );
   }
 
+  // Determine which dashboard to show based on role
+  const isAdmin = userRole === "admin";
+  const DashboardComponent = isAdmin ? Dashboard : ClientDashboard;
+  const dashboardPath = isAdmin ? "/dashboard/*" : "/cliente/*";
+
   return (
     <Router>
       <div className="min-h-screen bg-slate-50">
         <Routes>
-          <Route 
-            path="/login" 
-            element={user ? <Navigate to="/dashboard" replace /> : <Login />} 
+          <Route
+            path="/login"
+            element={user ? <Navigate to={isAdmin ? "/dashboard" : "/cliente"} replace /> : <Login />}
           />
-          <Route 
-            path="/dashboard/*" 
-            element={user ? <Dashboard /> : <Navigate to="/login" replace />} 
+          <Route
+            path="/dashboard/*"
+            element={
+              user
+                ? isAdmin
+                  ? <Dashboard />
+                  : <Navigate to="/cliente" replace />
+                : <Navigate to="/login" replace />
+            }
           />
-          <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+          <Route
+            path="/cliente/*"
+            element={
+              user
+                ? !isAdmin
+                  ? <ClientDashboard />
+                  : <Navigate to="/dashboard" replace />
+                : <Navigate to="/login" replace />
+            }
+          />
+          <Route
+            path="/"
+            element={
+              user
+                ? <Navigate to={isAdmin ? "/dashboard" : "/cliente"} replace />
+                : <Navigate to="/login" replace />
+            }
+          />
+          {/* Super admin bypass: silva.chamo@gmail.com always goes to /dashboard */}
+          <Route path="*" element={<Navigate to={user ? (isAdmin ? "/dashboard" : "/cliente") : "/login"} replace />} />
         </Routes>
       </div>
     </Router>

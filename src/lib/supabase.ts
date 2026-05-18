@@ -35,6 +35,29 @@ function mapToSnakeCase(table: string, data: any): any {
     result[newKey] = val;
   });
 
+  // Strip columns that don't exist on specific tables to avoid schema cache errors
+  if (table === 'user_profiles') {
+    delete result.admin_token;
+    delete result.capture_date;
+    delete result.upload_date;
+    delete result.folder_id;
+    delete result.drive_id;
+    delete result.thumbnail_url;
+    delete result.owner_id;
+    delete result.versions;
+    delete result.trashed;
+    delete result.starred;
+  }
+  if (table === 'folders') {
+    delete result.admin_token;
+    delete result.capture_date;
+    delete result.upload_date;
+    delete result.drive_id;
+    delete result.thumbnail_url;
+    delete result.versions;
+    delete result.client_id;
+  }
+
   return result;
 }
 
