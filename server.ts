@@ -5,6 +5,8 @@ import multer from "multer";
 import fs from "fs";
 import { Readable } from "stream";
 import { google } from "googleapis";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 
 async function startServer() {
   // Ajudar o servidor compilado a encontrar os módulos
@@ -21,6 +23,17 @@ async function startServer() {
 
   // Body parser
   app.use(express.json());
+
+  // Inicializar Firebase Firestore para sincronização resiliente de tokens do Google Drive (Vercel Resiliência)
+  let db: any = null;
+  try {
+    const firebaseConfig = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf-8"));
+    const firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    console.log("Firebase initialized in server.ts");
+  } catch (err) {
+    console.error("Error initializing Firebase in server.ts:", err);
+  }
 
   // API routes
   app.get("/api/health", (req, res) => {
@@ -43,30 +56,63 @@ async function startServer() {
       // Ignorar erro
     }
 
-    // Se tivermos as credenciais OAuth do Silva e o token salvo
-    if (oauthKeys && oauthKeys.client_id && oauthKeys.client_secret && fs.existsSync("./google-tokens.json")) {
+    // Se tivermos as credenciais OAuth do Silva
+    if (oauthKeys && oauthKeys.client_id && oauthKeys.client_secret) {
       try {
-        const tokens = JSON.parse(fs.readFileSync("./google-tokens.json", "utf-8"));
-        const oauth2Client = new google.auth.OAuth2(
-          oauthKeys.client_id,
-          oauthKeys.client_secret,
-          "http://localhost:3333/api/drive/auth/callback"
-        );
-        oauth2Client.setCredentials(tokens);
+        let tokens: any = null;
         
-        // Listener para atualizar tokens automaticamente se expirarem
-        oauth2Client.on('tokens', (newTokens: any) => {
+        // Se existir localmente no disco, carrega do disco
+        if (fs.existsSync("./google-tokens.json")) {
+          tokens = JSON.parse(fs.readFileSync("./google-tokens.json", "utf-8"));
+        } else if (db) {
+          // Caso contrário, tenta recuperar do Firestore (essencial para persistência na Vercel)
           try {
-            const currentTokens = JSON.parse(fs.readFileSync("./google-tokens.json", "utf-8"));
-            const mergedTokens = { ...currentTokens, ...newTokens };
-            fs.writeFileSync("./google-tokens.json", JSON.stringify(mergedTokens, null, 2));
-            console.log("Tokens pessoais do Google Drive atualizados e salvos com sucesso.");
-          } catch (e) {
-            console.error("Erro ao salvar tokens atualizados:", e);
+            const docRef = doc(db, "settings", "google_drive_tokens");
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              tokens = docSnap.data();
+              // Salva localmente em cache temporário de arquivo
+              fs.writeFileSync("./google-tokens.json", JSON.stringify(tokens, null, 2));
+              console.log("Tokens do Google Drive recuperados com absoluto sucesso do Firestore.");
+            }
+          } catch (dbErr) {
+            console.warn("Erro ao buscar tokens do Firestore:", dbErr);
           }
-        });
+        }
 
-        return { auth: oauth2Client, type: "oauth2" };
+        if (tokens) {
+          const oauth2Client = new google.auth.OAuth2(
+            oauthKeys.client_id,
+            oauthKeys.client_secret,
+            "http://localhost:3333/api/drive/auth/callback"
+          );
+          oauth2Client.setCredentials(tokens);
+          
+          // Listener para atualizar tokens automaticamente se expirarem
+          oauth2Client.on('tokens', async (newTokens: any) => {
+            try {
+              let currentTokens = {};
+              if (fs.existsSync("./google-tokens.json")) {
+                currentTokens = JSON.parse(fs.readFileSync("./google-tokens.json", "utf-8"));
+              }
+              const mergedTokens = { ...currentTokens, ...newTokens };
+              fs.writeFileSync("./google-tokens.json", JSON.stringify(mergedTokens, null, 2));
+              
+              if (db) {
+                try {
+                  await setDoc(doc(db, "settings", "google_drive_tokens"), mergedTokens);
+                } catch (dbErr) {
+                  console.error("Erro ao atualizar tokens no Firestore:", dbErr);
+                }
+              }
+              console.log("Tokens pessoais do Google Drive atualizados e salvos com sucesso localmente e no Firestore.");
+            } catch (e) {
+              console.error("Erro ao salvar tokens atualizados:", e);
+            }
+          });
+
+          return { auth: oauth2Client, type: "oauth2" };
+        }
       } catch (err) {
         console.warn("Erro ao configurar cliente OAuth2 pessoal, fazendo fallback para Conta de Serviço:", err);
       }
@@ -427,6 +473,16 @@ async function startServer() {
       const { tokens } = await oauth2Client.getToken(code as string);
       fs.writeFileSync("./google-tokens.json", JSON.stringify(tokens, null, 2));
 
+      // Persistir também no Firestore para resiliência na Vercel
+      if (db) {
+        try {
+          await setDoc(doc(db, "settings", "google_drive_tokens"), tokens);
+          console.log("Tokens de acesso persistidos com sucesso no Firestore.");
+        } catch (dbErr) {
+          console.error("Erro ao salvar tokens no Firestore:", dbErr);
+        }
+      }
+
       res.send(`
         <html>
           <head>
@@ -463,6 +519,16 @@ async function startServer() {
       const fs = await import("fs");
       if (fs.existsSync("./google-tokens.json")) {
         fs.unlinkSync("./google-tokens.json");
+      }
+
+      // Remover também do Firestore para manter sincronização
+      if (db) {
+        try {
+          await deleteDoc(doc(db, "settings", "google_drive_tokens"));
+          console.log("Tokens removidos com sucesso do Firestore.");
+        } catch (dbErr) {
+          console.error("Erro ao deletar tokens do Firestore:", dbErr);
+        }
       }
       res.json({ success: true, message: "Google Drive desconectado com sucesso." });
     } catch (error: any) {
