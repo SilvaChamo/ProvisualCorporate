@@ -120,13 +120,17 @@ interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
 }
 
 function SafeImage({ thumbnailUrl, driveId, fallbackSize = 'w500', alt, className, ...props }: SafeImageProps) {
-  const initialUrl = thumbnailUrl || (driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=${fallbackSize}` : '');
+  const initialUrl = driveId 
+    ? `/api/drive/thumbnail?id=${driveId}` 
+    : (thumbnailUrl || '');
   const [src, setSrc] = useState(initialUrl);
   const [hasFailedOnce, setHasFailedOnce] = useState(false);
   const [hasFailedAlt, setHasFailedAlt] = useState(false);
 
   useEffect(() => {
-    const newUrl = thumbnailUrl || (driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=${fallbackSize}` : '');
+    const newUrl = driveId 
+      ? `/api/drive/thumbnail?id=${driveId}` 
+      : (thumbnailUrl || '');
     setSrc(newUrl);
     setHasFailedOnce(false);
     setHasFailedAlt(false);

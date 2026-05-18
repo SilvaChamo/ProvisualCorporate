@@ -370,6 +370,54 @@ async function startServer() {
     }
   });
 
+  // Obter e fazer proxy do thumbnail com autenticação ativa do Google Drive
+  app.get("/api/drive/thumbnail", async (req, res) => {
+    const { id } = req.query;
+    if (!id) return res.status(400).send("ID do arquivo é obrigatório");
+
+    try {
+      const { auth } = await getGoogleAuth();
+      const drive = google.drive({ version: 'v3', auth });
+
+      // Buscar o link do thumbnail do arquivo
+      const fileResponse = await drive.files.get({
+        fileId: id as string,
+        fields: 'thumbnailLink, mimeType',
+        supportsAllDrives: true
+      });
+
+      const thumbnailLink = fileResponse.data.thumbnailLink;
+      if (!thumbnailLink) {
+        return res.status(404).send("Thumbnail não disponível");
+      }
+
+      // Ajusta o tamanho do thumbnail para ser de altíssima qualidade (s800)
+      const sizeLink = thumbnailLink.replace(/=s\d+/, '=s800');
+
+      // Faz download seguro usando o token de acesso da nossa autenticação
+      const tokenResponse = await auth.getAccessToken();
+      const imageResponse = await fetch(sizeLink, {
+        headers: {
+          Authorization: `Bearer ${tokenResponse.token}`
+        }
+      });
+
+      if (!imageResponse.ok) {
+        throw new Error(`Erro ao baixar thumbnail: ${imageResponse.statusText}`);
+      }
+
+      const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=86400"); // Cache de 1 dia
+
+      const buffer = Buffer.from(await imageResponse.arrayBuffer());
+      res.send(buffer);
+    } catch (error: any) {
+      console.error("Erro ao obter thumbnail do Drive:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
   // Excluir arquivo permanentemente do Google Drive
   app.post("/api/drive/delete", async (req, res) => {
     const { fileId } = req.body;
