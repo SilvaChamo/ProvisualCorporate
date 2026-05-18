@@ -365,8 +365,12 @@ export default function Dashboard() {
   const [folders, setFolders] = useState<FolderData[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'image' | 'video' | 'document' | 'other' | 'google_drive' | 'contas_acesso'>('all');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
+    return sessionStorage.getItem('prov_selected_folder_id') || null;
+  });
+  const [activeTab, setActiveTab] = useState<'all' | 'image' | 'video' | 'document' | 'other' | 'google_drive' | 'contas_acesso'>(() => {
+    return (sessionStorage.getItem('prov_active_tab') as any) || 'all';
+  });
   const [isClientsMenuOpen, setIsClientsMenuOpen] = useState(true);
   const [isClientsListOpen, setIsClientsListOpen] = useState(true);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
@@ -374,7 +378,9 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
-  const [driveFilterType, setDriveFilterType] = useState<string | null>(null);
+  const [driveFilterType, setDriveFilterType] = useState<string | null>(() => {
+    return sessionStorage.getItem('prov_drive_filter_type') || null;
+  });
   const [storageQuota, setStorageQuota] = useState<{ limit: string; usage: string } | null>(null);
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
   const [activeFolderSubmenu, setActiveFolderSubmenu] = useState<'none' | 'partilhar' | 'organizar'>('none');
@@ -442,6 +448,30 @@ export default function Dashboard() {
   const [visibleImagesCount, setVisibleImagesCount] = useState(10);
   const [foldersLoaded, setFoldersLoaded] = useState(false);
   const [assetsLoaded, setAssetsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (activeTab) {
+      sessionStorage.setItem('prov_active_tab', activeTab);
+    } else {
+      sessionStorage.removeItem('prov_active_tab');
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (selectedFolderId) {
+      sessionStorage.setItem('prov_selected_folder_id', selectedFolderId);
+    } else {
+      sessionStorage.removeItem('prov_selected_folder_id');
+    }
+  }, [selectedFolderId]);
+
+  useEffect(() => {
+    if (driveFilterType) {
+      sessionStorage.setItem('prov_drive_filter_type', driveFilterType);
+    } else {
+      sessionStorage.removeItem('prov_drive_filter_type');
+    }
+  }, [driveFilterType]);
 
   // Lógica premium para evitar skeleton em ações internas (sincronizada com sessionStorage)
   const [isProcessingAction, setIsProcessingAction] = useState(false);
@@ -534,6 +564,10 @@ export default function Dashboard() {
   };
 
   const isDataLoading = !foldersLoaded || !assetsLoaded;
+  const handleActionSuccess = () => {
+    setIsProcessingAction(false);
+    sessionStorage.removeItem('action_in_progress');
+  };
   const showSkeleton = false;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -566,7 +600,8 @@ export default function Dashboard() {
         color: "#e2b13c",
         adminToken: "Silva_Chamo_Master_Admin_2026"
       });
-      window.location.reload();
+      setIsProcessingAction(false);
+      sessionStorage.removeItem('action_in_progress');
     } catch (error) {
       console.error("Erro ao criar pasta:", error);
       setIsProcessingAction(false);
@@ -913,7 +948,6 @@ export default function Dashboard() {
       }
       
       setSelectedAssetIds([]);
-      window.location.reload();
     } catch (err: any) {
       console.error(err);
       alert("Erro ao mover itens em massa: " + err.message);
@@ -955,7 +989,6 @@ export default function Dashboard() {
       }
 
       setSelectedAssetIds([]);
-      window.location.reload();
     } catch (err: any) {
       console.error(err);
       alert("Erro ao eliminar itens em massa: " + err.message);
@@ -974,12 +1007,13 @@ export default function Dashboard() {
     
     // Se a aba ativa for 'all' (Dados do Cliente), mantemos a aba ativa como 'all' para consistência de navegação.
     // Caso contrário, alteramos para a aba 'google_drive'.
-    if (activeTab !== 'all' && activeTab !== 'contas_acesso') {
-      setActiveTab('google_drive');
-      setDriveFilterType(filterType || null);
+    if (!isBackground) {
+      if (activeTab !== 'all' && activeTab !== 'contas_acesso') {
+        setActiveTab('google_drive');
+        setDriveFilterType(filterType || null);
+      }
+      setSelectedFolderId(folderId === 'root' ? null : folderId);
     }
-    
-    setSelectedFolderId(folderId === 'root' ? null : folderId);
     
     if (!isBackground) {
       setIsUploading(true);
@@ -1382,6 +1416,8 @@ export default function Dashboard() {
           (a.folderId === arquivoFolderId || (!a.folderId && !arquivoFolderId))
         );
       }
+    } else if (activeTab === 'all') {
+      result = result.filter(a => a.folderId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
     } else if (activeTab !== 'all') {
       result = result.filter(a => a.type === activeTab);
     }
@@ -2260,7 +2296,7 @@ export default function Dashboard() {
             });
           }}
         >
-          {isDataLoading && !isActionReloading ? (
+          {!foldersLoaded || !assetsLoaded ? (
             <div className="h-full w-full flex flex-col items-center justify-center bg-gray-50 min-h-[400px] animate-in fade-in duration-300">
               <div className="relative w-12 h-12 flex items-center justify-center">
                 <div className="absolute inset-0 border-4 border-gray-200 rounded-full" />
@@ -2431,7 +2467,8 @@ export default function Dashboard() {
                                                     }
                                                     await updateDoc(doc(db, "folders", folder.id), { parentId: null });
                                                     alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
-                                                    window.location.reload();
+                                                    setIsProcessingAction(false);
+                                                    sessionStorage.removeItem('action_in_progress');
                                                   } catch (err: any) {
                                                     alert("Erro ao mover pasta: " + err.message);
                                                     setIsProcessingAction(false);
@@ -2474,7 +2511,8 @@ export default function Dashboard() {
                                                     }
                                                     await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
                                                     alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
-                                                    window.location.reload();
+                                                    setIsProcessingAction(false);
+                                                    sessionStorage.removeItem('action_in_progress');
                                                   } catch (err: any) {
                                                     alert("Erro ao mover pasta: " + err.message);
                                                     setIsProcessingAction(false);
@@ -2544,7 +2582,7 @@ export default function Dashboard() {
                                                 }
                                               }
                                               await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
-                                              window.location.reload();
+                                              handleActionSuccess();
                                             } catch (err: any) {
                                               alert("Erro ao renomear pasta: " + err.message);
                                               setIsProcessingAction(false);
@@ -2606,7 +2644,7 @@ export default function Dashboard() {
                                                 e.stopPropagation();
                                                 try {
                                                   await updateDoc(doc(db, "folders", folder.id), { color });
-                                                  window.location.reload();
+                                                  handleActionSuccess();
                                                 } catch (err) {
                                                   console.error("Erro ao mudar cor da pasta:", err);
                                                 }
@@ -2648,7 +2686,8 @@ export default function Dashboard() {
                                                 }
                                               }
                                               await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
-                                              window.location.reload();
+                                              setIsProcessingAction(false);
+                                              sessionStorage.removeItem('action_in_progress');
                                             } catch (err: any) {
                                               alert("Erro ao mover para o lixo: " + err.message);
                                               setIsProcessingAction(false);
@@ -2886,7 +2925,7 @@ export default function Dashboard() {
                                                 }
                                                 await updateDoc(doc(db, "folders", folder.id), { parentId: null });
                                                 alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
-                                                window.location.reload();
+                                                handleActionSuccess();
                                               } catch (err: any) {
                                                 alert("Erro ao mover pasta: " + err.message);
                                                 setIsProcessingAction(false);
@@ -2929,7 +2968,7 @@ export default function Dashboard() {
                                                 }
                                                 await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
                                                 alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
-                                                window.location.reload();
+                                                handleActionSuccess();
                                               } catch (err: any) {
                                                 alert("Erro ao mover pasta: " + err.message);
                                                 setIsProcessingAction(false);
@@ -2999,7 +3038,7 @@ export default function Dashboard() {
                                             }
                                           }
                                           await updateDoc(doc(db, "folders", folder.id), { name: newName.normalize('NFC') });
-                                          window.location.reload();
+                                          handleActionSuccess();
                                         } catch (err: any) {
                                           alert("Erro ao renomear pasta: " + err.message);
                                           setIsProcessingAction(false);
@@ -3061,7 +3100,7 @@ export default function Dashboard() {
                                             e.stopPropagation();
                                             try {
                                               await updateDoc(doc(db, "folders", folder.id), { color });
-                                              window.location.reload();
+                                              handleActionSuccess();
                                             } catch (err) {
                                               console.error("Erro ao mudar cor da pasta:", err);
                                             }
@@ -3103,7 +3142,7 @@ export default function Dashboard() {
                                             }
                                           }
                                           await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
-                                          window.location.reload();
+                                          handleActionSuccess();
                                         } catch (err: any) {
                                           alert("Erro ao mover para o lixo: " + err.message);
                                           setIsProcessingAction(false);
@@ -3584,27 +3623,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Loader Premium de Processamento de Tela Inteira para Ações Internas */}
-      {(isProcessingAction || isActionReloading) && (
-        <div className="fixed inset-0 bg-gray-900/75 z-[9999] flex flex-col items-center justify-center animate-in fade-in duration-300">
-          <div className="bg-white border border-gray-100 rounded-xl p-8 shadow-[0_10px_30px_rgba(0,0,0,0.08)] flex flex-col items-center gap-5 max-w-sm w-full mx-4">
-            {/* Spinner premium em degradê espiral */}
-            <div className="relative w-16 h-16 flex items-center justify-center">
-              <div className="absolute inset-0 border-4 border-gray-100 rounded-full" />
-              <div className="absolute inset-0 border-4 border-[#a21b7e] border-t-transparent rounded-full animate-spin" />
-            </div>
-            
-            <div className="text-center flex flex-col gap-1.5">
-              <h3 className="text-[14px] font-black text-gray-800 tracking-wide uppercase">
-                A processar...
-              </h3>
-              <p className="text-[11px] font-medium text-gray-500 max-w-xs leading-relaxed">
-                A atualizar as informações físicas no Google Drive e a sincronizar o seu banco de dados local.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Loader removido para carregamento instantâneo */}
     </div>
   );
 }
@@ -3696,6 +3715,7 @@ function AssetCard({
     try {
       onStartAction?.(true);
       await actionFn();
+      onStartAction?.(false);
     } catch (err: any) {
       onStartAction?.(false);
       console.error(err);
@@ -3879,7 +3899,7 @@ function AssetCard({
                             }
                             await updateDoc(doc(db, "assets", asset.id), { folderId: "" });
                             alert(`Ficheiro "${asset.name}" movido para a Raiz com sucesso!`);
-                            window.location.reload();
+                            /* window.location.reload() removed */
                           });
                         }}
                         className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -3914,7 +3934,7 @@ function AssetCard({
                             }
                             await updateDoc(doc(db, "assets", asset.id), { folderId: folder.id });
                             alert(`Ficheiro "${asset.name}" movido para a pasta "${folder.name}"!`);
-                            window.location.reload();
+                            /* window.location.reload() removed */
                           });
                         }}
                         className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -3975,7 +3995,7 @@ function AssetCard({
                           delete (newAsset as any).id;
                           await addDoc(collection(db, "assets"), newAsset);
                           alert(`Cópia do ficheiro criada na Raiz!`);
-                          window.location.reload();
+                          /* window.location.reload() removed */
                         });
                       }}
                       className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -4032,7 +4052,7 @@ function AssetCard({
                             delete (newAsset as any).id;
                             await addDoc(collection(db, "assets"), newAsset);
                             alert(`Cópia do ficheiro criada na pasta "${folder.name}"!`);
-                            window.location.reload();
+                            /* window.location.reload() removed */
                           });
                         }}
                         className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -4121,7 +4141,6 @@ function AssetCard({
 
                         // 2. Atualizar no Firestore
                         await updateDoc(doc(db, "assets", asset.id), { name: newName });
-                        window.location.reload();
                       });
                     } else {
                       setShowMenu(false);
@@ -4179,7 +4198,7 @@ function AssetCard({
                       };
                       delete (newAsset as any).id;
                       await addDoc(collection(db, "assets"), newAsset);
-                      window.location.reload();
+                      /* window.location.reload() removed */
                     });
                   }}
                   className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -4276,7 +4295,7 @@ function AssetCard({
 
                         // 2. Atualizar no Firestore
                         await updateDoc(doc(db, "assets", asset.id), { folderId: "trash", trashed: true });
-                        window.location.reload();
+                        /* window.location.reload() removed */
                       });
                     } else {
                       setShowMenu(false);
@@ -4297,7 +4316,7 @@ function AssetCard({
       </div>
 
       <div className="w-full h-full flex items-center justify-center bg-gray-50">
-        {(asset.thumbnailUrl || asset.driveId) ? (
+        {((asset.type === 'image' || asset.type === 'video') && (asset.thumbnailUrl || asset.driveId)) ? (
           <SafeImage
             thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s500') : undefined}
             driveId={asset.driveId}
@@ -4357,6 +4376,7 @@ function AssetRow({
     try {
       onStartAction?.(true);
       await actionFn();
+      onStartAction?.(false);
     } catch (err: any) {
       onStartAction?.(false);
       console.error(err);
@@ -4397,7 +4417,7 @@ function AssetRow({
           <Check size={12} className="stroke-[3]" />
         </div>
 
-        {(asset.thumbnailUrl || asset.driveId) && asset.type !== 'folder' ? (
+        {((asset.type === 'image' || asset.type === 'video') && (asset.thumbnailUrl || asset.driveId)) ? (
           <div className="w-8 h-8 overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-100 rounded-none">
             <SafeImage
               thumbnailUrl={asset.thumbnailUrl}
@@ -4560,7 +4580,7 @@ function AssetRow({
                               }
                               await updateDoc(doc(db, "assets", asset.id), { folderId: "" });
                               alert(`Ficheiro "${asset.name}" movido para a Raiz com sucesso!`);
-                              window.location.reload();
+                              /* window.location.reload() removed */
                             });
                           }}
                           className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -4595,7 +4615,7 @@ function AssetRow({
                               }
                               await updateDoc(doc(db, "assets", asset.id), { folderId: folder.id });
                               alert(`Ficheiro "${asset.name}" movido para a pasta "${folder.name}"!`);
-                              window.location.reload();
+                              /* window.location.reload() removed */
                             });
                           }}
                           className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -4656,7 +4676,7 @@ function AssetRow({
                             delete (newAsset as any).id;
                             await addDoc(collection(db, "assets"), newAsset);
                             alert(`Cópia do ficheiro criada na Raiz!`);
-                            window.location.reload();
+                            /* window.location.reload() removed */
                           });
                         }}
                         className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -4713,7 +4733,7 @@ function AssetRow({
                               delete (newAsset as any).id;
                               await addDoc(collection(db, "assets"), newAsset);
                               alert(`Cópia do ficheiro criada na pasta "${folder.name}"!`);
-                              window.location.reload();
+                              /* window.location.reload() removed */
                             });
                           }}
                           className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -4802,7 +4822,6 @@ function AssetRow({
 
                           // 2. Atualizar no Firestore
                           await updateDoc(doc(db, "assets", asset.id), { name: newName });
-                          window.location.reload();
                         });
                       } else {
                         setShowMenu(false);
@@ -4860,7 +4879,7 @@ function AssetRow({
                         };
                         delete (newAsset as any).id;
                         await addDoc(collection(db, "assets"), newAsset);
-                        window.location.reload();
+                        /* window.location.reload() removed */
                       });
                     }}
                     className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -4957,7 +4976,7 @@ function AssetRow({
 
                           // 2. Atualizar no Firestore
                           await updateDoc(doc(db, "assets", asset.id), { folderId: "trash", trashed: true });
-                          window.location.reload();
+                          /* window.location.reload() removed */
                         });
                       } else {
                         setShowMenu(false);
