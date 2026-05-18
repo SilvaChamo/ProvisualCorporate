@@ -54,11 +54,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, handleFirestoreError, OperationType } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { auth, storage } from "../lib/firebase";
-import { signOut } from "firebase/auth";
-import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc } from "../lib/supabase";
+import { supabase, collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc } from "../lib/supabase";
 const db = null;
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useRef } from "react";
 import logoHorizontal from "../Logo/logo_horizontal_clean.png";
 import logoJpg from "../Logo/logo_main_jpg.jpg";
@@ -368,6 +365,13 @@ interface UserProfile {
 
 export default function Dashboard() {
   const [folders, setFolders] = useState<FolderData[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUser(data.user);
+    });
+  }, []);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
@@ -606,7 +610,7 @@ export default function Dashboard() {
       await addDoc(collection(db, "folders"), {
         name: folderName,
         date: serverTimestamp(),
-        ownerId: auth.currentUser?.uid || "mock-admin",
+        ownerId: currentUser?.id || "mock-admin",
         parentId: selectedFolderId || (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : null),
         color: "#e2b13c",
         adminToken: "Silva_Chamo_Master_Admin_2026"
@@ -816,7 +820,7 @@ export default function Dashboard() {
   // Auth logout
   const handleLogout = async () => { 
     localStorage.removeItem("provisual_local_admin");
-    await signOut(auth); 
+    await supabase.auth.signOut(); 
     window.location.href = "/login";
   };
 
@@ -975,7 +979,7 @@ export default function Dashboard() {
               size: fileSize,
               url: driveFile.webViewLink
             }],
-            ...(userProfile?.role === 'cliente' && { clientId: auth.currentUser?.uid }),
+            ...(userProfile?.role === 'cliente' && { clientId: currentUser?.id }),
             adminToken: "Silva_Chamo_Master_Admin_2026"
           };
 
@@ -1093,7 +1097,7 @@ export default function Dashboard() {
 
   const handleGoogleSync = async (targetFolderId?: string, filterType?: string, isBackground = false) => {
     if (!assetsLoaded || !foldersLoaded) {
-      console.log("Aguardando carregamento de metadados do Firebase antes de sincronizar...");
+      console.log("Aguardando carregamento de metadados do Supabase antes de sincronizar...");
       return;
     }
     const folderId = targetFolderId || 'root';
@@ -1202,7 +1206,7 @@ export default function Dashboard() {
         }
       }
 
-      // 1. Identificar arquivos no Firebase para esta pasta que foram apagados ou movidos do Drive
+      // 1. Identificar arquivos no Supabase para esta pasta que foram apagados ou movidos do Drive
       const currentDbAssets = assets.filter(a => a.folderId === (folderId === 'root' ? null : folderId));
       const driveFileIds = driveFiles.map((f: any) => f.id);
       for (const dbAsset of currentDbAssets) {
@@ -1216,7 +1220,7 @@ export default function Dashboard() {
         }
       }
 
-      // 2. Identificar subpastas no Firebase para esta pasta que foram apagadas ou movidas do Drive
+      // 2. Identificar subpastas no Supabase para esta pasta que foram apagadas ou movidas do Drive
       const currentDbFolders = folders.filter(f => f.parentId === (folderId === 'root' ? null : folderId));
       for (const dbFolder of currentDbFolders) {
         if (dbFolder.id && !driveFileIds.includes(dbFolder.id) && (dbFolder as any).ownerId === 'google-drive') {
@@ -1246,7 +1250,7 @@ export default function Dashboard() {
   // Fetch User Role
   useEffect(() => {
     const localUserJson = localStorage.getItem("provisual_local_admin");
-    if (!auth.currentUser && localUserJson) {
+    if (!currentUser && localUserJson) {
       try {
         const localUser = JSON.parse(localUserJson);
         setUserProfile({
@@ -1260,7 +1264,7 @@ export default function Dashboard() {
       }
     }
 
-    if (!auth.currentUser) {
+    if (!currentUser) {
       setUserProfile({
         role: "admin",
         email: "admin@provisual.demo",
@@ -1269,14 +1273,14 @@ export default function Dashboard() {
       return;
     }
     const fetchProfile = async () => {
-      const userDoc = await getDoc(doc(db, "users", auth.currentUser!.uid));
+      const userDoc = await getDoc(doc(db, "users", currentUser!.id));
       if (userDoc.exists()) {
         setUserProfile(userDoc.data() as UserProfile);
       } else {
         setUserProfile({
           role: "admin",
-          email: auth.currentUser!.email || "admin@provisual.demo",
-          displayName: auth.currentUser!.displayName || "Silva Chamo"
+          email: currentUser!.email || "admin@provisual.demo",
+          displayName: currentUser!.user_metadata?.displayName || "Silva Chamo"
         });
       }
     };
@@ -1361,7 +1365,7 @@ export default function Dashboard() {
         f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
         f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
         (f as any).clientId === userProfile.clientId ||
-        (f as any).clientId === auth.currentUser?.uid
+        (f as any).clientId === currentUser?.id
       )
     );
 
@@ -1390,10 +1394,7 @@ export default function Dashboard() {
     }
   }, [userProfile?.role, selectedFolderId, folders]);
 
-  // Test Storage Connection
-  useEffect(() => {
-    console.log("Tentando conectar ao bucket:", storage.app.options.storageBucket);
-  }, []);
+
 
   useEffect(() => {
     const fetchStorage = async () => {
@@ -1470,9 +1471,9 @@ export default function Dashboard() {
     let result = assets;
     
     // Filtrar por clientId ou pasta permitida se for cliente (ver apenas seus próprios arquivos)
-    if (userProfile?.role === 'cliente' && auth.currentUser?.uid) {
+    if (userProfile?.role === 'cliente' && currentUser?.id) {
       result = result.filter(a => 
-        (a as any).clientId === auth.currentUser?.uid || 
+        (a as any).clientId === currentUser?.id || 
         ((a as any).clientId === userProfile.clientId) ||
         isFolderAllowedForClient(a.folderId)
       );
@@ -1555,7 +1556,7 @@ export default function Dashboard() {
               f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
               f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
               (f as any).clientId === userProfile.clientId ||
-              (f as any).clientId === auth.currentUser?.uid
+              (f as any).clientId === currentUser?.id
             )
           );
         } else {
@@ -3850,7 +3851,7 @@ export default function Dashboard() {
 
                 <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2">Selecione o Cliente</label>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                  {accounts.filter(a => a.role === 'cliente').map(client => {
+                  {accounts.filter(a => a.role !== 'admin').map(client => {
                     const rawName = client.displayName || "";
                     const parsed = rawName.includes('|') 
                       ? { name: rawName.split('|')[0], logo: rawName.split('|')[1] } 
@@ -3880,7 +3881,7 @@ export default function Dashboard() {
                       </button>
                     );
                   })}
-                  {accounts.filter(a => a.role === 'cliente').length === 0 && (
+                  {accounts.filter(a => a.role !== 'admin').length === 0 && (
                     <div className="p-4 text-center border border-dashed border-gray-200 rounded-xl bg-gray-50 text-gray-500 text-sm">
                       Nenhum cliente cadastrado. Adicione um na aba "Gestão de Clientes".
                     </div>
@@ -3900,14 +3901,12 @@ export default function Dashboard() {
                   onClick={async () => {
                     setIsDistributing(true);
                     try {
-                      const { supabase: sb } = await import('../lib/supabase');
-                      const table = itemToDistribute.type === 'folder' ? 'folders' : 'assets';
-                      const { error } = await sb.from(table).update({ client_id: selectedClientId }).eq('id', itemToDistribute.id);
-                      if (error) throw error;
-                      alert("Distribuído com sucesso!");
+                      const docRef = doc(db, itemToDistribute.type === 'folder' ? 'folders' : 'assets', itemToDistribute.id);
+                      await updateDoc(docRef, { clientId: selectedClientId });
+                      alert("Atribuído com sucesso!");
                       setDistributeModalOpen(false);
                     } catch (err: any) {
-                      alert("Erro ao distribuir: " + err.message);
+                      alert("Erro ao atribuir: " + err.message);
                     } finally {
                       setIsDistributing(false);
                     }
