@@ -71,9 +71,7 @@ export default function App() {
             path="/cliente/*"
             element={
               user
-                ? !isAdmin
-                  ? <ClientDashboard />
-                  : <Navigate to="/dashboard" replace />
+                ? <ClientDashboard />
                 : <Navigate to="/login" replace />
             }
           />

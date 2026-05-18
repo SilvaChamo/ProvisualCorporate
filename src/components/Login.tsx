@@ -89,7 +89,7 @@ export default function Login() {
               role: userData.role || "cliente"
             };
             localStorage.setItem("provisual_local_admin", JSON.stringify(simulatedUser));
-            window.location.href = "/dashboard";
+            window.location.href = simulatedUser.role === "admin" ? "/dashboard" : "/cliente";
             return;
           } else {
             setError("Senha de acesso incorreta para esta conta.");

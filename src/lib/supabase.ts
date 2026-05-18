@@ -23,6 +23,7 @@ function mapToSnakeCase(table: string, data: any): any {
     else if (key === 'thumbnailUrl') newKey = 'thumbnail_url';
     else if (key === 'displayName') newKey = 'display_name';
     else if (key === 'clientId') newKey = 'client_id';
+    else if (key === 'createdAt') newKey = 'created_at';
 
     // Handle firebase timestamps / javascript dates
     let val = data[key];
