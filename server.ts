@@ -459,6 +459,18 @@ async function startServer() {
     }
   });
 
+  app.post("/api/drive/auth/disconnect", async (req, res) => {
+    try {
+      const fs = await import("fs");
+      if (fs.existsSync("./google-tokens.json")) {
+        fs.unlinkSync("./google-tokens.json");
+      }
+      res.json({ success: true, message: "Google Drive desconectado com sucesso." });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

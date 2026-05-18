@@ -47,7 +47,8 @@ import {
   EyeOff,
   ShieldCheck,
   AlertCircle,
-  Database
+  Database,
+  Link
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -381,6 +382,7 @@ export default function Dashboard() {
   
   // Estado para conexão híbrida pessoal de Google Drive do Silva
   const [driveStatus, setDriveStatus] = useState<{connected: boolean; email: string; configNeeded: boolean} | null>(null);
+  const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
   
   // Estados para Gestão de Contas de Acesso dos Clientes
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -512,6 +514,22 @@ export default function Dashboard() {
       }
     } catch (err: any) {
       alert("Erro ao conectar: " + err.message);
+    }
+  };
+
+  const handleDisconnectDrive = async () => {
+    if (!confirm("Tem certeza que deseja desconectar o Google Drive? Esta ação desativará o upload direto para sua conta pessoal.")) return;
+    try {
+      const response = await fetch("/api/drive/auth/disconnect", { method: "POST" });
+      if (response.ok) {
+        alert("Google Drive desconectado com sucesso.");
+        window.location.reload();
+      } else {
+        const data = await response.json();
+        alert(data.error || "Erro ao desconectar.");
+      }
+    } catch (err: any) {
+      alert("Erro ao desconectar: " + err.message);
     }
   };
 
@@ -1177,6 +1195,47 @@ export default function Dashboard() {
     }
   }, [userProfile?.role, activeTab]);
 
+  // Helper para verificar se a pasta selecionada é permitida para o cliente ativo
+  const isFolderAllowedForClient = (folderId: string | null): boolean => {
+    if (!userProfile || userProfile.role !== 'cliente') return true; // Admins podem ver tudo
+    if (folderId === null) return true; // A raiz 'Meu Arquivo' é sempre acessível
+
+    // Achar todas as pastas raiz permitidas ao cliente
+    const allowedClientRootFolders = folders.filter(f => 
+      f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' && 
+      (
+        f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
+        f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
+        (f as any).clientId === userProfile.clientId ||
+        (f as any).clientId === auth.currentUser?.uid
+      )
+    );
+
+    const allowedIds = new Set(allowedClientRootFolders.map(f => f.id));
+
+    // Rastrear a hierarquia para cima até achar uma pasta autorizada
+    let currentId: string | null = folderId;
+    let depth = 0;
+    while (currentId && depth < 20) {
+      if (allowedIds.has(currentId)) return true;
+      const folder = folders.find(f => f.id === currentId);
+      currentId = folder ? folder.parentId : null;
+      depth++;
+    }
+
+    return false;
+  };
+
+  // Efeito de segurança para impedir acessos diretos não autorizados a pastas
+  useEffect(() => {
+    if (userProfile?.role === 'cliente' && selectedFolderId !== null && folders.length > 0) {
+      if (!isFolderAllowedForClient(selectedFolderId)) {
+        console.warn("Acesso negado à pasta e reset de segurança acionado:", selectedFolderId);
+        setSelectedFolderId(null);
+      }
+    }
+  }, [userProfile?.role, selectedFolderId, folders]);
+
   // Test Storage Connection
   useEffect(() => {
     console.log("Tentando conectar ao bucket:", storage.app.options.storageBucket);
@@ -1256,9 +1315,13 @@ export default function Dashboard() {
   const filteredAssets = useMemo(() => {
     let result = assets;
     
-    // Filtrar por clientId se for cliente (ver apenas seus próprios arquivos)
+    // Filtrar por clientId ou pasta permitida se for cliente (ver apenas seus próprios arquivos)
     if (userProfile?.role === 'cliente' && auth.currentUser?.uid) {
-      result = result.filter(a => (a as any).clientId === auth.currentUser?.uid);
+      result = result.filter(a => 
+        (a as any).clientId === auth.currentUser?.uid || 
+        ((a as any).clientId === userProfile.clientId) ||
+        isFolderAllowedForClient(a.folderId)
+      );
     }
     
     // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed
@@ -1335,9 +1398,22 @@ export default function Dashboard() {
     } else if (activeTab === 'all') {
       // Na Gestão de Clientes:
       if (selectedFolderId === null) {
-        // Se estivermos na raiz da Gestão de Clientes:
-        // O conteúdo desta pasta ('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG') deve vir no menu "Gestão de Clientes"
-        result = result.filter(f => f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
+        if (userProfile?.role === 'cliente') {
+          // Filtrar para mostrar apenas a pasta correspondente a este cliente
+          result = result.filter(f => 
+            f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' && 
+            (
+              f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
+              f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
+              (f as any).clientId === userProfile.clientId ||
+              (f as any).clientId === auth.currentUser?.uid
+            )
+          );
+        } else {
+          // Se estivermos na raiz da Gestão de Clientes:
+          // O conteúdo desta pasta ('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG') deve vir no menu "Gestão de Clientes"
+          result = result.filter(f => f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
+        }
       } else {
         // Se estivermos dentro de uma pasta na Gestão de Clientes:
         // Mostramos as subpastas daquela pasta normalmente
@@ -1353,7 +1429,7 @@ export default function Dashboard() {
     }
 
     return result;
-  }, [folders, selectedFolderId, activeTab, driveFilterType, searchQuery]);
+  }, [folders, selectedFolderId, activeTab, driveFilterType, searchQuery, userProfile]);
 
   const localUsageBytes = useMemo(() => {
     let totalBytes = 0;
@@ -1414,14 +1490,20 @@ export default function Dashboard() {
         const label = activeTab === 'image' ? 'Imagens' : activeTab === 'video' ? 'Vídeos' : 'Documentos';
         list.push({ id: null, name: label, type: 'all' });
       }
-    }
+    } else {
+      // Se há uma pasta selecionada, adicionamos o ponto de partida (raiz) no início dos breadcrumbs
+      if (activeTab === 'all') {
+        const label = userProfile?.role === 'cliente' ? 'Meu Arquivo' : 'Dados do Cliente';
+        list.push({ id: null, name: label, type: 'all' });
+      } else if (activeTab === 'google_drive') {
+        list.push({ id: null, name: 'Arquivo Provisual', type: 'all' });
+      }
 
-    if (selectedFolderId) {
       const path: { id: string; name: string; type: 'folder' }[] = [];
       let currentId = selectedFolderId;
       let visited = new Set<string>();
       
-      while (currentId && currentId !== '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' && !visited.has(currentId)) {
+      while (currentId && currentId !== '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' && currentId !== arquivoFolderId && !visited.has(currentId)) {
         visited.add(currentId);
         const folder = folders.find(f => f.id === currentId);
         if (folder) {
@@ -1798,31 +1880,108 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Botão Sincronizar - Apenas para Admins */}
+            {/* Dropdown de Integração Google Drive - Apenas para Admins */}
             {userProfile?.role === 'admin' && activeTab === 'google_drive' && (
-              <button
-                onClick={async () => {
-                  const folderId = selectedFolderId || (arquivoFolderId || 'root');
-                  setIsSyncing(true);
-                  try {
-                    await handleGoogleSync(folderId, undefined, false);
-                  } finally {
-                    setIsSyncing(false);
-                  }
-                }}
-                className={cn(
-                  "p-1.5 rounded-sm border border-gray-200 bg-white text-gray-600 hover:text-[#a21b7e] hover:border-[#a21b7e]/30 shadow-sm transition-all cursor-pointer h-8 w-8 flex items-center justify-center ml-2",
-                  isSyncing && "text-[#a21b7e] bg-[#a21b7e]/5 border-[#a21b7e]/30"
-                )}
-                title="Sincronizar Arquivos"
-              >
-                <RefreshCw 
-                  size={15} 
+              <div className="relative ml-2 shrink-0">
+                <button
+                  onClick={() => setIsDriveDropdownOpen(!isDriveDropdownOpen)}
                   className={cn(
-                    isSyncing && "animate-spin"
-                  )} 
-                />
-              </button>
+                    "flex items-center gap-2 px-3 py-1.5 rounded-sm border border-gray-200 bg-white text-xs font-bold text-gray-600 hover:text-[#a21b7e] hover:border-[#a21b7e]/30 shadow-sm transition-all cursor-pointer h-8",
+                    isDriveDropdownOpen && "text-[#a21b7e] border-[#a21b7e]/30 bg-[#a21b7e]/5"
+                  )}
+                  title="Configurações e Sincronização do Google Drive"
+                >
+                  <HardDrive size={14} className={cn(isSyncing && "text-[#a21b7e]")} />
+                  <span>Google Drive</span>
+                  <ChevronDown size={12} className={cn("transition-transform duration-200 shrink-0", isDriveDropdownOpen && "rotate-180")} />
+                </button>
+
+                <AnimatePresence>
+                  {isDriveDropdownOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-30" 
+                        onClick={() => setIsDriveDropdownOpen(false)}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                        transition={{ duration: 0.1 }}
+                        className="absolute right-0 mt-1.5 w-64 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-40 py-2 text-left text-gray-700 font-sans cursor-default"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Status da Conexão */}
+                        <div className="px-4 py-2 border-b border-gray-50 mb-1">
+                          <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest block">Status do Drive</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={cn("w-2 h-2 rounded-full shrink-0", driveStatus?.connected ? "bg-emerald-500 animate-pulse" : "bg-gray-300")} />
+                            <span className="text-xs font-bold text-gray-700 truncate">
+                              {driveStatus?.connected ? "Cota Pessoal Ativa" : "Cota de Serviço Limite"}
+                            </span>
+                          </div>
+                          {driveStatus?.connected && (
+                            <span className="text-[9px] text-gray-400 block mt-0.5 truncate select-all">
+                              {driveStatus.email}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Ações */}
+                        <div className="px-1.5 space-y-0.5">
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setIsDriveDropdownOpen(false);
+                              const folderId = selectedFolderId || (arquivoFolderId || 'root');
+                              setIsSyncing(true);
+                              try {
+                                await handleGoogleSync(folderId, undefined, false);
+                              } finally {
+                                setIsSyncing(false);
+                              }
+                            }}
+                            className="w-full flex items-center justify-between px-3 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold text-gray-600 hover:text-[#a21b7e] cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <RefreshCw size={14} className={cn("text-gray-400 group-hover:text-[#a21b7e]", isSyncing && "animate-spin text-[#a21b7e]")} />
+                              <span>Sincronizar arquivos</span>
+                            </div>
+                          </button>
+
+                          <div className="my-1 border-t border-gray-100" />
+
+                          {driveStatus?.connected ? (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setIsDriveDropdownOpen(false);
+                                await handleDisconnectDrive();
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 bg-transparent hover:bg-red-50 group transition-colors text-left text-[13px] font-bold text-red-600 cursor-pointer"
+                            >
+                              <LogOut size={14} className="text-red-400 group-hover:text-red-600 shrink-0" />
+                              <span>Desconectar Conta</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setIsDriveDropdownOpen(false);
+                                await handleConnectDrive();
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 bg-transparent hover:bg-emerald-50 group transition-colors text-left text-[13px] font-bold text-emerald-600 cursor-pointer"
+                            >
+                              <Link size={14} className="text-emerald-400 group-hover:text-emerald-600 shrink-0" />
+                              <span>Conectar Google Drive</span>
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
           </div>
         </div>
