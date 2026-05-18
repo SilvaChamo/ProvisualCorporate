@@ -1,6 +1,10 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import multer from "multer";
+import fs from "fs";
+import { Readable } from "stream";
+import { google } from "googleapis";
 
 async function startServer() {
   // Ajudar o servidor compilado a encontrar os módulos
@@ -24,14 +28,10 @@ async function startServer() {
   });
 
   // Google Drive Integration
-  const multer = require("multer");
   const upload = multer({ storage: multer.memoryStorage() });
-  const fs = require("fs");
-  const { Readable } = require("stream");
 
   // Utilitário para inicializar o cliente Google Auth (Híbrido)
   async function getGoogleAuth() {
-    const { google } = require("googleapis");
     
     // 1. Tentar ler as credenciais OAuth 2.0 pessoais do Silva
     let oauthKeys;
@@ -77,7 +77,7 @@ async function startServer() {
     if (process.env.GOOGLE_KEYS) {
       serviceKeys = JSON.parse(process.env.GOOGLE_KEYS);
     } else {
-      serviceKeys = require("./provisual-corporate-a16cee3d2250.json");
+      serviceKeys = JSON.parse(fs.readFileSync("./provisual-corporate-a16cee3d2250.json", "utf-8"));
     }
 
     const auth = new google.auth.JWT(
@@ -96,7 +96,6 @@ async function startServer() {
     try {
       console.log('--- Listando Pasta do Drive ---');
       console.log('ID Solicitado:', folderId, 'Filtro:', filterType);
-      const { google } = require("googleapis");
       const { auth, type } = await getGoogleAuth();
       console.log('Tipo de Autenticação Ativa:', type);
 
@@ -136,7 +135,6 @@ async function startServer() {
 
   app.get("/api/drive/storage", async (req, res) => {
     try {
-      const { google } = require("googleapis");
       const { auth } = await getGoogleAuth();
       const drive = google.drive({ version: 'v3', auth });
       const response = await drive.about.get({
@@ -156,7 +154,6 @@ async function startServer() {
     if (!file || !folderId) return res.status(400).json({ error: "File and Folder ID are required" });
 
     try {
-      const { google } = require("googleapis");
       const { auth, type } = await getGoogleAuth();
       console.log('Autenticação Ativa para Upload:', type);
 
@@ -216,7 +213,6 @@ async function startServer() {
       console.log('--- Copiando Arquivo no Drive ---');
       console.log('File ID Origem:', fileId, 'Pasta Destino:', destinationFolderId, 'Novo Nome:', newName);
       
-      const { google } = require("googleapis");
       const { auth } = await getGoogleAuth();
       const drive = google.drive({ version: 'v3', auth });
 
@@ -251,7 +247,6 @@ async function startServer() {
       console.log('--- Atualizando Arquivo no Drive ---');
       console.log('File ID:', fileId, { newName, addParents, removeParents, trashed, starred });
 
-      const { google } = require("googleapis");
       const { auth } = await getGoogleAuth();
       const drive = google.drive({ version: 'v3', auth });
 
@@ -292,7 +287,6 @@ async function startServer() {
       console.log('--- Excluindo Arquivo no Drive ---');
       console.log('File ID:', fileId);
 
-      const { google } = require("googleapis");
       const { auth } = await getGoogleAuth();
       const drive = google.drive({ version: 'v3', auth });
 
@@ -332,7 +326,6 @@ async function startServer() {
 
   app.get("/api/drive/auth/url", async (req, res) => {
     try {
-      const { google } = require("googleapis");
       if (!fs.existsSync("./google-oauth.json")) {
         return res.status(400).json({ error: "O arquivo google-oauth.json não foi configurado na raiz." });
       }
@@ -365,7 +358,6 @@ async function startServer() {
     if (!code) return res.status(400).send("Código de autorização não fornecido pelo Google.");
 
     try {
-      const { google } = require("googleapis");
       if (!fs.existsSync("./google-oauth.json")) {
         return res.status(400).send("Configuração google-oauth.json ausente.");
       }
