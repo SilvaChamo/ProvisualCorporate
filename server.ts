@@ -80,12 +80,11 @@ async function startServer() {
       serviceKeys = JSON.parse(fs.readFileSync("./provisual-corporate-a16cee3d2250.json", "utf-8"));
     }
 
-    const auth = new google.auth.JWT(
-      serviceKeys.client_email,
-      null,
-      serviceKeys.private_key,
-      ['https://www.googleapis.com/auth/drive']
-    );
+    const auth = new google.auth.JWT({
+      email: serviceKeys.client_email,
+      key: serviceKeys.private_key,
+      scopes: ['https://www.googleapis.com/auth/drive']
+    });
 
     return { auth, type: "service_account" };
   }

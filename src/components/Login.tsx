@@ -20,34 +20,29 @@ export default function Login() {
 
   // Auto-prover a conta master de administrador no Firestore no primeiro carregamento
   useEffect(() => {
-    const isDevelopment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-    if (isDevelopment) {
-      const provisionAdmin = async () => {
-        try {
-          const adminDocRef = doc(db, "users", "admin_master_silva");
-          const adminDoc = await getDoc(adminDocRef);
-          
-          // Se não existir, ou se quisermos atualizar para garantir as credenciais corretas
-          if (!adminDoc.exists() || adminDoc.data()?.email !== "silva.chamo@gmail.com") {
-            await setDoc(adminDocRef, {
-              email: "silva.chamo@gmail.com",
-              displayName: "Silva Chamo (Admin Master)",
-              password: "Administrador#01?*",
-              role: "admin",
-              adminToken: "Silva_Chamo_Master_Admin_2026",
-              createdAt: serverTimestamp()
-            });
-            console.log("Conta Master de Administrador provisionada com sucesso!");
-          }
-        } catch (err) {
-          console.warn("Erro ao auto-provisionar administrador master:", err);
+    const provisionAdmin = async () => {
+      try {
+        const adminDocRef = doc(db, "users", "admin_master_silva");
+        const adminDoc = await getDoc(adminDocRef);
+        
+        // Se não existir, ou se quisermos atualizar para garantir as credenciais corretas
+        if (!adminDoc.exists() || adminDoc.data()?.email !== "silva.chamo@gmail.com") {
+          await setDoc(adminDocRef, {
+            email: "silva.chamo@gmail.com",
+            displayName: "Silva Chamo (Admin Master)",
+            password: "Administrador#01?*",
+            role: "admin",
+            adminToken: "Silva_Chamo_Master_Admin_2026",
+            createdAt: serverTimestamp()
+          });
+          console.log("Conta Master de Administrador provisionada com sucesso!");
         }
-      };
-      provisionAdmin();
-    }
+      } catch (err) {
+        console.warn("Erro ao auto-provisionar administrador master:", err);
+      }
+    };
+    provisionAdmin();
   }, []);
-
-
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,53 +67,46 @@ export default function Login() {
     } catch (err: any) {
       console.warn("Firebase Auth falhou, verificando credenciais locais no Firestore:", err.code);
       
-      const isDevelopment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      
-      if (isDevelopment) {
-        try {
-          // Buscamos se existe uma conta criada no Firestore com este email (busca case-insensitive)
-          const searchEmail = email.trim().toLowerCase();
-          const usersRef = collection(db, "users");
-          const q = query(usersRef, where("email", "==", searchEmail));
-          const querySnapshot = await getDocs(q);
+      // Permitir login via Firestore em qualquer ambiente (desenvolvimento ou produção)
+      // para suportar contas corporativas e de clientes criadas diretamente no painel.
+      try {
+        // Buscamos se existe uma conta criada no Firestore com este email (busca case-insensitive)
+        const searchEmail = email.trim().toLowerCase();
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", searchEmail));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const userDoc = querySnapshot.docs[0];
+          const userData = userDoc.data();
           
-          if (!querySnapshot.empty) {
-            const userDoc = querySnapshot.docs[0];
-            const userData = userDoc.data();
-            
-            if (userData.password === password) {
-              // Credencial local coincide perfeitamente!
-              const simulatedUser = {
-                uid: userDoc.id,
-                email: userData.email,
-                displayName: userData.displayName || userData.email.split("@")[0],
-                role: userData.role || "cliente"
-              };
-              localStorage.setItem("provisual_local_admin", JSON.stringify(simulatedUser));
-              window.location.href = "/dashboard";
-              return;
-            } else {
-              setError("Senha de acesso incorreta para esta conta.");
-              setIsLoading(false);
-              return;
-            }
+          if (userData.password === password) {
+            // Credencial coincide perfeitamente!
+            const simulatedUser = {
+              uid: userDoc.id,
+              email: userData.email,
+              displayName: userData.displayName || userData.email.split("@")[0],
+              role: userData.role || "cliente"
+            };
+            localStorage.setItem("provisual_local_admin", JSON.stringify(simulatedUser));
+            window.location.href = "/dashboard";
+            return;
           } else {
-            setError("Esta conta de e-mail não está cadastrada na plataforma.");
+            setError("Senha de acesso incorreta para esta conta.");
             setIsLoading(false);
             return;
           }
-        } catch (dbErr: any) {
-          console.error("Erro ao verificar credenciais locais:", dbErr);
-          setError(`Erro ao validar credenciais no banco: ${dbErr.message || dbErr}`);
+        } else {
+          setError("Esta conta de e-mail não está cadastrada na plataforma.");
           setIsLoading(false);
           return;
         }
+      } catch (dbErr: any) {
+        console.error("Erro ao verificar credenciais locais:", dbErr);
+        setError(`Erro ao validar credenciais no banco: ${dbErr.message || dbErr}`);
+        setIsLoading(false);
+        return;
       }
-      
-      // Caso não esteja em desenvolvimento ou ocorra outra falha
-      setError("Credenciais de acesso inválidas. A porta está fechada para usuários não autorizados.");
-      setIsLoading(false);
-      return;
     }
   };
 
