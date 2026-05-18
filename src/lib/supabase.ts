@@ -153,7 +153,21 @@ export async function setDoc(docRef: any, data: any, options?: any) {
     error = err;
   }
   
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.message.includes('unique') || error.message.includes('violates')) {
+      if (table === 'assets' && mapped.drive_id) {
+        const { data: existingAsset, error: findErr } = await supabase.from(table).select('id').eq('drive_id', mapped.drive_id).maybeSingle();
+        if (!findErr && existingAsset) {
+          const { error: updErr } = await supabase.from(table).update(mapped).eq('id', existingAsset.id);
+          if (!updErr) {
+            notifyTableChange(table);
+            return;
+          }
+        }
+      }
+    }
+    throw new Error(error.message);
+  }
   notifyTableChange(table);
 }
 
@@ -180,8 +194,20 @@ export async function addDoc(collectionRef: any, data: any) {
   }
   
   if (error) {
-    // Fallback geral em caso de erro de restrição única
+    // Tratamento definitivo e inteligente de conflitos de chave única no Drive ID ou IDs residuais
     if (error.message.includes('unique') || error.message.includes('violates')) {
+      if (table === 'assets' && mapped.drive_id) {
+        const { data: existingAsset, error: findErr } = await supabase.from(table).select('id').eq('drive_id', mapped.drive_id).maybeSingle();
+        if (!findErr && existingAsset) {
+          const { error: updErr } = await supabase.from(table).update(mapped).eq('id', existingAsset.id);
+          if (!updErr) {
+            notifyTableChange(table);
+            return { id: existingAsset.id };
+          }
+        }
+      }
+      
+      // Fallback secundário usando upsert pelo id
       const { data: fbData, error: fbErr } = await supabase.from(table).upsert(mapped).select().single();
       if (fbErr) throw new Error(fbErr.message);
       notifyTableChange(table);
