@@ -697,7 +697,18 @@ export default function Dashboard() {
 
     try {
       // 1. Identificar e criar pastas recursivamente se for upload de pasta
-      const dirToDriveId: { [path: string]: string } = { "": selectedFolderId || 'root' };
+      let rootFolderId = selectedFolderId;
+      if (!rootFolderId) {
+        if (activeTab === 'google_drive') {
+          rootFolderId = arquivoFolderId || 'root';
+        } else if (activeTab === 'all') {
+          rootFolderId = '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG';
+        } else {
+          rootFolderId = 'root';
+        }
+      }
+
+      const dirToDriveId: { [path: string]: string } = { "": rootFolderId };
       const isFolderUpload = filesArray.some(file => file.webkitRelativePath);
 
       if (isFolderUpload) {
@@ -763,7 +774,7 @@ export default function Dashboard() {
         setUploadQueue(prev => prev.map(item => item.id === currentQueueItem.id ? { ...item, progress: 15 } : item));
 
         // Determinar o ID do diretório destino do arquivo
-        let fileFolderId = selectedFolderId || 'root';
+        let fileFolderId = rootFolderId;
         if (file.webkitRelativePath) {
           const parts = file.webkitRelativePath.split('/');
           parts.pop();
@@ -1549,18 +1560,7 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="flex items-center gap-4">
-            {driveStatus && driveStatus.connected && (
-              <div 
-                className="w-9 h-9 rounded-sm bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600 transition-all select-none hover:bg-emerald-100/50 cursor-pointer"
-                title={`Drive Pessoal Ativo: ${driveStatus.email}`}
-              >
-                <div className="relative">
-                  <HardDrive size={18} />
-                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white animate-pulse" />
-                </div>
-              </div>
-            )}
+          <div className="flex items-center gap-3">
             {userProfile && (
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-3.5 py-1.5 rounded-lg select-none">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
@@ -1586,9 +1586,21 @@ export default function Dashboard() {
               </div>
             )}
 
+            {driveStatus && driveStatus.connected && (
+              <div 
+                className="w-9 h-9 rounded-sm bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600 transition-all select-none hover:bg-emerald-100/50 cursor-pointer shrink-0"
+                title={`Drive Pessoal Ativo: ${driveStatus.email}`}
+              >
+                <div className="relative">
+                  <HardDrive size={18} />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white animate-pulse" />
+                </div>
+              </div>
+            )}
+
             <button
               onClick={handleLogout}
-              className="flex items-center justify-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer h-9"
+              className="flex items-center justify-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer h-9 shrink-0"
             >
               <LogOut size={16} />
               Sair
