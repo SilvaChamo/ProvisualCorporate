@@ -1,14 +1,6 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { fileURLToPath } from "url";
-
-const _filename = typeof import.meta !== 'undefined' && import.meta.url 
-  ? fileURLToPath(import.meta.url) 
-  : (typeof __filename !== 'undefined' ? __filename : '');
-const _dirname = typeof import.meta !== 'undefined' && import.meta.url 
-  ? path.dirname(_filename) 
-  : (typeof __dirname !== 'undefined' ? __dirname : '');
 
 async function startServer() {
   // Ajudar o servidor compilado a encontrar os módulos
