@@ -1311,7 +1311,79 @@ export default function Dashboard() {
         }
       }
 
-      // 1. Identificar arquivos no Supabase para esta pasta que foram apagados ou movidos do Drive
+      // ── SYNC RECURSIVO: Para cada sub-pasta encontrada, sincroniza também o seu conteúdo ──
+      const subFolders = driveFiles.filter((f: any) => {
+        const isShortcut = f.mimeType === 'application/vnd.google-apps.shortcut';
+        const isFolder = f.mimeType === 'application/vnd.google-apps.folder' ||
+          (isShortcut && f.shortcutDetails?.targetMimeType === 'application/vnd.google-apps.folder');
+        return isFolder && !f.trashed;
+      });
+
+      for (const subFolder of subFolders) {
+        const subFolderId = (subFolder.mimeType === 'application/vnd.google-apps.shortcut' && subFolder.shortcutDetails?.targetId)
+          ? subFolder.shortcutDetails.targetId
+          : subFolder.id;
+
+        try {
+          const subResponse = await fetch('/api/drive/list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folderId: subFolderId })
+          });
+
+          if (!subResponse.ok) continue;
+          const subFiles = await subResponse.json();
+
+          for (const sf of subFiles) {
+            const sfIsShortcut = sf.mimeType === 'application/vnd.google-apps.shortcut';
+            const sfIsFolder = sf.mimeType === 'application/vnd.google-apps.folder' ||
+              (sfIsShortcut && sf.shortcutDetails?.targetMimeType === 'application/vnd.google-apps.folder');
+            const sfRealId = (sfIsShortcut && sf.shortcutDetails?.targetId) ? sf.shortcutDetails.targetId : sf.id;
+            const sfSafeName = typeof sf.name === 'string' ? sf.name : '';
+
+            // Ignorar ficheiros de sistema
+            if (sfSafeName.toLowerCase().includes('ds_store') || sfSafeName.startsWith('._') || sfSafeName === 'Thumbs.db' || sfSafeName === 'desktop.ini') continue;
+
+            if (sfIsFolder) {
+              await setDoc(doc(db, "folders", sfRealId), {
+                name: sf.name,
+                date: sf.createdTime ? Timestamp.fromDate(new Date(sf.createdTime)) : serverTimestamp(),
+                ownerId: "google-drive",
+                parentId: subFolderId,
+                starred: sf.starred || false,
+                trashed: sf.trashed || false,
+                adminToken: "Silva_Chamo_Master_Admin_2026"
+              });
+            } else {
+              const sfExtension = sfSafeName.split('.').pop()?.toLowerCase() || '';
+              const sfIsRaw = ['cr2', 'cr3', 'nef', 'arw', 'dng', 'raf', 'orf'].includes(sfExtension);
+              const sfMime = sf.shortcutDetails?.targetMimeType || sf.mimeType || '';
+              const sfType = sfMime.includes('image') || sfIsRaw ? 'image' : (sfMime.includes('video') ? 'video' : 'document');
+              const sfSize = sf.size ? `${(parseInt(sf.size) / 1024 / 1024).toFixed(1)} MB` : '0 MB';
+              const existingSf = assets.find(a => a.driveId === sfRealId || a.id === sfRealId);
+
+              await setDoc(doc(db, "assets", sfRealId), {
+                name: sf.name,
+                type: sfType,
+                captureDate: sf.createdTime ? Timestamp.fromDate(new Date(sf.createdTime)) : serverTimestamp(),
+                uploadDate: serverTimestamp(),
+                folderId: sf.trashed ? 'trash' : (existingSf?.folderId ?? subFolderId),
+                ownerId: "google-drive",
+                driveId: sfRealId,
+                thumbnailUrl: sf.thumbnailLink || "",
+                starred: sf.starred || false,
+                trashed: sf.trashed || false,
+                versions: [{ quality: "original", size: sfSize, url: sf.webViewLink || "" }],
+                adminToken: "Silva_Chamo_Master_Admin_2026"
+              });
+            }
+          }
+        } catch (subErr: any) {
+          console.warn(`[Sync Recursivo] Falhou para a sub-pasta ${subFolder.name}:`, subErr.message);
+        }
+      }
+
+
       const currentDbAssets = assets.filter(a => a.folderId === (folderId === 'root' ? null : folderId));
       const driveFileIds = driveFiles.map((f: any) => {
         const isShortcut = f.mimeType === 'application/vnd.google-apps.shortcut';
