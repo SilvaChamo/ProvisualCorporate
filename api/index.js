@@ -144,7 +144,7 @@ app.post("/api/drive/list", async (req, res) => {
     const response = await drive.files.list({
       q: queryStr,
       orderBy: orderByStr,
-      fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails)',
+      fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails, permissions)',
       pageSize: 100,
       supportsAllDrives: true,
       includeItemsFromAllDrives: true

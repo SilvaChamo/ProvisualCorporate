@@ -967,7 +967,7 @@ export default function ClientDashboard() {
               size: fileSize,
               url: driveFile.webViewLink
             }],
-            ...(userProfile?.role === 'cliente' && { clientId: currentUser?.email }),
+            ...(userProfile?.role === 'cliente' && { clientId: userProfile?.email }),
             adminToken: "Silva_Chamo_Master_Admin_2026"
           };
 
@@ -1256,9 +1256,9 @@ export default function ClientDashboard() {
       try {
         const localUser = JSON.parse(localUserJson);
         setUserProfile({
-          role: localUser.role || "admin",
-          email: localUser.email || "admin@provisual.demo",
-          displayName: localUser.displayName || "Admin"
+          role: localUser.role || "cliente",
+          email: localUser.email || "cliente@provisual.demo",
+          displayName: localUser.displayName || "Cliente"
         });
         return;
       } catch (e) {
@@ -1268,9 +1268,9 @@ export default function ClientDashboard() {
 
     if (!currentUser) {
       setUserProfile({
-        role: "admin",
-        email: "admin@provisual.demo",
-        displayName: "Silva Chamo (Admin Master)"
+        role: "cliente",
+        email: "cliente@provisual.demo",
+        displayName: "Cliente"
       });
       return;
     }
@@ -1280,14 +1280,14 @@ export default function ClientDashboard() {
         setUserProfile(userDoc.data() as UserProfile);
       } else {
         setUserProfile({
-          role: "admin",
-          email: currentUser!.email || "admin@provisual.demo",
-          displayName: currentUser!.displayName || "Silva Chamo"
+          role: "cliente",
+          email: currentUser!.email || "cliente@provisual.demo",
+          displayName: currentUser!.user_metadata?.displayName || currentUser!.email?.split("@")[0] || "Cliente"
         });
       }
     };
     fetchProfile();
-  }, []);
+  }, [currentUser]);
 
   // Fetch Folders
   useEffect(() => {
@@ -1355,22 +1355,54 @@ export default function ClientDashboard() {
     }
   }, [userProfile?.role, activeTab]);
 
+  // Helper to normalize strings for comparison (removes accents, spaces, special chars)
+  const cleanCompareStr = (s: string): string => {
+    return s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  };
+
+  // Helper para buscar as pastas raiz permitidas para o cliente
+  const getAllowedClientRootFolders = (allFolders: FolderData[]): FolderData[] => {
+    if (!userProfile || userProfile.role !== 'cliente') return allFolders;
+
+    const email = userProfile.email?.toLowerCase() || "";
+    const displayName = userProfile.displayName || "";
+    
+    // Extrai o nome da empresa se o displayName estiver no formato "Responsável | Empresa | Logo"
+    let companyName = "";
+    let responsibleName = "";
+    if (displayName.includes('|')) {
+      const parts = displayName.split('|');
+      responsibleName = parts[0]?.trim() || "";
+      companyName = parts[1]?.trim() || "";
+    } else {
+      companyName = displayName.trim();
+    }
+
+    const cleanEmail = cleanCompareStr(email);
+    const cleanCompany = cleanCompareStr(companyName);
+    const cleanResponsible = cleanCompareStr(responsibleName);
+
+    return allFolders.filter(f =>
+      f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' &&
+      (
+        (email && cleanCompareStr(f.name) === cleanEmail) ||
+        (companyName && cleanCompareStr(f.name) === cleanCompany) ||
+        (responsibleName && cleanCompareStr(f.name) === cleanResponsible) ||
+        (email && (f as any).clientId?.toLowerCase() === email)
+      )
+    );
+  };
+
   // Helper para verificar se a pasta selecionada é permitida para o cliente ativo
   const isFolderAllowedForClient = (folderId: string | null): boolean => {
     if (!userProfile || userProfile.role !== 'cliente') return true; // Admins podem ver tudo
-    if (folderId === null) return true; // A raiz 'Meu Arquivo' é sempre acessível
+    if (folderId === null) return false; // A raiz geral não é permitida para clientes, apenas subpastas autorizadas
 
-    // Achar todas as pastas raiz permitidas ao cliente
-    const allowedClientRootFolders = folders.filter(f =>
-      f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' &&
-      (
-        f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
-        f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
-        (f as any).clientId === userProfile?.email ||
-        (f as any).clientId === currentUser?.email
-      )
-    );
-
+    const allowedClientRootFolders = getAllowedClientRootFolders(folders);
     const allowedIds = new Set(allowedClientRootFolders.map(f => f.id));
 
     // Rastrear a hierarquia para cima até achar uma pasta autorizada
@@ -1453,11 +1485,36 @@ export default function ClientDashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
+              // Buscar o registro existente no Supabase para não sobrescrever o client_id configurado
+              const { data: existingFolder } = await supabase
+                .from('folders')
+                .select('client_id')
+                .eq('id', file.id)
+                .maybeSingle();
+
+              let folderClientId = existingFolder?.client_id || null;
+
+              // Tenta extrair das permissões do Drive
+              const sharedEmails = (file.permissions || [])
+                .map((p: any) => p.emailAddress?.toLowerCase())
+                .filter(Boolean);
+
+              const gDriveClientEmail = sharedEmails.find((email: string) => 
+                email !== 'provisualcorporate@gmail.com' && 
+                email !== 'silva.chamo@gmail.com' &&
+                !email.endsWith('.demo')
+              );
+
+              if (gDriveClientEmail) {
+                folderClientId = gDriveClientEmail;
+              }
+
               await setDoc(doc(db, "folders", file.id), {
                 name: file.name,
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
-                parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG'
+                parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
+                ...(folderClientId && { clientId: folderClientId })
               });
             }
           }
@@ -1473,9 +1530,8 @@ export default function ClientDashboard() {
     let result = assets;
 
     // Filtrar por clientId ou pasta permitida se for cliente (ver apenas seus próprios arquivos)
-    if (userProfile?.role === 'cliente' && currentUser?.id) {
+    if (userProfile?.role === 'cliente') {
       result = result.filter(a =>
-        (a as any).clientId === currentUser?.email ||
         ((a as any).clientId === userProfile?.email) ||
         isFolderAllowedForClient(a.folderId)
       );
@@ -1552,15 +1608,7 @@ export default function ClientDashboard() {
       if (selectedFolderId === null) {
         if (userProfile?.role === 'cliente') {
           // Filtrar para mostrar apenas a pasta correspondente a este cliente
-          result = result.filter(f =>
-            f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' &&
-            (
-              f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
-              f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
-              (f as any).clientId === userProfile?.email ||
-              (f as any).clientId === currentUser?.email
-            )
-          );
+          result = getAllowedClientRootFolders(result);
         } else {
           // Se estivermos na raiz da Gestão de Clientes:
           // O conteúdo desta pasta ('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG') deve vir no menu "Gestão de Clientes"
@@ -1578,6 +1626,11 @@ export default function ClientDashboard() {
 
     if (searchQuery) {
       result = result.filter(f => f && f.name && typeof f.name === 'string' && f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+
+    // Filtro extra de segurança para garantir que o cliente nunca veja pastas de outros clientes
+    if (userProfile?.role === 'cliente') {
+      result = result.filter(f => isFolderAllowedForClient(f.id));
     }
 
     return result;
@@ -4165,7 +4218,7 @@ function AssetCard({
                       <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
                     </button>
 
-                    {folders.map(folder => (
+                    {(userProfile?.role === 'cliente' ? folders.filter(f => isFolderAllowedForClient(f.id)) : folders).map(folder => (
                       <button
                         key={folder.id}
                         onClick={(e) => {
@@ -4854,7 +4907,7 @@ function AssetRow({
                         <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
                       </button>
 
-                      {folders.map(folder => (
+                      {(userProfile?.role === 'cliente' ? folders.filter(f => isFolderAllowedForClient(f.id)) : folders).map(folder => (
                         <button
                           key={folder.id}
                           onClick={(e) => {

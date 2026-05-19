@@ -59,7 +59,6 @@ function mapToSnakeCase(table: string, data: any): any {
     delete result.drive_id;
     delete result.thumbnail_url;
     delete result.versions;
-    delete result.client_id;
   }
 
   return result;
