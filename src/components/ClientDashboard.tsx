@@ -1364,36 +1364,17 @@ export default function ClientDashboard() {
       .replace(/[^a-z0-9]/g, "");
   };
 
-  // Helper para buscar as pastas raiz permitidas para o cliente
+  // Helper para buscar as pastas raiz permitidas para o cliente (baseado no email)
   const getAllowedClientRootFolders = (allFolders: FolderData[]): FolderData[] => {
     if (!userProfile || userProfile.role !== 'cliente') return allFolders;
 
     const email = userProfile.email?.toLowerCase() || "";
-    const displayName = userProfile.displayName || "";
-    
-    // Extrai o nome da empresa se o displayName estiver no formato "Responsável | Empresa | Logo"
-    let companyName = "";
-    let responsibleName = "";
-    if (displayName.includes('|')) {
-      const parts = displayName.split('|');
-      responsibleName = parts[0]?.trim() || "";
-      companyName = parts[1]?.trim() || "";
-    } else {
-      companyName = displayName.trim();
-    }
+    if (!email) return [];
 
-    const cleanEmail = cleanCompareStr(email);
-    const cleanCompany = cleanCompareStr(companyName);
-    const cleanResponsible = cleanCompareStr(responsibleName);
-
+    // Filtrar pastas onde o clientEmail coincide com o email do utilizador logado
     return allFolders.filter(f =>
       f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' &&
-      (
-        (email && cleanCompareStr(f.name) === cleanEmail) ||
-        (companyName && cleanCompareStr(f.name) === cleanCompany) ||
-        (responsibleName && cleanCompareStr(f.name) === cleanResponsible) ||
-        (email && (f as any).clientId?.toLowerCase() === email)
-      )
+      (f as any).clientEmail?.toLowerCase() === email
     );
   };
 
@@ -1485,28 +1466,23 @@ export default function ClientDashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
-              // Buscar o registro existente no Supabase para não sobrescrever o client_id configurado
-              const { data: existingFolder } = await supabase
-                .from('folders')
-                .select('client_id')
-                .eq('id', file.id)
-                .maybeSingle();
+              // Extrair o email do cliente pelas permissões de partilha do Drive
+              const existingFolderInState = folders.find(f => f.id === file.id);
+              let folderClientEmail = (existingFolderInState as any)?.clientEmail || null;
 
-              let folderClientId = existingFolder?.client_id || null;
-
-              // Tenta extrair das permissões do Drive
               const sharedEmails = (file.permissions || [])
                 .map((p: any) => p.emailAddress?.toLowerCase())
                 .filter(Boolean);
 
-              const gDriveClientEmail = sharedEmails.find((email: string) => 
-                email !== 'provisualcorporate@gmail.com' && 
+              const gDriveClientEmail = sharedEmails.find((email: string) =>
+                email !== 'provisualcorporate@gmail.com' &&
                 email !== 'silva.chamo@gmail.com' &&
                 !email.endsWith('.demo')
               );
 
+              // Email do Drive tem prioridade (é a fonte de verdade)
               if (gDriveClientEmail) {
-                folderClientId = gDriveClientEmail;
+                folderClientEmail = gDriveClientEmail;
               }
 
               await setDoc(doc(db, "folders", file.id), {
@@ -1514,7 +1490,7 @@ export default function ClientDashboard() {
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-                ...(folderClientId && { clientId: folderClientId })
+                ...(folderClientEmail && { clientEmail: folderClientEmail })
               });
             }
           }
@@ -1529,7 +1505,7 @@ export default function ClientDashboard() {
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
-      // 1. Sincronizar pastas de clientes do Drive e associar client_id no banco
+      // 1. Sincronizar pastas de clientes do Drive e associar clientEmail pelo email de partilha
       const resClient = await fetch('/api/drive/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1539,26 +1515,22 @@ export default function ClientDashboard() {
         const driveFiles = await resClient.json();
         for (const file of driveFiles) {
           if (file.mimeType === 'application/vnd.google-apps.folder') {
-            const { data: existingFolder } = await supabase
-              .from('folders')
-              .select('client_id')
-              .eq('id', file.id)
-              .maybeSingle();
-
-            let folderClientId = existingFolder?.client_id || null;
+            const existingFolderInState = folders.find(f => f.id === file.id);
+            let folderClientEmail = (existingFolderInState as any)?.clientEmail || null;
 
             const sharedEmails = (file.permissions || [])
               .map((p: any) => p.emailAddress?.toLowerCase())
               .filter(Boolean);
 
-            const gDriveClientEmail = sharedEmails.find((email: string) => 
-              email !== 'provisualcorporate@gmail.com' && 
+            const gDriveClientEmail = sharedEmails.find((email: string) =>
+              email !== 'provisualcorporate@gmail.com' &&
               email !== 'silva.chamo@gmail.com' &&
               !email.endsWith('.demo')
             );
 
+            // Email do Drive tem prioridade
             if (gDriveClientEmail) {
-              folderClientId = gDriveClientEmail;
+              folderClientEmail = gDriveClientEmail;
             }
 
             await setDoc(doc(db, "folders", file.id), {
@@ -1566,7 +1538,7 @@ export default function ClientDashboard() {
               date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
               ownerId: "google-drive",
               parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-              ...(folderClientId && { clientId: folderClientId })
+              ...(folderClientEmail && { clientEmail: folderClientEmail })
             });
           }
         }
@@ -1588,12 +1560,9 @@ export default function ClientDashboard() {
   const filteredAssets = useMemo(() => {
     let result = assets;
 
-    // Filtrar por clientId ou pasta permitida se for cliente (ver apenas seus próprios arquivos)
+    // Filtrar por pasta permitida (baseado no email do cliente)
     if (userProfile?.role === 'cliente') {
-      result = result.filter(a =>
-        ((a as any).clientId === userProfile?.email) ||
-        isFolderAllowedForClient(a.folderId)
-      );
+      result = result.filter(a => isFolderAllowedForClient(a.folderId));
     }
 
     // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed
@@ -3881,9 +3850,13 @@ export default function ClientDashboard() {
                   onClick={async () => {
                     setIsDistributing(true);
                     try {
+                      // Encontrar o email do cliente selecionado pelo seu ID
+                      const selectedClient = accounts.find(a => a.id === selectedClientId);
+                      const clientEmailToAssign = selectedClient?.email?.toLowerCase();
+                      if (!clientEmailToAssign) throw new Error("Email do cliente não encontrado.");
                       const { supabase: sb } = await import('../lib/supabase');
                       const table = itemToDistribute.type === 'folder' ? 'folders' : 'assets';
-                      const { error } = await sb.from(table).update({ client_id: selectedClientId }).eq('id', itemToDistribute.id);
+                      const { error } = await sb.from(table).update({ client_email: clientEmailToAssign }).eq('id', itemToDistribute.id);
                       if (error) throw error;
                       alert("Distribuído com sucesso!");
                       setDistributeModalOpen(false);

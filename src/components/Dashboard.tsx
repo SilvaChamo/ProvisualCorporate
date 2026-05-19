@@ -1381,36 +1381,17 @@ export default function Dashboard() {
       .replace(/[^a-z0-9]/g, "");
   };
 
-  // Helper para buscar as pastas raiz permitidas para o cliente
+  // Helper para buscar as pastas raiz permitidas para o cliente (baseado no email)
   const getAllowedClientRootFolders = (allFolders: FolderData[]): FolderData[] => {
     if (!userProfile || userProfile.role !== 'cliente') return allFolders;
 
     const email = userProfile.email?.toLowerCase() || "";
-    const displayName = userProfile.displayName || "";
-    
-    // Extrai o nome da empresa se o displayName estiver no formato "Responsável | Empresa | Logo"
-    let companyName = "";
-    let responsibleName = "";
-    if (displayName.includes('|')) {
-      const parts = displayName.split('|');
-      responsibleName = parts[0]?.trim() || "";
-      companyName = parts[1]?.trim() || "";
-    } else {
-      companyName = displayName.trim();
-    }
+    if (!email) return [];
 
-    const cleanEmail = cleanCompareStr(email);
-    const cleanCompany = cleanCompareStr(companyName);
-    const cleanResponsible = cleanCompareStr(responsibleName);
-
+    // A pasta do cliente é identificada pelo clientEmail igual ao email do utilizador
     return allFolders.filter(f =>
       f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' &&
-      (
-        (email && cleanCompareStr(f.name) === cleanEmail) ||
-        (companyName && cleanCompareStr(f.name) === cleanCompany) ||
-        (responsibleName && cleanCompareStr(f.name) === cleanResponsible) ||
-        (email && (f as any).clientId?.toLowerCase() === email)
-      )
+      (f as any).clientEmail?.toLowerCase() === email
     );
   };
 
@@ -1502,14 +1483,9 @@ export default function Dashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
-              // Buscar o registro existente no Supabase para não sobrescrever o client_id configurado
-              const { data: existingFolder } = await supabase
-                .from('folders')
-                .select('client_id')
-                .eq('id', file.id)
-                .maybeSingle();
-
-              let folderClientId = existingFolder?.client_id || null;
+              // Preservar o client_id existente usando os dados já carregados no estado local (sem query extra ao Supabase)
+              const existingFolderInState = folders.find(f => f.id === file.id);
+              let folderClientId = (existingFolderInState as any)?.clientId || null;
 
               // Tenta extrair das permissões do Drive
               const sharedEmails = (file.permissions || [])
@@ -1556,13 +1532,9 @@ export default function Dashboard() {
         const driveFiles = await resClient.json();
         for (const file of driveFiles) {
           if (file.mimeType === 'application/vnd.google-apps.folder') {
-            const { data: existingFolder } = await supabase
-              .from('folders')
-              .select('client_id')
-              .eq('id', file.id)
-              .maybeSingle();
-
-            let folderClientId = existingFolder?.client_id || null;
+            // Preservar o clientId existente usando os dados já carregados no estado local
+            const existingFolderInState = folders.find(f => f.id === file.id);
+            let folderClientId = (existingFolderInState as any)?.clientId || null;
 
             const sharedEmails = (file.permissions || [])
               .map((p: any) => p.emailAddress?.toLowerCase())
@@ -1605,12 +1577,9 @@ export default function Dashboard() {
   const filteredAssets = useMemo(() => {
     let result = assets;
     
-    // Filtrar por clientId ou pasta permitida se for cliente (ver apenas seus próprios arquivos)
+    // Filtrar por pasta permitida (baseado no email do cliente)
     if (userProfile?.role === 'cliente') {
-      result = result.filter(a => 
-        ((a as any).clientId === userProfile.email) ||
-        isFolderAllowedForClient(a.folderId)
-      );
+      result = result.filter(a => isFolderAllowedForClient(a.folderId));
     }
     
     // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed
@@ -2628,9 +2597,17 @@ export default function Dashboard() {
                             }}
                             className="flex items-center justify-between p-4 bg-white border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group shadow-sm relative overflow-visible rounded-lg"
                           >
-                            <div className="flex items-center gap-3 truncate">
+                            <div className="flex items-center gap-3 truncate flex-1 min-w-0">
                               <FolderIcon size={20} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} className="shrink-0 animate-in fade-in" />
-                              <span className="text-xs font-bold text-gray-700 truncate uppercase">{folder.name}</span>
+                              <div className="truncate min-w-0">
+                                <span className="text-xs font-bold text-gray-700 truncate uppercase block">{folder.name}</span>
+                                {(folder as any).clientEmail && userProfile?.role === 'admin' && (
+                                  <span className="text-[10px] font-medium text-[#a21b7e] flex items-center gap-1 mt-0.5">
+                                    <Users size={9} className="shrink-0" />
+                                    <span className="truncate">{(folder as any).clientEmail}</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             
                             <div className="relative overflow-visible">
@@ -2698,15 +2675,11 @@ export default function Dashboard() {
                                             try {
                                               setIsProcessingAction(true);
                                               sessionStorage.setItem('action_in_progress', 'true');
-                                              
                                               if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
                                                 const renameResponse = await fetch('/api/drive/update', {
                                                   method: 'POST',
                                                   headers: { 'Content-Type': 'application/json' },
-                                                  body: JSON.stringify({
-                                                    fileId: folder.id,
-                                                    newName: newName.normalize('NFC')
-                                                  })
+                                                  body: JSON.stringify({ fileId: folder.id, newName: newName.normalize('NFC') })
                                                 });
                                                 if (!renameResponse.ok) {
                                                   const errData = await renameResponse.json();
@@ -2731,6 +2704,95 @@ export default function Dashboard() {
                                         </div>
                                       </button>
 
+                                      {/* ── ATRIBUIR A CLIENTE — nível 1, flyout nível 2 ── */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
+                                        }}
+                                        className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-[#a21b7e]/5 group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <UserPlus size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                          <div>
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors block">Atribuir a Cliente</span>
+                                            {(folder as any).clientEmail && (
+                                              <span className="text-[9px] text-[#a21b7e] font-medium truncate block max-w-[120px]">{(folder as any).clientEmail}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+
+                                        <AnimatePresence>
+                                          {activeFolderSubmenu === 'atribuir' && (
+                                            <motion.div
+                                              initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                              animate={{ opacity: 1, scale: 1, x: 0 }}
+                                              exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                              transition={{ duration: 0.1 }}
+                                              className="absolute right-0 translate-x-full ml-1.5 top-0 w-56 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Selecionar Cliente</div>
+
+                                              {(folder as any).clientEmail && (
+                                                <div className="mx-2 mb-1 px-2 py-1 text-[10px] text-[#a21b7e] font-medium bg-[#a21b7e]/8 rounded flex items-center gap-1.5">
+                                                  <Check size={10} className="shrink-0" />
+                                                  <span className="truncate">Actual: {(folder as any).clientEmail}</span>
+                                                </div>
+                                              )}
+
+                                              <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                                                {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
+                                                  accounts.filter(a => a.role !== 'admin').map((client: any) => {
+                                                    const clientName = client.displayName?.split('|')[1]?.trim() || client.displayName?.split('|')[0]?.trim() || client.email;
+                                                    const isActive = (folder as any).clientEmail === client.email?.toLowerCase();
+                                                    return (
+                                                      <button
+                                                        key={client.id}
+                                                        onClick={async (e) => {
+                                                          e.stopPropagation();
+                                                          try {
+                                                            await updateDoc(doc(db, 'folders', folder.id), { clientEmail: client.email?.toLowerCase() });
+                                                            alert(`✅ Pasta "${folder.name}" atribuída a ${client.email}!`);
+                                                          } catch (err: any) {
+                                                            alert("Erro ao atribuir: " + err.message);
+                                                          }
+                                                          setActiveFolderSubmenu('none');
+                                                          setActiveFolderMenuId(null);
+                                                        }}
+                                                        className={cn(
+                                                          "w-full text-left px-3 py-2 text-xs transition-colors",
+                                                          isActive ? "bg-[#a21b7e]/10 text-[#a21b7e]" : "text-gray-700 hover:bg-gray-50 hover:text-[#a21b7e]"
+                                                        )}
+                                                      >
+                                                        <div className="flex items-center gap-2">
+                                                          <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
+                                                            isActive ? "bg-[#a21b7e] text-white" : "bg-gray-100 text-gray-500"
+                                                          )}>
+                                                            {isActive ? <Check size={10} /> : clientName?.charAt(0)?.toUpperCase()}
+                                                          </div>
+                                                          <div className="min-w-0">
+                                                            <div className="font-bold truncate">{clientName}</div>
+                                                            <div className="text-[9px] text-gray-400 truncate">{client.email}</div>
+                                                          </div>
+                                                        </div>
+                                                      </button>
+                                                    );
+                                                  })
+                                                ) : (
+                                                  <div className="px-3 py-3 text-[10px] text-gray-400 italic text-center">
+                                                    Nenhum cliente cadastrado.<br />
+                                                    <span className="text-[#a21b7e] not-italic font-medium">Crie em Gestão de Clientes.</span>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </motion.div>
+                                          )}
+                                        </AnimatePresence>
+                                      </button>
+
+                                      {/* ── PARTILHAR — apenas link ── */}
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -2739,88 +2801,23 @@ export default function Dashboard() {
                                         className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                       >
                                         <div className="flex items-center gap-3">
-                                          <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
+                                          <Share2 size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar link</span>
                                         </div>
                                         <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
-                                      
-<AnimatePresence>
+
+                                      <AnimatePresence>
                                       {activeFolderSubmenu === 'partilhar' && (
                                         <motion.div
                                           initial={{ opacity: 0, scale: 0.95, x: 10 }}
                                           animate={{ opacity: 1, scale: 1, x: 0 }}
                                           exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                           transition={{ duration: 0.1 }}
-                                          className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                                          className="absolute right-0 translate-x-full ml-1.5 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default"
                                           onClick={(e) => e.stopPropagation()}
                                         >
-                                          <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
-                                          
-                                          
-                                          <div className="relative">
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (typeof setActiveFolderSubmenu !== 'undefined') {
-                                                  setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
-                                                } else if (typeof setActiveSubmenu !== 'undefined') {
-                                                  setActiveSubmenu(activeSubmenu === 'atribuir' ? 'none' : 'atribuir');
-                                                }
-                                              }}
-                                              className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                            >
-                                              <div className="flex items-center gap-3">
-                                                <UserPlus size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Atribuir a Cliente</span>
-                                              </div>
-                                              <ChevronRight size={14} className="text-gray-300 group-hover/sub:text-[#a21b7e] transition-colors" />
-                                            </button>
-                                            
-                                            <AnimatePresence>
-                                              {((typeof activeFolderSubmenu !== 'undefined' && activeFolderSubmenu === 'atribuir') || (typeof activeSubmenu !== 'undefined' && activeSubmenu === 'atribuir')) && (
-                                                <motion.div
-                                                  initial={{ opacity: 0, scale: 0.95, x: -10 }}
-                                                  animate={{ opacity: 1, scale: 1, x: 0 }}
-                                                  exit={{ opacity: 0, scale: 0.95, x: -10 }}
-                                                  transition={{ duration: 0.1 }}
-                                                  className="absolute left-[100%] ml-1.5 top-0 w-48 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-[60] py-1 text-left max-h-64 overflow-y-auto custom-scrollbar cursor-default"
-                                                  onClick={(e) => e.stopPropagation()}
-                                                >
-                                                  <div className="px-3 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Selecione o Cliente</div>
-                                                  {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
-                                                    accounts.filter(a => a.role !== 'admin').map((client: any) => (
-                                                      <button
-                                                        key={client.id}
-                                                        onClick={async (e) => {
-                                                          e.stopPropagation();
-                                                          const it = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder' } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type } : null;
-                                                          if (it) {
-                                                            try {
-                                                              const docRef = doc(db, it.type === 'folder' ? 'folders' : 'assets', it.id);
-                                                              await updateDoc(docRef, { clientId: client.email });
-                                                              alert("Atribuído com sucesso!");
-                                                            } catch (err) {
-                                                              alert("Erro ao atribuir: " + err.message);
-                                                            }
-                                                          }
-                                                          if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                          if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                                          if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                          if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                        }}
-                                                        className="w-full text-left px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] truncate block transition-colors"
-                                                      >
-                                                        {client.displayName || client.email}
-                                                      </button>
-                                                    ))
-                                                  ) : (
-                                                    <div className="px-3 py-2 text-xs text-gray-400 italic">Nenhum cliente disponível</div>
-                                                  )}
-                                                </motion.div>
-                                              )}
-                                            </AnimatePresence>
-                                          </div>
-                                          
+                                          <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Enviar via</div>
+
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -2829,7 +2826,7 @@ export default function Dashboard() {
                                               setActiveFolderMenuId(null);
                                               setActiveFolderSubmenu('none');
                                             }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-gray-50 group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
                                           >
                                             <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
                                             <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
@@ -2839,11 +2836,11 @@ export default function Dashboard() {
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                              window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
+                                              window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}*:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
                                               setActiveFolderMenuId(null);
                                               setActiveFolderSubmenu('none');
                                             }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-gray-50 group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
                                           >
                                             <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
                                             <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
@@ -2856,17 +2853,19 @@ export default function Dashboard() {
                                               e.stopPropagation();
                                               const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
                                               navigator.clipboard.writeText(shareUrl);
-                                              alert("Link de partilha da pasta copiado para a área de transferência!");
+                                              alert("Link copiado!");
                                               setActiveFolderMenuId(null);
                                               setActiveFolderSubmenu('none');
                                             }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-gray-50 group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
                                           >
                                             <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
+                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar link</span>
                                           </button>
                                         </motion.div>
                                       )}
+                                      </AnimatePresence>
+                                      </button>
 
                                       {activeFolderSubmenu === 'organizar' && (
                                         <motion.div
@@ -2874,11 +2873,11 @@ export default function Dashboard() {
                                           animate={{ opacity: 1, scale: 1, x: 0 }}
                                           exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                           transition={{ duration: 0.1 }}
-                                          className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
+                                          className="absolute right-full mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
                                           onClick={(e) => e.stopPropagation()}
                                         >
                                           <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-                                          
+
                                           {folder.parentId !== "" && folder.parentId !== null && (
                                             <button
                                               onClick={(e) => {
@@ -2893,26 +2892,15 @@ export default function Dashboard() {
                                                       const moveResponse = await fetch('/api/drive/update', {
                                                         method: 'POST',
                                                         headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({
-                                                          fileId: folder.id,
-                                                          addParents: 'root',
-                                                          removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                        })
+                                                        body: JSON.stringify({ fileId: folder.id, addParents: 'root', removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId })
                                                       });
-                                                      if (!moveResponse.ok) {
-                                                        const errData = await moveResponse.json();
-                                                        throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                      }
+                                                      if (!moveResponse.ok) { const errData = await moveResponse.json(); throw new Error(errData.error || 'Erro ao mover no Google Drive'); }
                                                     }
                                                     await updateDoc(doc(db, "folders", folder.id), { parentId: null });
-                                                    alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
+                                                    alert(`Pasta "${folder.name}" movida para a Raiz!`);
                                                     setIsProcessingAction(false);
                                                     sessionStorage.removeItem('action_in_progress');
-                                                  } catch (err: any) {
-                                                    alert("Erro ao mover pasta: " + err.message);
-                                                    setIsProcessingAction(false);
-                                                    sessionStorage.removeItem('action_in_progress');
-                                                  }
+                                                  } catch (err: any) { alert("Erro ao mover pasta: " + err.message); setIsProcessingAction(false); sessionStorage.removeItem('action_in_progress'); }
                                                 })();
                                               }}
                                               className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -2937,26 +2925,15 @@ export default function Dashboard() {
                                                       const moveResponse = await fetch('/api/drive/update', {
                                                         method: 'POST',
                                                         headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({
-                                                          fileId: folder.id,
-                                                          addParents: f.id,
-                                                          removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                        })
+                                                        body: JSON.stringify({ fileId: folder.id, addParents: f.id, removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId })
                                                       });
-                                                      if (!moveResponse.ok) {
-                                                        const errData = await moveResponse.json();
-                                                        throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                      }
+                                                      if (!moveResponse.ok) { const errData = await moveResponse.json(); throw new Error(errData.error || 'Erro ao mover no Google Drive'); }
                                                     }
                                                     await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
                                                     alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
                                                     setIsProcessingAction(false);
                                                     sessionStorage.removeItem('action_in_progress');
-                                                  } catch (err: any) {
-                                                    alert("Erro ao mover pasta: " + err.message);
-                                                    setIsProcessingAction(false);
-                                                    sessionStorage.removeItem('action_in_progress');
-                                                  }
+                                                  } catch (err: any) { alert("Erro ao mover pasta: " + err.message); setIsProcessingAction(false); sessionStorage.removeItem('action_in_progress'); }
                                                 })();
                                               }}
                                               className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
@@ -2967,8 +2944,6 @@ export default function Dashboard() {
                                           ))}
                                         </motion.div>
                                       )}
-                                    </AnimatePresence>
-</button>
 
                                       <button
                                         onClick={(e) => {
@@ -2983,6 +2958,7 @@ export default function Dashboard() {
                                         </div>
                                         <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
                                       </button>
+
 
                                       <div className="px-3.5 py-2">
                                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
@@ -3038,8 +3014,9 @@ export default function Dashboard() {
                                                   })
                                                 });
                                                 if (!trashResponse.ok) {
-                                                  const errData = await trashResponse.json();
-                                                  console.warn("Erro ao lixo no drive:", errData.error);
+                                                  let errMsg = 'Erro desconhecido';
+                                                  try { const errData = await trashResponse.json(); errMsg = errData.error || errMsg; } catch (_) { try { errMsg = await trashResponse.text(); } catch (__) {} }
+                                                  console.warn("Erro ao lixo no drive:", errMsg);
                                                 }
                                               }
                                               await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
@@ -3562,8 +3539,9 @@ export default function Dashboard() {
                                               })
                                             });
                                             if (!trashResponse.ok) {
-                                              const errData = await trashResponse.json();
-                                              console.warn("Erro ao lixo no drive:", errData.error);
+                                              let errMsg = 'Erro desconhecido';
+                                              try { const errData = await trashResponse.json(); errMsg = errData.error || errMsg; } catch (_) { try { errMsg = await trashResponse.text(); } catch (__) {} }
+                                              console.warn("Erro ao lixo no drive:", errMsg);
                                             }
                                           }
                                           await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
