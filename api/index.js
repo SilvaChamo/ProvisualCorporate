@@ -4,28 +4,20 @@ import multer from "multer";
 import fs from "fs";
 import { Readable } from "stream";
 import { google } from "googleapis";
-import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
+import { createClient } from "@supabase/supabase-js";
 
 // Importações estáticas de configuração para que a Vercel as inclua diretamente no bundle
-import firebaseConfig from "../firebase-applet-config.json";
 import serviceKeys from "../provisual-corporate-a16cee3d2250.json";
 import oauthKeys from "../google-oauth.json";
 
 const app = express();
 app.use(express.json());
 
-// Inicializar Firebase Firestore para sincronização resiliente de tokens do Google Drive (Vercel Resiliência)
-let db = null;
-try {
-  if (firebaseConfig) {
-    const firebaseApp = initializeApp(firebaseConfig);
-    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
-    console.log("Firebase initialized in api/index.js (Vercel Static Import)");
-  }
-} catch (err) {
-  console.error("Error initializing Firebase in api/index.js:", err);
-}
+// Inicializar Supabase para sincronização resiliente de tokens do Google Drive (Vercel Resiliência)
+const SUPABASE_URL = "https://gwankhxcbkrtgxopbxwd.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3YW5raHhjYmtydGd4b3BieHdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyMjY2NzUsImV4cCI6MjA4NTgwMjY3NX0.Wmx16vE2PQBuuyCT0wWrLQTDemMufo2VJeM5NF9IfcY";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+console.log("Supabase inicializado no backend (Vercel API)!");
 
 // Google Drive Integration
 const upload = multer({ storage: multer.memoryStorage() });
@@ -47,21 +39,20 @@ async function getGoogleAuth() {
         } catch (e) {}
       }
       
-      // Se não estiver no disco local, recuperamos do Firestore (resiliência no Vercel)
-      if (!tokens && db) {
+      // Se não estiver no disco local, recuperamos do Supabase (resiliência no Vercel)
+      if (!tokens) {
         try {
-          const docRef = doc(db, "settings", "google_drive_tokens");
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            tokens = docSnap.data();
+          const { data, error } = await supabase.from('settings').select('value').eq('key', 'google_drive_tokens').single();
+          if (!error && data && data.value) {
+            tokens = data.value;
             // Salva localmente em cache temporário de arquivo na Vercel se possível
             try {
               fs.writeFileSync(localTokensPath, JSON.stringify(tokens, null, 2));
             } catch (e) {}
-            console.log("Tokens do Google Drive recuperados com sucesso do Firestore (Vercel).");
+            console.log("Tokens do Google Drive recuperados com sucesso do Supabase (Vercel).");
           }
         } catch (dbErr) {
-          console.warn("Erro ao buscar tokens do Firestore no Vercel:", dbErr);
+          console.warn("Erro ao buscar tokens do Supabase no Vercel:", dbErr);
         }
       }
 
@@ -88,12 +79,11 @@ async function getGoogleAuth() {
               fs.writeFileSync(localTokensPath, JSON.stringify(mergedTokens, null, 2));
             } catch (e) {}
 
-            if (db) {
-              try {
-                await setDoc(doc(db, "settings", "google_drive_tokens"), mergedTokens);
-              } catch (dbErr) {
-                console.error("Erro ao atualizar tokens no Firestore do Vercel:", dbErr);
-              }
+            try {
+              await supabase.from('settings').upsert({ key: 'google_drive_tokens', value: mergedTokens });
+              console.log("Tokens atualizados e salvos no Supabase do Vercel.");
+            } catch (dbErr) {
+              console.error("Erro ao atualizar tokens no Supabase do Vercel:", dbErr);
             }
             console.log("Tokens atualizados e salvos no Firestore do Vercel.");
           } catch (e) {
@@ -355,14 +345,12 @@ app.get("/api/drive/auth/callback", async (req, res) => {
       fs.writeFileSync(localTokensPath, JSON.stringify(tokens, null, 2));
     } catch (e) {}
 
-    // Persistir também no Firestore para resiliência na Vercel
-    if (db) {
-      try {
-        await setDoc(doc(db, "settings", "google_drive_tokens"), tokens);
-        console.log("Tokens de acesso persistidos com sucesso no Firestore.");
-      } catch (dbErr) {
-        console.error("Erro ao salvar tokens no Firestore:", dbErr);
-      }
+    // Persistir também no Supabase para resiliência na Vercel
+    try {
+      await supabase.from('settings').upsert({ key: 'google_drive_tokens', value: tokens });
+      console.log("Tokens de acesso persistidos com sucesso no Supabase.");
+    } catch (dbErr) {
+      console.error("Erro ao salvar tokens no Supabase:", dbErr);
     }
 
     res.send(`
@@ -403,14 +391,12 @@ app.post("/api/drive/auth/disconnect", async (req, res) => {
       fs.unlinkSync(localTokensPath);
     }
 
-    // Remover também do Firestore para manter sincronização
-    if (db) {
-      try {
-        await deleteDoc(doc(db, "settings", "google_drive_tokens"));
-        console.log("Tokens removidos com sucesso do Firestore.");
-      } catch (dbErr) {
-        console.error("Erro ao deletar tokens do Firestore:", dbErr);
-      }
+    // Remover também do Supabase para manter sincronização
+    try {
+      await supabase.from('settings').delete().eq('key', 'google_drive_tokens');
+      console.log("Tokens removidos com sucesso do Supabase.");
+    } catch (dbErr) {
+      console.error("Erro ao deletar tokens do Supabase:", dbErr);
     }
     res.json({ success: true, message: "Google Drive desconectado com sucesso." });
   } catch (error) {
