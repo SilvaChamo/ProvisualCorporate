@@ -1561,7 +1561,9 @@ export default function Dashboard() {
               const gDriveClientEmail = sharedEmails.find((email: string) => 
                 email !== 'provisualcorporate@gmail.com' && 
                 email !== 'silva.chamo@gmail.com' &&
-                !email.endsWith('.demo')
+                !email.endsWith('.demo') &&
+                !email.includes('gserviceaccount.com') &&
+                !email.includes('provisual-sync')
               );
 
               if (gDriveClientEmail) {
@@ -1609,7 +1611,9 @@ export default function Dashboard() {
             const gDriveClientEmail = sharedEmails.find((email: string) => 
               email !== 'provisualcorporate@gmail.com' && 
               email !== 'silva.chamo@gmail.com' &&
-              !email.endsWith('.demo')
+              !email.endsWith('.demo') &&
+              !email.includes('gserviceaccount.com') &&
+              !email.includes('provisual-sync')
             );
 
             if (gDriveClientEmail) {
