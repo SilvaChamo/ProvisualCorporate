@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
+  X,
   Folder as FolderIcon,
   FileText,
   Image as ImageIcon,
@@ -365,6 +366,7 @@ interface UserProfile {
 
 export default function ClientDashboard() {
   const [currentUser, setCurrentUser] = useState<any>(null);
+  
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setCurrentUser(session?.user || null);
@@ -374,6 +376,8 @@ export default function ClientDashboard() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+
 
   const [folders, setFolders] = useState<FolderData[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -614,7 +618,7 @@ export default function ClientDashboard() {
       await addDoc(collection(db, "folders"), {
         name: folderName,
         date: serverTimestamp(),
-        ownerId: currentUser?.uid || "mock-admin",
+        ownerId: currentUser?.id || "mock-admin",
         parentId: selectedFolderId || (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : null),
         color: "#e2b13c",
         adminToken: "Silva_Chamo_Master_Admin_2026"
@@ -963,7 +967,7 @@ export default function ClientDashboard() {
               size: fileSize,
               url: driveFile.webViewLink
             }],
-            ...(userProfile?.role === 'cliente' && { clientId: currentUser?.uid }),
+            ...(userProfile?.role === 'cliente' && { clientId: currentUser?.id }),
             adminToken: "Silva_Chamo_Master_Admin_2026"
           };
 
@@ -1257,7 +1261,7 @@ export default function ClientDashboard() {
       return;
     }
     const fetchProfile = async () => {
-      const userDoc = await getDoc(doc(db, "users", currentUser!.uid));
+      const userDoc = await getDoc(doc(db, "users", currentUser!.id));
       if (userDoc.exists()) {
         setUserProfile(userDoc.data() as UserProfile);
       } else {
@@ -1281,7 +1285,7 @@ export default function ClientDashboard() {
         if (data.date && typeof data.date.toDate === 'function') folderDate = data.date.toDate();
         return { id: doc.id, ...data, date: folderDate } as FolderData;
       });
-      setAllFolders(folderList.sort((a, b) => b.date.getTime() - a.date.getTime()));
+      setFolders(folderList.sort((a, b) => b.date.getTime() - a.date.getTime()));
       setFoldersLoaded(true);
     }, (error) => {
       console.error("Folders read error:", error);
@@ -1302,7 +1306,7 @@ export default function ClientDashboard() {
         if (data.uploadDate && typeof data.uploadDate.toDate === 'function') upDate = data.uploadDate.toDate();
         return { id: doc.id, ...data, captureDate: capDate, uploadDate: upDate } as Asset;
       });
-      setAllAssets(assetList);
+      setAssets(assetList);
       setAssetsLoaded(true);
     }, (error) => {
       console.error("Assets read error:", error);
@@ -1349,7 +1353,7 @@ export default function ClientDashboard() {
         f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
         f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
         (f as any).clientId === userProfile.clientId ||
-        (f as any).clientId === currentUser?.uid
+        (f as any).clientId === currentUser?.id
       )
     );
 
@@ -1378,10 +1382,7 @@ export default function ClientDashboard() {
     }
   }, [userProfile?.role, selectedFolderId, folders]);
 
-  // Test Storage Connection
-  useEffect(() => {
-    console.log("Tentando conectar ao bucket:", storage.app.options.storageBucket);
-  }, []);
+  
 
   useEffect(() => {
     const fetchStorage = async () => {
@@ -1458,9 +1459,9 @@ export default function ClientDashboard() {
     let result = assets;
 
     // Filtrar por clientId ou pasta permitida se for cliente (ver apenas seus próprios arquivos)
-    if (userProfile?.role === 'cliente' && currentUser?.uid) {
+    if (userProfile?.role === 'cliente' && currentUser?.id) {
       result = result.filter(a =>
-        (a as any).clientId === currentUser?.uid ||
+        (a as any).clientId === currentUser?.id ||
         ((a as any).clientId === userProfile.clientId) ||
         isFolderAllowedForClient(a.folderId)
       );
@@ -1543,7 +1544,7 @@ export default function ClientDashboard() {
               f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
               f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
               (f as any).clientId === userProfile.clientId ||
-              (f as any).clientId === currentUser?.uid
+              (f as any).clientId === currentUser?.id
             )
           );
         } else {
@@ -2390,28 +2391,7 @@ export default function ClientDashboard() {
                                           >
                                             <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                                if (item) {
-                                                  if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                    onDistribute(item);
-                                                  } else if (typeof setItemToDistribute !== 'undefined') {
-                                                    setItemToDistribute(item);
-                                                    setDistributeModalOpen(true);
-                                                  }
-                                                  if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                  if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                  if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                  if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                                }
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                            >
-                                              <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                                            </button>
+                                            
 
                                             <button
                                               onClick={(e) => {
@@ -2872,28 +2852,7 @@ export default function ClientDashboard() {
                                       >
                                         <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                            if (item) {
-                                              if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                onDistribute(item);
-                                              } else if (typeof setItemToDistribute !== 'undefined') {
-                                                setItemToDistribute(item);
-                                                setDistributeModalOpen(true);
-                                              }
-                                              if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                              if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                              if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                              if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                            }
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                        >
-                                          <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                                        </button>
+                                        
 
                                         <button
                                           onClick={(e) => {
@@ -3976,28 +3935,7 @@ function AssetCard({
                   >
                     <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                        if (item) {
-                          if (typeof onDistribute !== 'undefined' && onDistribute) {
-                            onDistribute(item);
-                          } else if (typeof setItemToDistribute !== 'undefined') {
-                            setItemToDistribute(item);
-                            setDistributeModalOpen(true);
-                          }
-                          if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                          if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                          if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                          if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                        }
-                      }}
-                      className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                    >
-                      <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                    </button>
+                    
 
                     <button
                       onClick={(e) => {
@@ -4686,28 +4624,7 @@ function AssetRow({
                     >
                       <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                          if (item) {
-                            if (typeof onDistribute !== 'undefined' && onDistribute) {
-                              onDistribute(item);
-                            } else if (typeof setItemToDistribute !== 'undefined') {
-                              setItemToDistribute(item);
-                              setDistributeModalOpen(true);
-                            }
-                            if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                            if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                            if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                            if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                          }
-                        }}
-                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                      >
-                        <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                      </button>
+                      
 
                       <button
                         onClick={(e) => {
