@@ -250,134 +250,6 @@ function SkeletonView({ viewMode, activeTab }: { viewMode: 'grid' | 'list'; acti
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════
-          MODAL ORGANIZAR — Estilo Google Drive (Mover / Copiar)
-          Overlay: transparente sem blur
-          ══════════════════════════════════════════════════════════ */}
-      <AnimatePresence>
-        {organizarModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40"
-            onClick={() => { setOrganizarModal(null); setOrganizarSearch(''); }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 16 }}
-              transition={{ duration: 0.18 }}
-              className="bg-white rounded-xl shadow-2xl w-[520px] max-w-[95vw] flex flex-col overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="px-6 pt-5 pb-4 border-b border-gray-100">
-                <h2 className="text-[15px] font-black text-gray-800">
-                  {organizarModal.mode === 'move' ? 'Mover' : 'Copiar'} &ldquo;{organizarModal.folder.name}&rdquo; para
-                </h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[11px] text-gray-400">Localização actual:</span>
-                  <span className="text-[11px] font-bold text-[#a21b7e] bg-[#a21b7e]/8 px-2 py-0.5 rounded">
-                    {folders.find(f => f.id === organizarModal.folder.parentId)?.name || 'Raiz (Meu Drive)'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex border-b border-gray-100">
-                {(['move', 'copy'] as const).map(m => (
-                  <button
-                    key={m}
-                    onClick={() => setOrganizarModal({ ...organizarModal, mode: m })}
-                    className={cn(
-                      "flex-1 py-2.5 text-xs font-black uppercase tracking-wider transition-colors",
-                      organizarModal.mode === m
-                        ? "text-[#a21b7e] border-b-2 border-[#a21b7e]"
-                        : "text-gray-400 hover:text-gray-600"
-                    )}
-                  >
-                    {m === 'move' ? '📁 Mover' : '📋 Copiar'}
-                  </button>
-                ))}
-              </div>
-              <div className="px-4 pt-3 pb-2">
-                <div className="relative">
-                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Pesquisar pasta de destino..."
-                    value={organizarSearch}
-                    onChange={e => setOrganizarSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#a21b7e] transition-all"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto max-h-[300px] px-2 pb-2 custom-scrollbar">
-                {(organizarModal.folder.parentId !== null && organizarModal.folder.parentId !== '') && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        setIsProcessingAction(true);
-                        if (organizarModal.folder.id.length > 20) {
-                          const r = await fetch('/api/drive/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: organizarModal.folder.id, addParents: 'root', removeParents: organizarModal.folder.parentId }) });
-                          if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
-                        }
-                        if (organizarModal.mode === 'move') { await updateDoc(doc(db, 'folders', organizarModal.folder.id), { parentId: null }); }
-                        alert('Pasta movida para Raiz!');
-                        setOrganizarModal(null); setOrganizarSearch(''); handleActionSuccess();
-                      } catch (err: any) { alert('Erro: ' + err.message); setIsProcessingAction(false); }
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left group transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                      <FolderIcon size={16} className="text-gray-500" />
-                    </div>
-                    <div>
-                      <div className="text-[13px] font-bold text-gray-700 group-hover:text-[#a21b7e] transition-colors">Raiz (Meu Drive)</div>
-                      <div className="text-[10px] text-gray-400">Pasta principal do drive</div>
-                    </div>
-                  </button>
-                )}
-                {folders
-                  .filter(f => f.id !== organizarModal.folder.id && f.id !== organizarModal.folder.parentId && !(f as any).trashed && !(f as any).deleted && (organizarSearch === '' || f.name.toLowerCase().includes(organizarSearch.toLowerCase())))
-                  .map(f => (
-                    <button
-                      key={f.id}
-                      onClick={async () => {
-                        try {
-                          setIsProcessingAction(true);
-                          if (organizarModal.folder.id.length > 20) {
-                            const r = await fetch('/api/drive/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: organizarModal.folder.id, addParents: f.id, removeParents: organizarModal.folder.parentId }) });
-                            if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
-                          }
-                          if (organizarModal.mode === 'move') { await updateDoc(doc(db, 'folders', organizarModal.folder.id), { parentId: f.id }); }
-                          alert(`Pasta "${organizarModal.folder.name}" ${organizarModal.mode === 'move' ? 'movida' : 'copiada'} para "${f.name}"!`);
-                          setOrganizarModal(null); setOrganizarSearch(''); handleActionSuccess();
-                        } catch (err: any) { alert('Erro: ' + err.message); setIsProcessingAction(false); }
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left group transition-colors"
-                    >
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: ((f as any).color || '#e2b13c') + '22' }}>
-                        <FolderIcon size={16} style={{ color: (f as any).color || '#e2b13c' }} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-bold text-gray-700 group-hover:text-[#a21b7e] transition-colors truncate">{f.name}</div>
-                        {(f as any).clientEmail && <div className="text-[10px] text-gray-400 truncate">{(f as any).clientEmail}</div>}
-                      </div>
-                    </button>
-                  ))}
-              </div>
-              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
-                <span className="text-[10px] text-gray-400">Clique numa pasta para confirmar</span>
-                <button onClick={() => { setOrganizarModal(null); setOrganizarSearch(''); }} className="px-5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                  Cancelar
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
     </div>
   );
 }
@@ -5712,6 +5584,136 @@ function AssetRow({
           </AnimatePresence>
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════
+          MODAL ORGANIZAR — Estilo Google Drive (Mover / Copiar)
+          Overlay: transparente sem blur
+          ══════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {organizarModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40"
+            onClick={() => { setOrganizarModal(null); setOrganizarSearch(''); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{ duration: 0.18 }}
+              className="bg-white rounded-xl shadow-2xl w-[520px] max-w-[95vw] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-6 pt-5 pb-4 border-b border-gray-100">
+                <h2 className="text-[15px] font-black text-gray-800">
+                  {organizarModal.mode === 'move' ? 'Mover' : 'Copiar'} &ldquo;{organizarModal.folder.name}&rdquo; para
+                </h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[11px] text-gray-400">Localização actual:</span>
+                  <span className="text-[11px] font-bold text-[#a21b7e] bg-[#a21b7e]/8 px-2 py-0.5 rounded">
+                    {folders.find(f => f.id === organizarModal.folder.parentId)?.name || 'Raiz (Meu Drive)'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex border-b border-gray-100">
+                {(['move', 'copy'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setOrganizarModal({ ...organizarModal, mode: m })}
+                    className={cn(
+                      "flex-1 py-2.5 text-xs font-black uppercase tracking-wider transition-colors",
+                      organizarModal.mode === m
+                        ? "text-[#a21b7e] border-b-2 border-[#a21b7e]"
+                        : "text-gray-400 hover:text-gray-600"
+                    )}
+                  >
+                    {m === 'move' ? '📁 Mover' : '📋 Copiar'}
+                  </button>
+                ))}
+              </div>
+              <div className="px-4 pt-3 pb-2">
+                <div className="relative">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Pesquisar pasta de destino..."
+                    value={organizarSearch}
+                    onChange={e => setOrganizarSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#a21b7e] transition-all"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto max-h-[300px] px-2 pb-2 custom-scrollbar">
+                {(organizarModal.folder.parentId !== null && organizarModal.folder.parentId !== '') && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsProcessingAction(true);
+                        if (organizarModal.folder.id.length > 20) {
+                          const r = await fetch('/api/drive/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: organizarModal.folder.id, addParents: 'root', removeParents: organizarModal.folder.parentId }) });
+                          if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+                        }
+                        if (organizarModal.mode === 'move') { await updateDoc(doc(db, 'folders', organizarModal.folder.id), { parentId: null }); }
+                        alert('Pasta movida para Raiz!');
+                        setOrganizarModal(null); setOrganizarSearch(''); handleActionSuccess();
+                      } catch (err: any) { alert('Erro: ' + err.message); setIsProcessingAction(false); }
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left group transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                      <FolderIcon size={16} className="text-gray-500" />
+                    </div>
+                    <div>
+                      <div className="text-[13px] font-bold text-gray-700 group-hover:text-[#a21b7e] transition-colors">Raiz (Meu Drive)</div>
+                      <div className="text-[10px] text-gray-400">Pasta principal do drive</div>
+                    </div>
+                  </button>
+                )}
+                {folders
+                  .filter(f => f.id !== organizarModal.folder.id && f.id !== organizarModal.folder.parentId && !(f as any).trashed && !(f as any).deleted && (organizarSearch === '' || f.name.toLowerCase().includes(organizarSearch.toLowerCase())))
+                  .map(f => (
+                    <button
+                      key={f.id}
+                      onClick={async () => {
+                        try {
+                          setIsProcessingAction(true);
+                          if (organizarModal.folder.id.length > 20) {
+                            const r = await fetch('/api/drive/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: organizarModal.folder.id, addParents: f.id, removeParents: organizarModal.folder.parentId }) });
+                            if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+                          }
+                          if (organizarModal.mode === 'move') { await updateDoc(doc(db, 'folders', organizarModal.folder.id), { parentId: f.id }); }
+                          alert(`Pasta "${organizarModal.folder.name}" ${organizarModal.mode === 'move' ? 'movida' : 'copiada'} para "${f.name}"!`);
+                          setOrganizarModal(null); setOrganizarSearch(''); handleActionSuccess();
+                        } catch (err: any) { alert('Erro: ' + err.message); setIsProcessingAction(false); }
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left group transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: ((f as any).color || '#e2b13c') + '22' }}>
+                        <FolderIcon size={16} style={{ color: (f as any).color || '#e2b13c' }} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-bold text-gray-700 group-hover:text-[#a21b7e] transition-colors truncate">{f.name}</div>
+                        {(f as any).clientEmail && <div className="text-[10px] text-gray-400 truncate">{(f as any).clientEmail}</div>}
+                      </div>
+                    </button>
+                  ))}
+              </div>
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+                <span className="text-[10px] text-gray-400">Clique numa pasta para confirmar</span>
+                <button onClick={() => { setOrganizarModal(null); setOrganizarSearch(''); }} className="px-5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
     </div>
   );
 }
