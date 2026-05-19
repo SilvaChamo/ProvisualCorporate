@@ -887,7 +887,17 @@ export default function Dashboard() {
     setIsUploading(true);
     setShowUploadQueueCard(true);
 
-    const filesArray = Array.from(files) as File[];
+    // Filtrar ficheiros de sistema do macOS/Windows para não fazer upload (ex: .DS_Store)
+    const filesArray = (Array.from(files) as File[]).filter(file => {
+      const name = file.name;
+      return !name.toLowerCase().includes('ds_store') && !name.startsWith('._') && name !== 'Thumbs.db' && name !== 'desktop.ini';
+    });
+
+    if (filesArray.length === 0) {
+      setIsUploading(false);
+      return;
+    }
+
     const totalFiles = filesArray.length;
 
     // Adicionar todos os arquivos à fila de upload
@@ -1241,7 +1251,7 @@ export default function Dashboard() {
 
         // ── Ignorar ficheiros de sistema (macOS/Windows) ──
         if (
-          file.name === '.DS_Store' ||
+          file.name.toLowerCase().includes('ds_store') ||
           file.name.startsWith('._') ||
           file.name === 'Thumbs.db' ||
           file.name === 'desktop.ini'
@@ -1686,7 +1696,13 @@ export default function Dashboard() {
 
     // Para todas as outras abas/views, remover itens que estão no lixo
     // Ocultar ficheiros de sistema (ex: .DS_Store criados pelo macOS)
-    result = result.filter(a => !a.trashed && a.folderId !== 'trash' && !a.name.startsWith('.DS_Store') && !a.name.startsWith('._') && a.name !== 'Thumbs.db');
+    result = result.filter(a => 
+      !a.trashed && 
+      a.folderId !== 'trash' && 
+      !a.name.toLowerCase().includes('ds_store') && 
+      !a.name.startsWith('._') && 
+      a.name !== 'Thumbs.db'
+    );
 
     if (selectedFolderId) {
       // Se for uma pasta do Google Drive, o ID dela no Firestore será o ID do Google
@@ -1734,7 +1750,7 @@ export default function Dashboard() {
     result = result.filter(f =>
       !f.trashed &&
       f.parentId !== 'trash' &&
-      f.name !== '.DS_Store' &&
+      !f.name.toLowerCase().includes('ds_store') &&
       !f.name.startsWith('._') &&
       f.name !== 'Thumbs.db' &&
       f.name !== 'desktop.ini'
