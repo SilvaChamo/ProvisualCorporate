@@ -23,6 +23,7 @@ function mapToSnakeCase(table: string, data: any): any {
     else if (key === 'thumbnailUrl') newKey = 'thumbnail_url';
     else if (key === 'displayName') newKey = 'display_name';
     else if (key === 'clientId') newKey = 'client_id';
+    else if (key === 'clientEmail') newKey = 'client_email';
     else if (key === 'createdAt') newKey = 'created_at';
 
     // Handle firebase timestamps / javascript dates
@@ -115,6 +116,7 @@ export async function getDoc(docRef: any) {
         else if (key === 'thumbnail_url') newKey = 'thumbnailUrl';
         else if (key === 'display_name') newKey = 'displayName';
         else if (key === 'client_id') newKey = 'clientId';
+        else if (key === 'client_email') newKey = 'clientEmail';
         
         // Wrap dates with Firestore Timestamp shim so .toDate() works!
         if (key === 'capture_date' || key === 'upload_date' || key === 'date') {
@@ -287,6 +289,7 @@ export function onSnapshot(ref: any, callback: (snapshot: any) => void, errorCal
           else if (key === 'thumbnail_url') newKey = 'thumbnailUrl';
           else if (key === 'display_name') newKey = 'displayName';
           else if (key === 'client_id') newKey = 'clientId';
+        else if (key === 'client_email') newKey = 'clientEmail';
           
           if (key === 'capture_date' || key === 'upload_date' || key === 'date') {
             mapped[newKey] = toDateCompat(item[key]);

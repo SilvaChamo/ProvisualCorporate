@@ -396,7 +396,7 @@ export default function Dashboard() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean } | null>(null);
   
   // Estado para conexão híbrida pessoal de Google Drive do Silva
-  const [driveStatus, setDriveStatus] = useState<{connected: boolean; email: string; configNeeded: boolean} | null>(null);
+  const [driveStatus, setDriveStatus] = useState<{connected: boolean; type: string; email: string; configNeeded: boolean} | null>(null);
   const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
   
   // Estados para Gestão de Contas de Acesso dos Clientes
@@ -979,7 +979,7 @@ export default function Dashboard() {
               size: fileSize,
               url: driveFile.webViewLink
             }],
-            ...(userProfile?.role === 'cliente' && { clientId: currentUser?.id }),
+            ...(userProfile?.role === 'cliente' && { clientId: currentUser?.email }),
             adminToken: "Silva_Chamo_Master_Admin_2026"
           };
 
@@ -1125,26 +1125,48 @@ export default function Dashboard() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao conectar com Google Drive');
+        let errMsg = 'Erro ao conectar com Google Drive';
+        try {
+          const errorData = await response.json();
+          errMsg = errorData.error || errMsg;
+        } catch (_) {
+          try {
+            const text = await response.text();
+            errMsg = text.substring(0, 150) || errMsg;
+          } catch (__) {}
+        }
+        throw new Error(errMsg);
       }
 
-      const driveFiles = await response.json();
+      let driveFiles;
+      try {
+        driveFiles = await response.json();
+      } catch (jsonErr) {
+        let textVal = '';
+        try { textVal = await response.text(); } catch (_) {}
+        throw new Error("Resposta inválida do servidor: " + (textVal.substring(0, 150) || jsonErr.message));
+      }
       if (!isBackground) setUploadProgress(50);
 
       // Converter arquivos do Drive para o formato do nosso sistema
       for (const file of driveFiles) {
+        const isShortcut = file.mimeType === 'application/vnd.google-apps.shortcut';
+        const targetMimeType = isShortcut ? file.shortcutDetails?.targetMimeType : null;
         const isFolder = file.mimeType === 'application/vnd.google-apps.folder' || 
-          (file.mimeType === 'application/vnd.google-apps.shortcut' && file.shortcutDetails?.targetMimeType === 'application/vnd.google-apps.folder');
+          (isShortcut && targetMimeType === 'application/vnd.google-apps.folder');
         const extension = file.name.split('.').pop()?.toLowerCase() || '';
         const isRaw = ['cr2', 'cr3', 'nef', 'arw', 'dng', 'raf', 'orf'].includes(extension);
 
-        const fileType = isFolder ? 'folder' : (file.mimeType.includes('image') || isRaw ? 'image' : (file.mimeType.includes('video') ? 'video' : 'document'));
+        const mimeTypeToUse = targetMimeType || file.mimeType;
+        const fileType = isFolder ? 'folder' : (mimeTypeToUse.includes('image') || isRaw ? 'image' : (mimeTypeToUse.includes('video') ? 'video' : 'document'));
         const fileSize = file.size ? `${(parseInt(file.size) / 1024 / 1024).toFixed(1)} MB` : (isFolder ? '-' : '0 MB');
+
+        // Resolver o ID real do alvo se for um atalho
+        const realId = (isShortcut && file.shortcutDetails?.targetId) ? file.shortcutDetails.targetId : file.id;
 
         if (isFolder) {
           // Salvar pasta no Firestore com o mesmo ID do Drive
-          await setDoc(doc(db, "folders", file.id), {
+          await setDoc(doc(db, "folders", realId), {
             name: file.name,
             date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
             ownerId: "google-drive",
@@ -1155,7 +1177,7 @@ export default function Dashboard() {
           });
 
           // Limpar qualquer asset residual que tenha sido cadastrado incorretamente com esse ID de pasta/atalho
-          const residual = assets.find(a => a.driveId === file.id);
+          const residual = assets.find(a => a.driveId === realId);
           if (residual) {
             try {
               await deleteDoc(doc(db, "assets", residual.id));
@@ -1172,7 +1194,7 @@ export default function Dashboard() {
           uploadDate: serverTimestamp(),
           folderId: file.trashed ? 'trash' : folderId,
           ownerId: "google-drive",
-          driveId: file.id,
+          driveId: realId,
           thumbnailUrl: file.thumbnailLink || "",
           starred: file.starred || false,
           trashed: file.trashed || false,
@@ -1186,29 +1208,21 @@ export default function Dashboard() {
 
         if (!isFolder) {
           try {
-            const { supabase: sb } = await import('../lib/supabase');
-            const mapped = {
-              name: assetData.name,
-              type: assetData.type,
-              folder_id: assetData.folderId,
-              owner_id: assetData.ownerId,
-              drive_id: assetData.driveId,
-              thumbnail_url: assetData.thumbnailUrl,
-              starred: assetData.starred,
-              trashed: assetData.trashed,
-              versions: assetData.versions,
-              admin_token: assetData.adminToken,
-            };
-            await sb.from('assets').upsert(mapped, { onConflict: 'drive_id', ignoreDuplicates: false });
+            // Usar o setDoc para fazer upsert na tabela assets com o ID do documento igual ao driveId (realId)
+            // e garantir acionamento do notifyTableChange para atualização instantânea em tempo real!
+            await setDoc(doc(db, "assets", realId), assetData);
           } catch (upsertErr: any) {
-            console.warn("[Sync Silencioso] Upsert de asset ignorado:", upsertErr?.message);
+            console.warn("[Sync Silencioso] Salvar asset ignorado:", upsertErr?.message);
           }
         }
       }
 
       // 1. Identificar arquivos no Supabase para esta pasta que foram apagados ou movidos do Drive
       const currentDbAssets = assets.filter(a => a.folderId === (folderId === 'root' ? null : folderId));
-      const driveFileIds = driveFiles.map((f: any) => f.id);
+      const driveFileIds = driveFiles.map((f: any) => {
+        const isShortcut = f.mimeType === 'application/vnd.google-apps.shortcut';
+        return (isShortcut && f.shortcutDetails?.targetId) ? f.shortcutDetails.targetId : f.id;
+      });
       for (const dbAsset of currentDbAssets) {
         if (dbAsset.driveId && !driveFileIds.includes(dbAsset.driveId)) {
           try {
@@ -1368,8 +1382,8 @@ export default function Dashboard() {
       (
         f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
         f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
-        (f as any).clientId === userProfile.clientId ||
-        (f as any).clientId === currentUser?.id
+        (f as any).clientId === userProfile.email ||
+        (f as any).clientId === currentUser?.email
       )
     );
 
@@ -1477,8 +1491,8 @@ export default function Dashboard() {
     // Filtrar por clientId ou pasta permitida se for cliente (ver apenas seus próprios arquivos)
     if (userProfile?.role === 'cliente' && currentUser?.id) {
       result = result.filter(a => 
-        (a as any).clientId === currentUser?.id || 
-        ((a as any).clientId === userProfile.clientId) ||
+        (a as any).clientId === currentUser?.email || 
+        ((a as any).clientId === userProfile.email) ||
         isFolderAllowedForClient(a.folderId)
       );
     }
@@ -1559,8 +1573,8 @@ export default function Dashboard() {
             (
               f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
               f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
-              (f as any).clientId === userProfile.clientId ||
-              (f as any).clientId === currentUser?.id
+              (f as any).clientId === userProfile.email ||
+              (f as any).clientId === currentUser?.email
             )
           );
         } else {
@@ -2069,9 +2083,20 @@ export default function Dashboard() {
                         <div className="px-4 py-2 border-b border-gray-50 mb-1">
                           <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest block">Status do Drive</span>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className={cn("w-2 h-2 rounded-full shrink-0", driveStatus?.connected ? "bg-emerald-500 animate-pulse" : "bg-gray-300")} />
+                            <span className={cn(
+                              "w-2 h-2 rounded-full shrink-0", 
+                              driveStatus?.type === "oauth2" 
+                                ? "bg-emerald-500 animate-pulse" 
+                                : driveStatus?.type === "service_account"
+                                ? "bg-blue-500 animate-pulse" 
+                                : "bg-red-500"
+                            )} />
                             <span className="text-xs font-bold text-gray-700 truncate">
-                              {driveStatus?.connected ? "Cota Pessoal Ativa" : "Cota de Serviço Limite"}
+                              {driveStatus?.type === "oauth2" 
+                                ? "Cota Pessoal Ativa" 
+                                : driveStatus?.type === "service_account"
+                                ? "Conta de Serviço Ativa" 
+                                : "Google Drive Desconectado"}
                             </span>
                           </div>
                           {driveStatus?.connected && (
@@ -2647,7 +2672,7 @@ export default function Dashboard() {
                                                           if (it) {
                                                             try {
                                                               const docRef = doc(db, it.type === 'folder' ? 'folders' : 'assets', it.id);
-                                                              await updateDoc(docRef, { clientId: client.id });
+                                                              await updateDoc(docRef, { clientId: client.email });
                                                               alert("Atribuído com sucesso!");
                                                             } catch (err) {
                                                               alert("Erro ao atribuir: " + err.message);
@@ -3173,7 +3198,7 @@ export default function Dashboard() {
                                                           if (it) {
                                                             try {
                                                               const docRef = doc(db, it.type === 'folder' ? 'folders' : 'assets', it.id);
-                                                              await updateDoc(docRef, { clientId: client.id });
+                                                              await updateDoc(docRef, { clientId: client.email });
                                                               alert("Atribuído com sucesso!");
                                                             } catch (err) {
                                                               alert("Erro ao atribuir: " + err.message);
@@ -3953,8 +3978,8 @@ export default function Dashboard() {
                       <button
                         key={client.id}
                         type="button"
-                        onClick={() => setSelectedClientId(client.id)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedClientId === client.id ? 'border-[#a21b7e] bg-[#a21b7e]/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
+                        onClick={() => setSelectedClientId(client.email)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedClientId === client.email ? 'border-[#a21b7e] bg-[#a21b7e]/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
                       >
                         <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
                           {parsed.logo ? (
@@ -3969,7 +3994,7 @@ export default function Dashboard() {
                           <p className="text-sm font-bold text-gray-700 font-sans">{parsed.name || 'Cliente'}</p>
                           <p className="text-xs text-gray-400 font-sans">{client.email}</p>
                         </div>
-                        {selectedClientId === client.id && <CheckCircle2 size={16} className="text-[#a21b7e] ml-auto shrink-0" />}
+                        {selectedClientId === client.email && <CheckCircle2 size={16} className="text-[#a21b7e] ml-auto shrink-0" />}
                       </button>
                     );
                   })}
@@ -4414,7 +4439,7 @@ function AssetCard({
                                                           if (it) {
                                                             try {
                                                               const docRef = doc(db, it.type === 'folder' ? 'folders' : 'assets', it.id);
-                                                              await updateDoc(docRef, { clientId: client.id });
+                                                              await updateDoc(docRef, { clientId: client.email });
                                                               alert("Atribuído com sucesso!");
                                                             } catch (err) {
                                                               alert("Erro ao atribuir: " + err.message);
@@ -5168,7 +5193,7 @@ function AssetRow({
                                                           if (it) {
                                                             try {
                                                               const docRef = doc(db, it.type === 'folder' ? 'folders' : 'assets', it.id);
-                                                              await updateDoc(docRef, { clientId: client.id });
+                                                              await updateDoc(docRef, { clientId: client.email });
                                                               alert("Atribuído com sucesso!");
                                                             } catch (err) {
                                                               alert("Erro ao atribuir: " + err.message);

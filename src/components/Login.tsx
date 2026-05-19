@@ -51,21 +51,31 @@ export default function Login() {
     setSuccessMessage(null);
     try {
       if (isSignUp) {
-        const result = await createUserWithEmailAndPassword(auth, email, password);
-        const user = result.user;
+        const { data: authData, error: authErr } = await supabase.auth.signUp({ email, password });
+        if (authErr) throw authErr;
+        const user = authData.user;
         
-        // Create user profile in Firestore with adminToken field
-        await setDoc(doc(db, "users", user.uid), {
-          email: user.email,
-          role: "admin", // Definido como administrador ao cadastrar
-          createdAt: serverTimestamp(),
-          adminToken: "Silva_Chamo_Master_Admin_2026"
-        });
+        if (user) {
+          await setDoc(doc(db, "users", user.id), {
+            email: user.email,
+            role: "admin",
+            createdAt: serverTimestamp(),
+            adminToken: "Silva_Chamo_Master_Admin_2026"
+          });
+        }
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({ email, password });
+        if (authErr) throw authErr;
+        const user = authData.user;
+        if (user) {
+          const userDoc = await getDoc(doc(db, "users", user.id));
+          const role = userDoc.exists() ? userDoc.data()?.role : "admin";
+          window.location.href = role === "admin" ? "/dashboard" : "/cliente";
+          return;
+        }
       }
     } catch (err: any) {
-      console.warn("Firebase Auth falhou, verificando credenciais locais no Firestore:", err.code);
+      console.warn("Supabase Auth falhou, verificando credenciais locais no Firestore:", err);
       
       // Permitir login via Firestore em qualquer ambiente (desenvolvimento ou produção)
       // para suportar contas corporativas e de clientes criadas diretamente no painel.

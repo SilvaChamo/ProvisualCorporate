@@ -41,10 +41,15 @@ async function startServer() {
   async function getGoogleAuth() {
     
     // 1. Tentar ler as credenciais OAuth 2.0 pessoais do Silva
-    let oauthKeys;
+    let oauthKeys: any = null;
     try {
       if (fs.existsSync("./google-oauth.json")) {
         oauthKeys = JSON.parse(fs.readFileSync("./google-oauth.json", "utf-8"));
+      } else if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+        oauthKeys = {
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET
+        };
       }
     } catch (err) {
       // Ignorar erro
@@ -64,8 +69,10 @@ async function startServer() {
             const { data, error } = await supabase.from('settings').select('value').eq('key', 'google_drive_tokens').single();
             if (!error && data && data.value) {
               tokens = data.value;
-              // Salva localmente em cache temporário de arquivo
-              fs.writeFileSync("./google-tokens.json", JSON.stringify(tokens, null, 2));
+              // Salva localmente em cache temporário de arquivo se possível
+              try {
+                fs.writeFileSync("./google-tokens.json", JSON.stringify(tokens, null, 2));
+              } catch (_) {}
               console.log("Tokens do Google Drive recuperados com absoluto sucesso do Supabase.");
             }
           } catch (dbErr) {
@@ -89,7 +96,9 @@ async function startServer() {
                 currentTokens = JSON.parse(fs.readFileSync("./google-tokens.json", "utf-8"));
               }
               const mergedTokens = { ...currentTokens, ...newTokens };
-              fs.writeFileSync("./google-tokens.json", JSON.stringify(mergedTokens, null, 2));
+              try {
+                fs.writeFileSync("./google-tokens.json", JSON.stringify(mergedTokens, null, 2));
+              } catch (_) {}
               
               try {
                 await supabase.from('settings').upsert({ key: 'google_drive_tokens', value: mergedTokens });
@@ -113,8 +122,10 @@ async function startServer() {
     let serviceKeys;
     if (process.env.GOOGLE_KEYS) {
       serviceKeys = JSON.parse(process.env.GOOGLE_KEYS);
-    } else {
+    } else if (fs.existsSync("./provisual-corporate-a16cee3d2250.json")) {
       serviceKeys = JSON.parse(fs.readFileSync("./provisual-corporate-a16cee3d2250.json", "utf-8"));
+    } else {
+      throw new Error("Nenhuma credencial do Google Drive configurada. Adicione as chaves no painel do servidor ou carregue o ficheiro JSON de credenciais.");
     }
 
     const auth = new google.auth.JWT({
@@ -445,22 +456,38 @@ async function startServer() {
 
   // Rotas de Autorização Pessoal OAuth 2.0 do Silva (provisualcorporate@gmail.com)
   app.get("/api/drive/auth/status", async (req, res) => {
-    const oauthConfigured = fs.existsSync("./google-oauth.json");
+    const oauthConfigured = fs.existsSync("./google-oauth.json") || (!!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET);
     const tokensExist = fs.existsSync("./google-tokens.json");
     
-    let email = "Conta de Serviço (Gravação Limitada)";
-    if (tokensExist && oauthConfigured) {
+    // Verificar se tokens existem no Supabase se não localmente
+    let hasOAuthTokens = tokensExist;
+    if (!hasOAuthTokens) {
       try {
-        const tokens = JSON.parse(fs.readFileSync("./google-tokens.json", "utf-8"));
-        email = "provisualcorporate@gmail.com (Cota Pessoal Ativa)";
+        const { data, error } = await supabase.from('settings').select('value').eq('key', 'google_drive_tokens').single();
+        if (!error && data && data.value) {
+          hasOAuthTokens = true;
+        }
       } catch (e) {}
     }
 
+    const serviceKeysConfigured = !!process.env.GOOGLE_KEYS || fs.existsSync("./provisual-corporate-a16cee3d2250.json");
+
+    let statusType = "disconnected";
+    let email = "Desconectado (Sem chaves de acesso)";
+
+    if (oauthConfigured && hasOAuthTokens) {
+      statusType = "oauth2";
+      email = "provisualcorporate@gmail.com (Cota Pessoal)";
+    } else if (serviceKeysConfigured) {
+      statusType = "service_account";
+      email = "provisual-sync@provisual-corporate.iam.gserviceaccount.com (Serviço)";
+    }
+
     res.json({
-      connected: tokensExist && oauthConfigured,
-      type: tokensExist && oauthConfigured ? "oauth2" : "service_account",
+      connected: statusType !== "disconnected",
+      type: statusType,
       email,
-      configNeeded: !oauthConfigured
+      configNeeded: !oauthConfigured && !serviceKeysConfigured
     });
   });
 
