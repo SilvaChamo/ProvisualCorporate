@@ -33,6 +33,7 @@ import {
   Pencil,
   Copy,
   UserPlus,
+  UserMinus,
   Info,
   CheckCircle2,
   Check,
@@ -610,14 +611,18 @@ export default function Dashboard() {
     try {
       setIsProcessingAction(true);
       sessionStorage.setItem('action_in_progress', 'true');
+      // parentId: usa a pasta actualmente aberta (selectedFolderId).
+      // Se não há pasta aberta, usa a raiz do Drive (Meu Arquivo)
+      const newFolderParentId = selectedFolderId ?? (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : null);
       await addDoc(collection(db, "folders"), {
         name: folderName,
         date: serverTimestamp(),
         ownerId: currentUser?.id || "mock-admin",
-        parentId: selectedFolderId || (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : null),
+        parentId: newFolderParentId,
         color: "#e2b13c",
         adminToken: "Silva_Chamo_Master_Admin_2026"
       });
+      console.log('[Nova Pasta] Criada com parentId:', newFolderParentId, '| selectedFolderId:', selectedFolderId);
       setIsProcessingAction(false);
       sessionStorage.removeItem('action_in_progress');
     } catch (error) {
@@ -1598,7 +1603,8 @@ export default function Dashboard() {
     // Removemos o filtro estrito que ocultava os arquivos carregados na raiz
 
     // Para todas as outras abas/views, remover itens que estão no lixo
-    result = result.filter(a => !a.trashed && a.folderId !== 'trash');
+    // Ocultar ficheiros de sistema (ex: .DS_Store criados pelo macOS)
+    result = result.filter(a => !a.trashed && a.folderId !== 'trash' && !a.name.startsWith('.DS_Store') && !a.name.startsWith('._') && a.name !== 'Thumbs.db');
 
     if (selectedFolderId) {
       // Se for uma pasta do Google Drive, o ID dela no Firestore será o ID do Google
@@ -2739,10 +2745,28 @@ export default function Dashboard() {
                                               <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Selecionar Cliente</div>
 
                                               {(folder as any).clientEmail && (
-                                                <div className="mx-2 mb-1 px-2 py-1 text-[10px] text-[#a21b7e] font-medium bg-[#a21b7e]/8 rounded flex items-center gap-1.5">
-                                                  <Check size={10} className="shrink-0" />
-                                                  <span className="truncate">Actual: {(folder as any).clientEmail}</span>
-                                                </div>
+                                                <>
+                                                  <div className="mx-2 mt-1 px-2 py-1 text-[10px] text-[#a21b7e] font-medium bg-[#a21b7e]/8 rounded flex items-center gap-1.5">
+                                                    <Check size={10} className="shrink-0" />
+                                                    <span className="truncate">Actual: {(folder as any).clientEmail}</span>
+                                                  </div>
+                                                  <button
+                                                    onClick={async (e) => {
+                                                      e.stopPropagation();
+                                                      if (!confirm(`Desvincular a pasta "${folder.name}" de ${(folder as any).clientEmail}?`)) return;
+                                                      try {
+                                                        await updateDoc(doc(db, 'folders', folder.id), { clientEmail: null });
+                                                        alert('✅ Partilha removida com sucesso!');
+                                                      } catch (err: any) { alert('Erro: ' + err.message); }
+                                                      setActiveFolderSubmenu('none');
+                                                      setActiveFolderMenuId(null);
+                                                    }}
+                                                    className="w-full flex items-center gap-2 mx-0 px-3 py-1.5 mb-1 text-[10px] font-bold text-red-500 hover:bg-red-50 transition-colors text-left border-b border-gray-100"
+                                                  >
+                                                    <UserMinus size={11} className="shrink-0" />
+                                                    Desvincular partilha
+                                                  </button>
+                                                </>
                                               )}
 
                                               <div className="max-h-48 overflow-y-auto custom-scrollbar">
@@ -3229,10 +3253,28 @@ export default function Dashboard() {
                                         >
                                           <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Selecionar Cliente</div>
                                           {(folder as any).clientEmail && (
-                                            <div className="mx-2 mb-1 px-2 py-1 text-[10px] text-[#a21b7e] font-medium bg-[#a21b7e]/8 rounded flex items-center gap-1.5">
-                                              <Check size={10} className="shrink-0" />
-                                              <span className="truncate">Actual: {(folder as any).clientEmail}</span>
-                                            </div>
+                                            <>
+                                              <div className="mx-2 mt-1 px-2 py-1 text-[10px] text-[#a21b7e] font-medium bg-[#a21b7e]/8 rounded flex items-center gap-1.5">
+                                                <Check size={10} className="shrink-0" />
+                                                <span className="truncate">Actual: {(folder as any).clientEmail}</span>
+                                              </div>
+                                              <button
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  if (!confirm(`Desvincular a pasta "${folder.name}" de ${(folder as any).clientEmail}?`)) return;
+                                                  try {
+                                                    await updateDoc(doc(db, 'folders', folder.id), { clientEmail: null });
+                                                    alert('✅ Partilha removida com sucesso!');
+                                                  } catch (err: any) { alert('Erro: ' + err.message); }
+                                                  setActiveFolderSubmenu('none');
+                                                  setActiveFolderMenuId(null);
+                                                }}
+                                                className="w-full flex items-center gap-2 px-3 py-1.5 mb-1 text-[10px] font-bold text-red-500 hover:bg-red-50 transition-colors text-left border-b border-gray-100"
+                                              >
+                                                <UserMinus size={11} className="shrink-0" />
+                                                Desvincular partilha
+                                              </button>
+                                            </>
                                           )}
                                           <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                             {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
