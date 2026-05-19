@@ -1491,9 +1491,9 @@ export default function Dashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
-              // Preservar o client_id existente usando os dados já carregados no estado local (sem query extra ao Supabase)
+              // Preservar o client_email existente usando os dados já carregados no estado local (sem query extra ao Supabase)
               const existingFolderInState = folders.find(f => f.id === file.id);
-              let folderClientId = (existingFolderInState as any)?.clientId || null;
+              let folderClientEmail = (existingFolderInState as any)?.clientEmail || null;
 
               // Tenta extrair das permissões do Drive
               const sharedEmails = (file.permissions || [])
@@ -1507,7 +1507,7 @@ export default function Dashboard() {
               );
 
               if (gDriveClientEmail) {
-                folderClientId = gDriveClientEmail;
+                folderClientEmail = gDriveClientEmail;
               }
 
               await setDoc(doc(db, "folders", file.id), {
@@ -1515,7 +1515,7 @@ export default function Dashboard() {
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-                ...(folderClientId && { clientId: folderClientId })
+                ...(folderClientEmail && { clientEmail: folderClientEmail })
               });
             }
           }
@@ -1540,9 +1540,9 @@ export default function Dashboard() {
         const driveFiles = await resClient.json();
         for (const file of driveFiles) {
           if (file.mimeType === 'application/vnd.google-apps.folder') {
-            // Preservar o clientId existente usando os dados já carregados no estado local
+            // Preservar o clientEmail existente usando os dados já carregados no estado local
             const existingFolderInState = folders.find(f => f.id === file.id);
-            let folderClientId = (existingFolderInState as any)?.clientId || null;
+            let folderClientEmail = (existingFolderInState as any)?.clientEmail || null;
 
             const sharedEmails = (file.permissions || [])
               .map((p: any) => p.emailAddress?.toLowerCase())
@@ -1555,7 +1555,7 @@ export default function Dashboard() {
             );
 
             if (gDriveClientEmail) {
-              folderClientId = gDriveClientEmail;
+              folderClientEmail = gDriveClientEmail;
             }
 
             await setDoc(doc(db, "folders", file.id), {
@@ -1563,7 +1563,7 @@ export default function Dashboard() {
               date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
               ownerId: "google-drive",
               parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-              ...(folderClientId && { clientId: folderClientId })
+              ...(folderClientEmail && { clientEmail: folderClientEmail })
             });
           }
         }
