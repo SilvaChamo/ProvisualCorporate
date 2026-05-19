@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Users2, Eye, EyeOff, HelpCircle, Phone, Mail, MessageSquare, ExternalLink } from "lucide-react";
 import { cn } from "../lib/utils";
-import { auth, db } from "../lib/firebase";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
+import { supabase, db } from "../lib/supabase";
+
+import { doc, setDoc, getDoc, serverTimestamp, collection, query, where } from "../lib/supabase";
 import logoHorizontal from "../Logo/logo_horizontal_clean.png";
 import simboloImg from "../Logo/Simbolo.png";
 
@@ -72,13 +72,12 @@ export default function Login() {
       try {
         // Buscamos se existe uma conta criada no Firestore com este email (busca case-insensitive)
         const searchEmail = email.trim().toLowerCase();
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("email", "==", searchEmail));
-        const querySnapshot = await getDocs(q);
-        
-        if (!querySnapshot.empty) {
-          const userDoc = querySnapshot.docs[0];
-          const userData = userDoc.data();
+        const { data, error: dbErr } = await supabase.from('user_profiles').select('*').eq('email', searchEmail);
+        if (dbErr) throw dbErr;
+
+        if (data && data.length > 0) {
+          const userData = data[0];
+          const userDoc = { id: userData.id };
           
           if (userData.password === password) {
             // Credencial coincide perfeitamente!

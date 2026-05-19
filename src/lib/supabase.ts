@@ -335,3 +335,6 @@ export class Timestamp {
     return toDateCompat(date);
   }
 }
+
+// Export a dummy db object for compatibility with Firebase-like syntax
+export const db = {};

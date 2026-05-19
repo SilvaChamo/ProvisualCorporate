@@ -392,7 +392,7 @@ export default function Dashboard() {
   });
   const [storageQuota, setStorageQuota] = useState<{ limit: string; usage: string } | null>(null);
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
-  const [activeFolderSubmenu, setActiveFolderSubmenu] = useState<'none' | 'partilhar' | 'organizar'>('none');
+  const [activeFolderSubmenu, setActiveFolderSubmenu] = useState<'none' | 'partilhar' | 'organizar' | 'atribuir'>('none');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean } | null>(null);
   
   // Estado para conexão híbrida pessoal de Google Drive do Silva
@@ -2606,28 +2606,70 @@ export default function Dashboard() {
                                         >
                                           <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
                                           
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                              if (item) {
-                                                if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                  onDistribute(item);
-                                                } else if (typeof setItemToDistribute !== 'undefined') {
-                                                  setItemToDistribute(item);
-                                                  setDistributeModalOpen(true);
+                                          
+                                          <div className="relative">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (typeof setActiveFolderSubmenu !== 'undefined') {
+                                                  setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
+                                                } else if (typeof setActiveSubmenu !== 'undefined') {
+                                                  setActiveSubmenu(activeSubmenu === 'atribuir' ? 'none' : 'atribuir');
                                                 }
-                                                if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                              }
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                                          </button>
+                                              }}
+                                              className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <div className="flex items-center gap-3">
+                                                <UserPlus size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Atribuir a Cliente</span>
+                                              </div>
+                                              <ChevronRight size={14} className="text-gray-300 group-hover/sub:text-[#a21b7e] transition-colors" />
+                                            </button>
+                                            
+                                            <AnimatePresence>
+                                              {((typeof activeFolderSubmenu !== 'undefined' && activeFolderSubmenu === 'atribuir') || (typeof activeSubmenu !== 'undefined' && activeSubmenu === 'atribuir')) && (
+                                                <motion.div
+                                                  initial={{ opacity: 0, scale: 0.95, x: -10 }}
+                                                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                                                  exit={{ opacity: 0, scale: 0.95, x: -10 }}
+                                                  transition={{ duration: 0.1 }}
+                                                  className="absolute left-[100%] ml-1.5 top-0 w-48 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-[60] py-1 text-left max-h-64 overflow-y-auto custom-scrollbar cursor-default"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  <div className="px-3 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Selecione o Cliente</div>
+                                                  {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
+                                                    accounts.filter(a => a.role !== 'admin').map((client: any) => (
+                                                      <button
+                                                        key={client.id}
+                                                        onClick={async (e) => {
+                                                          e.stopPropagation();
+                                                          const it = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder' } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type } : null;
+                                                          if (it) {
+                                                            try {
+                                                              const docRef = doc(db, it.type === 'folder' ? 'folders' : 'assets', it.id);
+                                                              await updateDoc(docRef, { clientId: client.id });
+                                                              alert("Atribuído com sucesso!");
+                                                            } catch (err) {
+                                                              alert("Erro ao atribuir: " + err.message);
+                                                            }
+                                                          }
+                                                          if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
+                                                          if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
+                                                          if (typeof setShowMenu !== 'undefined') setShowMenu(false);
+                                                          if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
+                                                        }}
+                                                        className="w-full text-left px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] truncate block transition-colors"
+                                                      >
+                                                        {client.displayName || client.email}
+                                                      </button>
+                                                    ))
+                                                  ) : (
+                                                    <div className="px-3 py-2 text-xs text-gray-400 italic">Nenhum cliente disponível</div>
+                                                  )}
+                                                </motion.div>
+                                              )}
+                                            </AnimatePresence>
+                                          </div>
                                           
                                           <button
                                             onClick={(e) => {
@@ -3090,28 +3132,70 @@ export default function Dashboard() {
                                     >
                                       <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
                                           
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                              if (item) {
-                                                if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                  onDistribute(item);
-                                                } else if (typeof setItemToDistribute !== 'undefined') {
-                                                  setItemToDistribute(item);
-                                                  setDistributeModalOpen(true);
+                                          
+                                          <div className="relative">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (typeof setActiveFolderSubmenu !== 'undefined') {
+                                                  setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
+                                                } else if (typeof setActiveSubmenu !== 'undefined') {
+                                                  setActiveSubmenu(activeSubmenu === 'atribuir' ? 'none' : 'atribuir');
                                                 }
-                                                if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                              }
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                                          </button>
+                                              }}
+                                              className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <div className="flex items-center gap-3">
+                                                <UserPlus size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Atribuir a Cliente</span>
+                                              </div>
+                                              <ChevronRight size={14} className="text-gray-300 group-hover/sub:text-[#a21b7e] transition-colors" />
+                                            </button>
+                                            
+                                            <AnimatePresence>
+                                              {((typeof activeFolderSubmenu !== 'undefined' && activeFolderSubmenu === 'atribuir') || (typeof activeSubmenu !== 'undefined' && activeSubmenu === 'atribuir')) && (
+                                                <motion.div
+                                                  initial={{ opacity: 0, scale: 0.95, x: -10 }}
+                                                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                                                  exit={{ opacity: 0, scale: 0.95, x: -10 }}
+                                                  transition={{ duration: 0.1 }}
+                                                  className="absolute left-[100%] ml-1.5 top-0 w-48 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-[60] py-1 text-left max-h-64 overflow-y-auto custom-scrollbar cursor-default"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  <div className="px-3 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Selecione o Cliente</div>
+                                                  {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
+                                                    accounts.filter(a => a.role !== 'admin').map((client: any) => (
+                                                      <button
+                                                        key={client.id}
+                                                        onClick={async (e) => {
+                                                          e.stopPropagation();
+                                                          const it = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder' } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type } : null;
+                                                          if (it) {
+                                                            try {
+                                                              const docRef = doc(db, it.type === 'folder' ? 'folders' : 'assets', it.id);
+                                                              await updateDoc(docRef, { clientId: client.id });
+                                                              alert("Atribuído com sucesso!");
+                                                            } catch (err) {
+                                                              alert("Erro ao atribuir: " + err.message);
+                                                            }
+                                                          }
+                                                          if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
+                                                          if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
+                                                          if (typeof setShowMenu !== 'undefined') setShowMenu(false);
+                                                          if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
+                                                        }}
+                                                        className="w-full text-left px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] truncate block transition-colors"
+                                                      >
+                                                        {client.displayName || client.email}
+                                                      </button>
+                                                    ))
+                                                  ) : (
+                                                    <div className="px-3 py-2 text-xs text-gray-400 italic">Nenhum cliente disponível</div>
+                                                  )}
+                                                </motion.div>
+                                              )}
+                                            </AnimatePresence>
+                                          </div>
                                       
                                       <button
                                         onClick={(e) => {
@@ -4018,7 +4102,7 @@ function AssetCard({
   hasSelectionActive = false
 }: AssetCardProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar'>('none');
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar' | 'atribuir'>('none');
 
   const runAction = async (actionFn: () => Promise<void>) => {
     try {
@@ -4289,28 +4373,70 @@ function AssetCard({
                   >
                     <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
                                           
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                              if (item) {
-                                                if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                  onDistribute(item);
-                                                } else if (typeof setItemToDistribute !== 'undefined') {
-                                                  setItemToDistribute(item);
-                                                  setDistributeModalOpen(true);
+                                          
+                                          <div className="relative">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (typeof setActiveFolderSubmenu !== 'undefined') {
+                                                  setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
+                                                } else if (typeof setActiveSubmenu !== 'undefined') {
+                                                  setActiveSubmenu(activeSubmenu === 'atribuir' ? 'none' : 'atribuir');
                                                 }
-                                                if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                              }
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                                          </button>
+                                              }}
+                                              className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <div className="flex items-center gap-3">
+                                                <UserPlus size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Atribuir a Cliente</span>
+                                              </div>
+                                              <ChevronRight size={14} className="text-gray-300 group-hover/sub:text-[#a21b7e] transition-colors" />
+                                            </button>
+                                            
+                                            <AnimatePresence>
+                                              {((typeof activeFolderSubmenu !== 'undefined' && activeFolderSubmenu === 'atribuir') || (typeof activeSubmenu !== 'undefined' && activeSubmenu === 'atribuir')) && (
+                                                <motion.div
+                                                  initial={{ opacity: 0, scale: 0.95, x: -10 }}
+                                                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                                                  exit={{ opacity: 0, scale: 0.95, x: -10 }}
+                                                  transition={{ duration: 0.1 }}
+                                                  className="absolute left-[100%] ml-1.5 top-0 w-48 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-[60] py-1 text-left max-h-64 overflow-y-auto custom-scrollbar cursor-default"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  <div className="px-3 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Selecione o Cliente</div>
+                                                  {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
+                                                    accounts.filter(a => a.role !== 'admin').map((client: any) => (
+                                                      <button
+                                                        key={client.id}
+                                                        onClick={async (e) => {
+                                                          e.stopPropagation();
+                                                          const it = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder' } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type } : null;
+                                                          if (it) {
+                                                            try {
+                                                              const docRef = doc(db, it.type === 'folder' ? 'folders' : 'assets', it.id);
+                                                              await updateDoc(docRef, { clientId: client.id });
+                                                              alert("Atribuído com sucesso!");
+                                                            } catch (err) {
+                                                              alert("Erro ao atribuir: " + err.message);
+                                                            }
+                                                          }
+                                                          if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
+                                                          if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
+                                                          if (typeof setShowMenu !== 'undefined') setShowMenu(false);
+                                                          if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
+                                                        }}
+                                                        className="w-full text-left px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] truncate block transition-colors"
+                                                      >
+                                                        {client.displayName || client.email}
+                                                      </button>
+                                                    ))
+                                                  ) : (
+                                                    <div className="px-3 py-2 text-xs text-gray-400 italic">Nenhum cliente disponível</div>
+                                                  )}
+                                                </motion.div>
+                                              )}
+                                            </AnimatePresence>
+                                          </div>
                     
                     <button
                       onClick={(e) => {
@@ -4710,7 +4836,7 @@ function AssetRow({
   onDistribute
 }: AssetRowProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar'>('none');
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar' | 'atribuir'>('none');
 
   const runAction = async (actionFn: () => Promise<void>) => {
     try {
@@ -5001,28 +5127,70 @@ function AssetRow({
                     >
                       <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
                                           
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const item = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder', currentName: folder.name } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type, currentName: asset.name } : null;
-                                              if (item) {
-                                                if (typeof onDistribute !== 'undefined' && onDistribute) {
-                                                  onDistribute(item);
-                                                } else if (typeof setItemToDistribute !== 'undefined') {
-                                                  setItemToDistribute(item);
-                                                  setDistributeModalOpen(true);
+                                          
+                                          <div className="relative">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (typeof setActiveFolderSubmenu !== 'undefined') {
+                                                  setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
+                                                } else if (typeof setActiveSubmenu !== 'undefined') {
+                                                  setActiveSubmenu(activeSubmenu === 'atribuir' ? 'none' : 'atribuir');
                                                 }
-                                                if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
-                                                if (typeof setShowMenu !== 'undefined') setShowMenu(false);
-                                                if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
-                                                if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
-                                              }
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Distribuir a Cliente</span>
-                                          </button>
+                                              }}
+                                              className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <div className="flex items-center gap-3">
+                                                <UserPlus size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Atribuir a Cliente</span>
+                                              </div>
+                                              <ChevronRight size={14} className="text-gray-300 group-hover/sub:text-[#a21b7e] transition-colors" />
+                                            </button>
+                                            
+                                            <AnimatePresence>
+                                              {((typeof activeFolderSubmenu !== 'undefined' && activeFolderSubmenu === 'atribuir') || (typeof activeSubmenu !== 'undefined' && activeSubmenu === 'atribuir')) && (
+                                                <motion.div
+                                                  initial={{ opacity: 0, scale: 0.95, x: -10 }}
+                                                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                                                  exit={{ opacity: 0, scale: 0.95, x: -10 }}
+                                                  transition={{ duration: 0.1 }}
+                                                  className="absolute left-[100%] ml-1.5 top-0 w-48 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-[60] py-1 text-left max-h-64 overflow-y-auto custom-scrollbar cursor-default"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  <div className="px-3 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Selecione o Cliente</div>
+                                                  {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
+                                                    accounts.filter(a => a.role !== 'admin').map((client: any) => (
+                                                      <button
+                                                        key={client.id}
+                                                        onClick={async (e) => {
+                                                          e.stopPropagation();
+                                                          const it = typeof folder !== 'undefined' ? { id: folder.id, type: 'folder' } : typeof asset !== 'undefined' ? { id: asset.id, type: asset.type } : null;
+                                                          if (it) {
+                                                            try {
+                                                              const docRef = doc(db, it.type === 'folder' ? 'folders' : 'assets', it.id);
+                                                              await updateDoc(docRef, { clientId: client.id });
+                                                              alert("Atribuído com sucesso!");
+                                                            } catch (err) {
+                                                              alert("Erro ao atribuir: " + err.message);
+                                                            }
+                                                          }
+                                                          if (typeof setActiveFolderSubmenu !== 'undefined') setActiveFolderSubmenu('none');
+                                                          if (typeof setActiveSubmenu !== 'undefined') setActiveSubmenu('none');
+                                                          if (typeof setShowMenu !== 'undefined') setShowMenu(false);
+                                                          if (typeof setActiveFolderMenuId !== 'undefined') setActiveFolderMenuId(null);
+                                                        }}
+                                                        className="w-full text-left px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] truncate block transition-colors"
+                                                      >
+                                                        {client.displayName || client.email}
+                                                      </button>
+                                                    ))
+                                                  ) : (
+                                                    <div className="px-3 py-2 text-xs text-gray-400 italic">Nenhum cliente disponível</div>
+                                                  )}
+                                                </motion.div>
+                                              )}
+                                            </AnimatePresence>
+                                          </div>
                       
                       <button
                         onClick={(e) => {

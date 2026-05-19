@@ -3,8 +3,8 @@ import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
 import ClientDashboard from "./components/ClientDashboard";
 import { useState, useEffect } from "react";
-import { auth } from "./lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { supabase } from "./lib/supabase";
+
 
 export default function App() {
   const [user, setUser] = useState<any | null>(null);
@@ -27,13 +27,21 @@ export default function App() {
     }
 
     // 2. Otherwise listen to Firebase Auth
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const currentUser = session?.user || null;
       setUser(currentUser);
-      // Firebase Auth users are always admins (registered via sign-up form)
       setUserRole(currentUser ? "admin" : null);
       setLoading(false);
     });
-    return () => unsubscribe();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      setUserRole(currentUser ? "admin" : null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   if (loading) {

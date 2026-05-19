@@ -54,11 +54,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, handleFirestoreError, OperationType } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { auth, storage } from "../lib/firebase";
-import { signOut } from "firebase/auth";
-import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc } from "../lib/supabase";
-const db = null;
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc, supabase, db } from "../lib/supabase";
+
 import { useRef } from "react";
 import logoHorizontal from "../Logo/logo_horizontal_clean.png";
 import logoJpg from "../Logo/logo_main_jpg.jpg";
@@ -367,6 +364,17 @@ interface UserProfile {
 }
 
 export default function ClientDashboard() {
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentUser(session?.user || null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user || null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   const [folders, setFolders] = useState<FolderData[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -606,7 +614,7 @@ export default function ClientDashboard() {
       await addDoc(collection(db, "folders"), {
         name: folderName,
         date: serverTimestamp(),
-        ownerId: auth.currentUser?.uid || "mock-admin",
+        ownerId: currentUser?.uid || "mock-admin",
         parentId: selectedFolderId || (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : null),
         color: "#e2b13c",
         adminToken: "Silva_Chamo_Master_Admin_2026"
@@ -796,7 +804,7 @@ export default function ClientDashboard() {
   // Auth logout
   const handleLogout = async () => {
     localStorage.removeItem("provisual_local_admin");
-    await signOut(auth);
+    await supabase.auth.signOut();
     window.location.href = "/login";
   };
 
@@ -955,7 +963,7 @@ export default function ClientDashboard() {
               size: fileSize,
               url: driveFile.webViewLink
             }],
-            ...(userProfile?.role === 'cliente' && { clientId: auth.currentUser?.uid }),
+            ...(userProfile?.role === 'cliente' && { clientId: currentUser?.uid }),
             adminToken: "Silva_Chamo_Master_Admin_2026"
           };
 
@@ -1226,7 +1234,7 @@ export default function ClientDashboard() {
   // Fetch User Role
   useEffect(() => {
     const localUserJson = localStorage.getItem("provisual_local_admin");
-    if (!auth.currentUser && localUserJson) {
+    if (!currentUser && localUserJson) {
       try {
         const localUser = JSON.parse(localUserJson);
         setUserProfile({
@@ -1240,7 +1248,7 @@ export default function ClientDashboard() {
       }
     }
 
-    if (!auth.currentUser) {
+    if (!currentUser) {
       setUserProfile({
         role: "admin",
         email: "admin@provisual.demo",
@@ -1249,14 +1257,14 @@ export default function ClientDashboard() {
       return;
     }
     const fetchProfile = async () => {
-      const userDoc = await getDoc(doc(db, "users", auth.currentUser!.uid));
+      const userDoc = await getDoc(doc(db, "users", currentUser!.uid));
       if (userDoc.exists()) {
         setUserProfile(userDoc.data() as UserProfile);
       } else {
         setUserProfile({
           role: "admin",
-          email: auth.currentUser!.email || "admin@provisual.demo",
-          displayName: auth.currentUser!.displayName || "Silva Chamo"
+          email: currentUser!.email || "admin@provisual.demo",
+          displayName: currentUser!.displayName || "Silva Chamo"
         });
       }
     };
@@ -1341,7 +1349,7 @@ export default function ClientDashboard() {
         f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
         f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
         (f as any).clientId === userProfile.clientId ||
-        (f as any).clientId === auth.currentUser?.uid
+        (f as any).clientId === currentUser?.uid
       )
     );
 
@@ -1450,9 +1458,9 @@ export default function ClientDashboard() {
     let result = assets;
 
     // Filtrar por clientId ou pasta permitida se for cliente (ver apenas seus próprios arquivos)
-    if (userProfile?.role === 'cliente' && auth.currentUser?.uid) {
+    if (userProfile?.role === 'cliente' && currentUser?.uid) {
       result = result.filter(a =>
-        (a as any).clientId === auth.currentUser?.uid ||
+        (a as any).clientId === currentUser?.uid ||
         ((a as any).clientId === userProfile.clientId) ||
         isFolderAllowedForClient(a.folderId)
       );
@@ -1535,7 +1543,7 @@ export default function ClientDashboard() {
               f.name.toLowerCase() === userProfile.displayName?.toLowerCase() ||
               f.name.toLowerCase() === userProfile.email?.toLowerCase() ||
               (f as any).clientId === userProfile.clientId ||
-              (f as any).clientId === auth.currentUser?.uid
+              (f as any).clientId === currentUser?.uid
             )
           );
         } else {
@@ -2645,7 +2653,7 @@ export default function ClientDashboard() {
                                         >
                                           <div className="flex items-center gap-3">
                                             <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
                                           </div>
                                           <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
                                         </button>
@@ -3125,7 +3133,7 @@ export default function ClientDashboard() {
                                     >
                                       <div className="flex items-center gap-3">
                                         <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
+                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
                                       </div>
                                       <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
                                     </button>
@@ -4442,7 +4450,7 @@ function AssetCard({
                 >
                   <div className="flex items-center gap-3">
                     <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
+                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
                   </div>
                   <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
                 </button>
@@ -5152,7 +5160,7 @@ function AssetRow({
                   >
                     <div className="flex items-center gap-3">
                       <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
+                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
                     </div>
                     <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
                   </button>
