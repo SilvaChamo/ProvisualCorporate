@@ -1034,7 +1034,8 @@ export default function Dashboard() {
             adminToken: "Silva_Chamo_Master_Admin_2026"
           };
 
-          const docRef = await addDoc(collection(db, "assets"), assetData);
+          await setDoc(doc(db, "assets", driveFile.id), assetData);
+          const docRef = { id: driveFile.id };
 
           // Salvar na lista de recém-carregados para marcar com visto verde no grid
           setNewlyUploadedAssetIds(prev => [...prev, docRef.id]);
