@@ -1027,24 +1027,40 @@ export default function Dashboard() {
           const fileSize = driveFile.size ? `${(parseInt(driveFile.size) / 1024 / 1024).toFixed(1)} MB` : '0 MB';
 
           const assetData = {
-            name: driveFile.name,
+            name: driveFile.name || "Sem Nome",
             type: fileType,
             captureDate: driveFile.createdTime ? Timestamp.fromDate(new Date(driveFile.createdTime)) : serverTimestamp(),
             uploadDate: serverTimestamp(),
             folderId: fileFolderId === 'root' ? null : fileFolderId,
             ownerId: "google-drive",
             driveId: driveFile.id,
+            starred: false,
+            trashed: false,
             thumbnailUrl: driveFile.thumbnailLink || "",
             versions: [{
               quality: "original",
               size: fileSize,
-              url: driveFile.webViewLink
+              url: driveFile.webViewLink || ""
             }],
             ...(userProfile?.role === 'cliente' && { clientId: userProfile?.email }),
             adminToken: "Silva_Chamo_Master_Admin_2026"
           };
 
-          await setDoc(doc(db, "assets", driveFile.id), assetData);
+          if (isFolder) {
+            // Se for pasta enviada por upload, salvar em folders!
+            await setDoc(doc(db, "folders", driveFile.id), {
+              name: driveFile.name || "Sem Nome",
+              date: serverTimestamp(),
+              ownerId: "google-drive",
+              parentId: fileFolderId === 'root' ? null : fileFolderId,
+              starred: false,
+              trashed: false,
+              adminToken: "Silva_Chamo_Master_Admin_2026"
+            });
+          } else {
+            await setDoc(doc(db, "assets", driveFile.id), assetData);
+          }
+          
           const docRef = { id: driveFile.id };
 
           // Salvar na lista de recém-carregados para marcar com visto verde no grid
@@ -1250,11 +1266,12 @@ export default function Dashboard() {
         }
 
         // ── Ignorar ficheiros de sistema (macOS/Windows) ──
+        const safeName = typeof file.name === 'string' ? file.name : '';
         if (
-          file.name.toLowerCase().includes('ds_store') ||
-          file.name.startsWith('._') ||
-          file.name === 'Thumbs.db' ||
-          file.name === 'desktop.ini'
+          safeName.toLowerCase().includes('ds_store') ||
+          safeName.startsWith('._') ||
+          safeName === 'Thumbs.db' ||
+          safeName === 'desktop.ini'
         ) {
           continue;
         }
@@ -1696,13 +1713,11 @@ export default function Dashboard() {
 
     // Para todas as outras abas/views, remover itens que estão no lixo
     // Ocultar ficheiros de sistema (ex: .DS_Store criados pelo macOS)
-    result = result.filter(a => 
-      !a.trashed && 
-      a.folderId !== 'trash' && 
-      !a.name.toLowerCase().includes('ds_store') && 
-      !a.name.startsWith('._') && 
-      a.name !== 'Thumbs.db'
-    );
+    result = result.filter(a => {
+      if (a.trashed || a.folderId === 'trash') return false;
+      const name = typeof a.name === 'string' ? a.name : '';
+      return !name.toLowerCase().includes('ds_store') && !name.startsWith('._') && name !== 'Thumbs.db';
+    });
 
     if (selectedFolderId) {
       // Se for uma pasta do Google Drive, o ID dela no Firestore será o ID do Google
@@ -1747,14 +1762,14 @@ export default function Dashboard() {
     }
 
     // Remover itens que estão no lixo e ficheiros de sistema macOS/Windows
-    result = result.filter(f =>
-      !f.trashed &&
-      f.parentId !== 'trash' &&
-      !f.name.toLowerCase().includes('ds_store') &&
-      !f.name.startsWith('._') &&
-      f.name !== 'Thumbs.db' &&
-      f.name !== 'desktop.ini'
-    );
+    result = result.filter(f => {
+      if (f.trashed || f.parentId === 'trash') return false;
+      const name = typeof f.name === 'string' ? f.name : '';
+      return !name.toLowerCase().includes('ds_store') && 
+             !name.startsWith('._') && 
+             name !== 'Thumbs.db' && 
+             name !== 'desktop.ini';
+    });
 
     if (activeTab === 'google_drive') {
       // No Google Drive/Arquivo Provisual, se estivermos na raiz, mostramos as pastas da pasta geral "arquivo"
@@ -2762,6 +2777,7 @@ export default function Dashboard() {
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <button
+                                        onMouseEnter={() => setActiveFolderSubmenu('none')}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setSelectedFolderId(folder.id);
@@ -2782,6 +2798,7 @@ export default function Dashboard() {
                                       <div className="my-1 border-t border-gray-100" />
 
                                       <button
+                                        onMouseEnter={() => setActiveFolderSubmenu('none')}
                                         onClick={async (e) => {
                                           e.stopPropagation();
                                           const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
@@ -2820,6 +2837,7 @@ export default function Dashboard() {
 
                                       {/* ── ATRIBUIR A CLIENTE — nível 1, flyout nível 2 ── */}
                                       <button
+                                        onMouseEnter={() => setActiveFolderSubmenu('atribuir')}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
@@ -2926,6 +2944,7 @@ export default function Dashboard() {
 
                                       {/* ── PARTILHAR — apenas link ── */}
                                       <button
+                                        onMouseEnter={() => setActiveFolderSubmenu('partilhar')}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
@@ -3268,6 +3287,7 @@ export default function Dashboard() {
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <button
+                                    onMouseEnter={() => setActiveFolderSubmenu('none')}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setSelectedFolderId(folder.id);
@@ -3288,6 +3308,7 @@ export default function Dashboard() {
                                   <div className="my-1 border-t border-gray-100" />
 
                                   <button
+                                    onMouseEnter={() => setActiveFolderSubmenu('none')}
                                     onClick={async (e) => {
                                       e.stopPropagation();
                                       const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
@@ -3329,6 +3350,7 @@ export default function Dashboard() {
                                   </button>
 
                                   <button
+                                    onMouseEnter={() => setActiveFolderSubmenu('atribuir')}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
@@ -3432,6 +3454,7 @@ export default function Dashboard() {
                                   </button>
 
                                   <button
+                                    onMouseEnter={() => setActiveFolderSubmenu('partilhar')}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
