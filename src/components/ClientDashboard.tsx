@@ -1526,6 +1526,65 @@ export default function ClientDashboard() {
     syncClientFolders();
   }, []);
 
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      // 1. Sincronizar pastas de clientes do Drive e associar client_id no banco
+      const resClient = await fetch('/api/drive/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' })
+      });
+      if (resClient.ok) {
+        const driveFiles = await resClient.json();
+        for (const file of driveFiles) {
+          if (file.mimeType === 'application/vnd.google-apps.folder') {
+            const { data: existingFolder } = await supabase
+              .from('folders')
+              .select('client_id')
+              .eq('id', file.id)
+              .maybeSingle();
+
+            let folderClientId = existingFolder?.client_id || null;
+
+            const sharedEmails = (file.permissions || [])
+              .map((p: any) => p.emailAddress?.toLowerCase())
+              .filter(Boolean);
+
+            const gDriveClientEmail = sharedEmails.find((email: string) => 
+              email !== 'provisualcorporate@gmail.com' && 
+              email !== 'silva.chamo@gmail.com' &&
+              !email.endsWith('.demo')
+            );
+
+            if (gDriveClientEmail) {
+              folderClientId = gDriveClientEmail;
+            }
+
+            await setDoc(doc(db, "folders", file.id), {
+              name: file.name,
+              date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
+              ownerId: "google-drive",
+              parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
+              ...(folderClientId && { clientId: folderClientId })
+            });
+          }
+        }
+      }
+
+      // 2. Sincronizar arquivos da pasta atual ou raiz
+      const activeFolder = selectedFolderId || '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG';
+      await handleGoogleSync(activeFolder, undefined, true);
+
+      alert("Sincronização efetuada com sucesso!");
+    } catch (error: any) {
+      console.error("Erro na sincronização manual:", error);
+      alert("Erro ao sincronizar: " + error.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const filteredAssets = useMemo(() => {
     let result = assets;
 
@@ -1840,6 +1899,18 @@ export default function ClientDashboard() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className={cn(
+                "flex items-center gap-2 px-3.5 py-1.5 border border-gray-100 rounded-lg hover:border-gray-200 bg-gray-50 hover:bg-gray-100 transition-all font-bold text-xs text-gray-700 cursor-pointer shadow-sm hover:shadow-md",
+                isSyncing && "opacity-75 cursor-not-allowed"
+              )}
+            >
+              <RefreshCw size={13} className={cn("text-gray-500", isSyncing && "animate-spin text-[#a21b7e]")} />
+              <span>{isSyncing ? "Sincronizando..." : "Sincronizar"}</span>
+            </button>
+
             {userProfile && (
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-3.5 py-1.5 rounded-lg select-none">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
