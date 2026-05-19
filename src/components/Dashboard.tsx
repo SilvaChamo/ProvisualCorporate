@@ -1571,13 +1571,23 @@ export default function Dashboard() {
                 folderClientEmail = gDriveClientEmail;
               }
 
-              await setDoc(doc(db, "folders", file.id), {
+              // Limpar o email de serviço se ele já tiver sido guardado anteriormente por erro
+              if (folderClientEmail && (folderClientEmail.includes('gserviceaccount.com') || folderClientEmail.includes('provisual-sync') || folderClientEmail.includes('provisual_synk'))) {
+                folderClientEmail = null;
+              }
+
+              // Prepara o payload para atualizar no Supabase. Se folderClientEmail for null, enviamos null para apagar.
+              const payload: any = {
                 name: file.name,
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
-                parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-                ...(folderClientEmail && { clientEmail: folderClientEmail })
-              });
+                parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG'
+              };
+              if (folderClientEmail !== undefined) {
+                payload.clientEmail = folderClientEmail;
+              }
+
+              await setDoc(doc(db, "folders", file.id), payload);
             }
           }
         }
@@ -1621,13 +1631,22 @@ export default function Dashboard() {
               folderClientEmail = gDriveClientEmail;
             }
 
-            await setDoc(doc(db, "folders", file.id), {
+            // Limpar o email de serviço se ele já tiver sido guardado anteriormente por erro
+            if (folderClientEmail && (folderClientEmail.includes('gserviceaccount.com') || folderClientEmail.includes('provisual-sync') || folderClientEmail.includes('provisual_synk'))) {
+              folderClientEmail = null;
+            }
+
+            const payload: any = {
               name: file.name,
               date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
               ownerId: "google-drive",
-              parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-              ...(folderClientEmail && { clientEmail: folderClientEmail })
-            });
+              parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG'
+            };
+            if (folderClientEmail !== undefined) {
+              payload.clientEmail = folderClientEmail;
+            }
+
+            await setDoc(doc(db, "folders", file.id), payload);
           }
         }
       }
