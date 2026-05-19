@@ -249,6 +249,135 @@ function SkeletonView({ viewMode, activeTab }: { viewMode: 'grid' | 'list'; acti
           ))}
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════
+          MODAL ORGANIZAR — Estilo Google Drive (Mover / Copiar)
+          Overlay: transparente sem blur
+          ══════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {organizarModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40"
+            onClick={() => { setOrganizarModal(null); setOrganizarSearch(''); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{ duration: 0.18 }}
+              className="bg-white rounded-xl shadow-2xl w-[520px] max-w-[95vw] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-6 pt-5 pb-4 border-b border-gray-100">
+                <h2 className="text-[15px] font-black text-gray-800">
+                  {organizarModal.mode === 'move' ? 'Mover' : 'Copiar'} &ldquo;{organizarModal.folder.name}&rdquo; para
+                </h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[11px] text-gray-400">Localização actual:</span>
+                  <span className="text-[11px] font-bold text-[#a21b7e] bg-[#a21b7e]/8 px-2 py-0.5 rounded">
+                    {folders.find(f => f.id === organizarModal.folder.parentId)?.name || 'Raiz (Meu Drive)'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex border-b border-gray-100">
+                {(['move', 'copy'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setOrganizarModal({ ...organizarModal, mode: m })}
+                    className={cn(
+                      "flex-1 py-2.5 text-xs font-black uppercase tracking-wider transition-colors",
+                      organizarModal.mode === m
+                        ? "text-[#a21b7e] border-b-2 border-[#a21b7e]"
+                        : "text-gray-400 hover:text-gray-600"
+                    )}
+                  >
+                    {m === 'move' ? '📁 Mover' : '📋 Copiar'}
+                  </button>
+                ))}
+              </div>
+              <div className="px-4 pt-3 pb-2">
+                <div className="relative">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Pesquisar pasta de destino..."
+                    value={organizarSearch}
+                    onChange={e => setOrganizarSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#a21b7e] transition-all"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto max-h-[300px] px-2 pb-2 custom-scrollbar">
+                {(organizarModal.folder.parentId !== null && organizarModal.folder.parentId !== '') && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsProcessingAction(true);
+                        if (organizarModal.folder.id.length > 20) {
+                          const r = await fetch('/api/drive/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: organizarModal.folder.id, addParents: 'root', removeParents: organizarModal.folder.parentId }) });
+                          if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+                        }
+                        if (organizarModal.mode === 'move') { await updateDoc(doc(db, 'folders', organizarModal.folder.id), { parentId: null }); }
+                        alert('Pasta movida para Raiz!');
+                        setOrganizarModal(null); setOrganizarSearch(''); handleActionSuccess();
+                      } catch (err: any) { alert('Erro: ' + err.message); setIsProcessingAction(false); }
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left group transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                      <FolderIcon size={16} className="text-gray-500" />
+                    </div>
+                    <div>
+                      <div className="text-[13px] font-bold text-gray-700 group-hover:text-[#a21b7e] transition-colors">Raiz (Meu Drive)</div>
+                      <div className="text-[10px] text-gray-400">Pasta principal do drive</div>
+                    </div>
+                  </button>
+                )}
+                {folders
+                  .filter(f => f.id !== organizarModal.folder.id && f.id !== organizarModal.folder.parentId && !(f as any).trashed && !(f as any).deleted && (organizarSearch === '' || f.name.toLowerCase().includes(organizarSearch.toLowerCase())))
+                  .map(f => (
+                    <button
+                      key={f.id}
+                      onClick={async () => {
+                        try {
+                          setIsProcessingAction(true);
+                          if (organizarModal.folder.id.length > 20) {
+                            const r = await fetch('/api/drive/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: organizarModal.folder.id, addParents: f.id, removeParents: organizarModal.folder.parentId }) });
+                            if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+                          }
+                          if (organizarModal.mode === 'move') { await updateDoc(doc(db, 'folders', organizarModal.folder.id), { parentId: f.id }); }
+                          alert(`Pasta "${organizarModal.folder.name}" ${organizarModal.mode === 'move' ? 'movida' : 'copiada'} para "${f.name}"!`);
+                          setOrganizarModal(null); setOrganizarSearch(''); handleActionSuccess();
+                        } catch (err: any) { alert('Erro: ' + err.message); setIsProcessingAction(false); }
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left group transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: ((f as any).color || '#e2b13c') + '22' }}>
+                        <FolderIcon size={16} style={{ color: (f as any).color || '#e2b13c' }} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-bold text-gray-700 group-hover:text-[#a21b7e] transition-colors truncate">{f.name}</div>
+                        {(f as any).clientEmail && <div className="text-[10px] text-gray-400 truncate">{(f as any).clientEmail}</div>}
+                      </div>
+                    </button>
+                  ))}
+              </div>
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+                <span className="text-[10px] text-gray-400">Clique numa pasta para confirmar</span>
+                <button onClick={() => { setOrganizarModal(null); setOrganizarSearch(''); }} className="px-5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
@@ -393,6 +522,8 @@ export default function Dashboard() {
   const [storageQuota, setStorageQuota] = useState<{ limit: string; usage: string } | null>(null);
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
   const [activeFolderSubmenu, setActiveFolderSubmenu] = useState<'none' | 'partilhar' | 'organizar' | 'atribuir'>('none');
+  const [organizarModal, setOrganizarModal] = useState<{ folder: any; mode: 'move' | 'copy' } | null>(null);
+  const [organizarSearch, setOrganizarSearch] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean } | null>(null);
   
   // Estado para conexão híbrida pessoal de Google Drive do Silva
@@ -2730,7 +2861,7 @@ export default function Dashboard() {
                                               animate={{ opacity: 1, scale: 1, x: 0 }}
                                               exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                               transition={{ duration: 0.1 }}
-                                              className="absolute right-0 translate-x-full ml-1.5 top-0 w-56 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                                              className="absolute left-full ml-2 top-0 w-56 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
                                               onClick={(e) => e.stopPropagation()}
                                             >
                                               <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Selecionar Cliente</div>
@@ -2813,7 +2944,7 @@ export default function Dashboard() {
                                           animate={{ opacity: 1, scale: 1, x: 0 }}
                                           exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                           transition={{ duration: 0.1 }}
-                                          className="absolute right-0 translate-x-full ml-1.5 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default"
+                                          className="absolute left-full ml-2 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default"
                                           onClick={(e) => e.stopPropagation()}
                                         >
                                           <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Enviar via</div>
@@ -2867,96 +2998,58 @@ export default function Dashboard() {
                                       </AnimatePresence>
                                       </button>
 
-                                      {activeFolderSubmenu === 'organizar' && (
-                                        <motion.div
-                                          initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                          animate={{ opacity: 1, scale: 1, x: 0 }}
-                                          exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                          transition={{ duration: 0.1 }}
-                                          className="absolute right-full mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-
-                                          {folder.parentId !== "" && folder.parentId !== null && (
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveFolderMenuId(null);
-                                                setActiveFolderSubmenu('none');
-                                                setIsProcessingAction(true);
-                                                sessionStorage.setItem('action_in_progress', 'true');
-                                                (async () => {
-                                                  try {
-                                                    if (folder.id.length > 20) {
-                                                      const moveResponse = await fetch('/api/drive/update', {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ fileId: folder.id, addParents: 'root', removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId })
-                                                      });
-                                                      if (!moveResponse.ok) { const errData = await moveResponse.json(); throw new Error(errData.error || 'Erro ao mover no Google Drive'); }
-                                                    }
-                                                    await updateDoc(doc(db, "folders", folder.id), { parentId: null });
-                                                    alert(`Pasta "${folder.name}" movida para a Raiz!`);
-                                                    setIsProcessingAction(false);
-                                                    sessionStorage.removeItem('action_in_progress');
-                                                  } catch (err: any) { alert("Erro ao mover pasta: " + err.message); setIsProcessingAction(false); sessionStorage.removeItem('action_in_progress'); }
-                                                })();
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                            >
-                                              <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                                            </button>
-                                          )}
-
-                                          {folders.filter(f => f.id !== folder.id && f.id !== folder.parentId).map(f => (
-                                            <button
-                                              key={f.id}
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveFolderMenuId(null);
-                                                setActiveFolderSubmenu('none');
-                                                setIsProcessingAction(true);
-                                                sessionStorage.setItem('action_in_progress', 'true');
-                                                (async () => {
-                                                  try {
-                                                    if (folder.id.length > 20) {
-                                                      const moveResponse = await fetch('/api/drive/update', {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ fileId: folder.id, addParents: f.id, removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId })
-                                                      });
-                                                      if (!moveResponse.ok) { const errData = await moveResponse.json(); throw new Error(errData.error || 'Erro ao mover no Google Drive'); }
-                                                    }
-                                                    await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
-                                                    alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
-                                                    setIsProcessingAction(false);
-                                                    sessionStorage.removeItem('action_in_progress');
-                                                  } catch (err: any) { alert("Erro ao mover pasta: " + err.message); setIsProcessingAction(false); sessionStorage.removeItem('action_in_progress'); }
-                                                })();
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                            >
-                                              <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{f.name}</span>
-                                            </button>
-                                          ))}
-                                        </motion.div>
-                                      )}
 
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
                                         }}
-                                        className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-[#a21b7e]/5 group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                       >
                                         <div className="flex items-center gap-3">
                                           <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
                                           <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
                                         </div>
                                         <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                                        <AnimatePresence>
+                                          {activeFolderSubmenu === 'organizar' && (
+                                            <motion.div
+                                              initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                              animate={{ opacity: 1, scale: 1, x: 0 }}
+                                              exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                              transition={{ duration: 0.1 }}
+                                              className="absolute left-full ml-2 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setOrganizarModal({ folder, mode: 'move' });
+                                                  setActiveFolderSubmenu('none');
+                                                  setActiveFolderMenuId(null);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                              >
+                                                <FolderIcon size={14} className="text-gray-400 shrink-0" />
+                                                Mover para...
+                                              </button>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setOrganizarModal({ folder, mode: 'copy' });
+                                                  setActiveFolderSubmenu('none');
+                                                  setActiveFolderMenuId(null);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                              >
+                                                <Copy size={14} className="text-gray-400 shrink-0" />
+                                                Copiar para...
+                                              </button>
+                                            </motion.div>
+                                          )}
+                                        </AnimatePresence>
                                       </button>
 
 
@@ -3389,118 +3482,59 @@ export default function Dashboard() {
                                   </AnimatePresence>
                                   </button>
 
-
-                                  {activeFolderSubmenu === 'organizar' && (
-                                    <motion.div
-                                      initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                                      exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                      transition={{ duration: 0.1 }}
-                                      className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-                                      
-                                      {folder.parentId !== "" && folder.parentId !== null && (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFolderMenuId(null);
-                                            setActiveFolderSubmenu('none');
-                                            setIsProcessingAction(true);
-                                            sessionStorage.setItem('action_in_progress', 'true');
-                                            (async () => {
-                                              try {
-                                                if (folder.id.length > 20) {
-                                                  const moveResponse = await fetch('/api/drive/update', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({
-                                                      fileId: folder.id,
-                                                      addParents: 'root',
-                                                      removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                    })
-                                                  });
-                                                  if (!moveResponse.ok) {
-                                                    const errData = await moveResponse.json();
-                                                    throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                  }
-                                                }
-                                                await updateDoc(doc(db, "folders", folder.id), { parentId: null });
-                                                alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
-                                                handleActionSuccess();
-                                              } catch (err: any) {
-                                                alert("Erro ao mover pasta: " + err.message);
-                                                setIsProcessingAction(false);
-                                                sessionStorage.removeItem('action_in_progress');
-                                              }
-                                            })();
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                        >
-                                          <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                                        </button>
-                                      )}
-
-                                      {folders.filter(f => f.id !== folder.id && f.id !== folder.parentId).map(f => (
-                                        <button
-                                          key={f.id}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFolderMenuId(null);
-                                            setActiveFolderSubmenu('none');
-                                            setIsProcessingAction(true);
-                                            sessionStorage.setItem('action_in_progress', 'true');
-                                            (async () => {
-                                              try {
-                                                if (folder.id.length > 20) {
-                                                  const moveResponse = await fetch('/api/drive/update', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({
-                                                      fileId: folder.id,
-                                                      addParents: f.id,
-                                                      removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                    })
-                                                  });
-                                                  if (!moveResponse.ok) {
-                                                    const errData = await moveResponse.json();
-                                                    throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                  }
-                                                }
-                                                await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
-                                                alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
-                                                handleActionSuccess();
-                                              } catch (err: any) {
-                                                alert("Erro ao mover pasta: " + err.message);
-                                                setIsProcessingAction(false);
-                                                sessionStorage.removeItem('action_in_progress');
-                                              }
-                                            })();
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                        >
-                                          <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{f.name}</span>
-                                        </button>
-                                      ))}
-                                    </motion.div>
-                                  )}
-
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
                                     }}
-                                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-[#a21b7e]/5 group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                   >
                                     <div className="flex items-center gap-3">
                                       <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
                                       <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
                                     </div>
                                     <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                                    <AnimatePresence>
+                                      {activeFolderSubmenu === 'organizar' && (
+                                        <motion.div
+                                          initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                          animate={{ opacity: 1, scale: 1, x: 0 }}
+                                          exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                          transition={{ duration: 0.1 }}
+                                          className="absolute left-full ml-2 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setOrganizarModal({ folder, mode: 'move' });
+                                              setActiveFolderSubmenu('none');
+                                              setActiveFolderMenuId(null);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                          >
+                                            <FolderIcon size={14} className="text-gray-400 shrink-0" />
+                                            Mover para...
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setOrganizarModal({ folder, mode: 'copy' });
+                                              setActiveFolderSubmenu('none');
+                                              setActiveFolderMenuId(null);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                          >
+                                            <Copy size={14} className="text-gray-400 shrink-0" />
+                                            Copiar para...
+                                          </button>
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
                                   </button>
+
 
                                   <div className="px-3.5 py-2">
                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
