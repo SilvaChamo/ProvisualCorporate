@@ -603,30 +603,73 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle Folder Creation
+  // Handle Folder Creation — cria no Google Drive E no Supabase
   const handleCreateFolder = async () => {
-    const folderName = prompt("Digite o nome da nova pasta:");
-    if (!folderName) return;
+    const folderName = prompt("Nome da nova pasta:");
+    if (!folderName?.trim()) return;
 
     try {
       setIsProcessingAction(true);
       sessionStorage.setItem('action_in_progress', 'true');
-      // parentId: usa a pasta actualmente aberta (selectedFolderId).
-      // Se não há pasta aberta, usa a raiz do Drive (Meu Arquivo)
-      const newFolderParentId = selectedFolderId ?? (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : null);
-      await addDoc(collection(db, "folders"), {
-        name: folderName,
-        date: serverTimestamp(),
-        ownerId: currentUser?.id || "mock-admin",
-        parentId: newFolderParentId,
-        color: "#e2b13c",
-        adminToken: "Silva_Chamo_Master_Admin_2026"
-      });
-      console.log('[Nova Pasta] Criada com parentId:', newFolderParentId, '| selectedFolderId:', selectedFolderId);
+
+      // Determinar a pasta pai no Drive
+      // selectedFolderId = ID da pasta aberta actualmente (pode ser um Drive ID)
+      // Se não há pasta aberta, usa a pasta raiz de Clientes no Drive
+      const drivePastaRaiz = '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG';
+      const driveParentId = selectedFolderId || drivePastaRaiz;
+
+      // 1. Criar a pasta no Google Drive
+      let driveFolderId: string | null = null;
+      try {
+        const createResponse = await fetch('/api/drive/create-folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: folderName.trim(), parentId: driveParentId })
+        });
+        if (createResponse.ok) {
+          const driveData = await createResponse.json();
+          driveFolderId = driveData.id || null;
+          console.log('[Nova Pasta] Criada no Drive com ID:', driveFolderId);
+        } else {
+          const errData = await createResponse.json().catch(() => ({}));
+          console.warn('[Nova Pasta] Falha no Drive:', errData.error || createResponse.statusText);
+        }
+      } catch (driveErr) {
+        console.warn('[Nova Pasta] Erro ao criar no Drive (vai criar só localmente):', driveErr);
+      }
+
+      // 2. Guardar no Supabase — usa o ID do Drive se obtido, caso contrário ID gerado
+      // O newFolderParentId deve corresponder à raiz visual se não houver selectedFolderId
+      const newFolderParentId = selectedFolderId ?? drivePastaRaiz;
+
+      if (driveFolderId) {
+        // Usar o ID do Drive como ID do registo (padrão do sistema)
+        await setDoc(doc(db, 'folders', driveFolderId), {
+          name: folderName.trim(),
+          date: serverTimestamp(),
+          ownerId: 'google-drive',
+          parentId: newFolderParentId,
+          color: '#e2b13c',
+          adminToken: 'Silva_Chamo_Master_Admin_2026'
+        });
+      } else {
+        // Fallback: criar apenas no Supabase (sem Drive)
+        await addDoc(collection(db, 'folders'), {
+          name: folderName.trim(),
+          date: serverTimestamp(),
+          ownerId: currentUser?.id || 'mock-admin',
+          parentId: newFolderParentId,
+          color: '#e2b13c',
+          adminToken: 'Silva_Chamo_Master_Admin_2026'
+        });
+      }
+
+      console.log('[Nova Pasta] Guardada com parentId:', newFolderParentId);
       setIsProcessingAction(false);
       sessionStorage.removeItem('action_in_progress');
-    } catch (error) {
-      console.error("Erro ao criar pasta:", error);
+    } catch (error: any) {
+      console.error('Erro ao criar pasta:', error);
+      alert('Erro ao criar pasta: ' + error.message);
       setIsProcessingAction(false);
       sessionStorage.removeItem('action_in_progress');
     }
@@ -1195,12 +1238,29 @@ export default function Dashboard() {
           }
         }
 
+        // ── Ignorar ficheiros de sistema (macOS/Windows) ──
+        if (
+          file.name === '.DS_Store' ||
+          file.name.startsWith('._') ||
+          file.name === 'Thumbs.db' ||
+          file.name === 'desktop.ini'
+        ) {
+          continue;
+        }
+
+        // Verificar se o asset já existe no Supabase (para não sobrescrever o folderId manualmente definido)
+        const existingAsset = assets.find(a => a.driveId === realId || a.id === realId);
+
         const assetData = {
           name: file.name,
           type: fileType,
           captureDate: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
           uploadDate: serverTimestamp(),
-          folderId: file.trashed ? 'trash' : folderId,
+          // Preservar folderId existente (evita que o sync mova ficheiros que foram organizados manualmente)
+          // Só actualiza se: 1) asset não existe ainda, ou 2) o ficheiro foi eliminado (trashed)
+          folderId: file.trashed
+            ? 'trash'
+            : (existingAsset?.folderId ?? folderId),
           ownerId: "google-drive",
           driveId: realId,
           thumbnailUrl: file.thumbnailLink || "",
@@ -1216,8 +1276,6 @@ export default function Dashboard() {
 
         if (!isFolder) {
           try {
-            // Usar o setDoc para fazer upsert na tabela assets com o ID do documento igual ao driveId (realId)
-            // e garantir acionamento do notifyTableChange para atualização instantânea em tempo real!
             await setDoc(doc(db, "assets", realId), assetData);
           } catch (upsertErr: any) {
             console.warn("[Sync Silencioso] Salvar asset ignorado:", upsertErr?.message);
@@ -1648,8 +1706,15 @@ export default function Dashboard() {
       return result.filter(f => f.trashed === true || f.parentId === 'trash');
     }
 
-    // Remover itens que estão no lixo
-    result = result.filter(f => !f.trashed && f.parentId !== 'trash');
+    // Remover itens que estão no lixo e ficheiros de sistema macOS/Windows
+    result = result.filter(f =>
+      !f.trashed &&
+      f.parentId !== 'trash' &&
+      f.name !== '.DS_Store' &&
+      !f.name.startsWith('._') &&
+      f.name !== 'Thumbs.db' &&
+      f.name !== 'desktop.ini'
+    );
 
     if (activeTab === 'google_drive') {
       // No Google Drive/Arquivo Provisual, se estivermos na raiz, mostramos as pastas da pasta geral "arquivo"
@@ -1855,7 +1920,7 @@ export default function Dashboard() {
                   icon={<HardDrive size={20} />}
                   label="Meu Drive"
                   active={activeTab === 'google_drive' && driveFilterType === null}
-                  onClick={() => { setActiveTab('google_drive'); handleGoogleSync('root'); setVisibleImagesCount(10); }}
+                  onClick={() => { setActiveTab('google_drive'); handleGoogleSync(arquivoFolderId || 'root'); setVisibleImagesCount(10); }}
                 />
                 <SidebarItem
                   icon={<Users size={20} />}
@@ -1871,7 +1936,7 @@ export default function Dashboard() {
                 />
                 <SidebarItem
                   icon={<Star size={20} />}
-                  label="Com Estrela"
+                  label="Com estrela"
                   active={activeTab === 'google_drive' && driveFilterType === 'starred'}
                   onClick={() => { setActiveTab('google_drive'); handleGoogleSync(undefined, 'starred'); setVisibleImagesCount(10); }}
                 />
