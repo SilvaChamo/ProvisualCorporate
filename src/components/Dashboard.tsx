@@ -2194,22 +2194,27 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={handleManualSync}
               disabled={isSyncing}
+              title={
+                isSyncing
+                  ? "Sincronizando..."
+                  : driveStatus?.connected
+                    ? `Sincronizar · ${driveStatus.email}`
+                    : "Sincronizar"
+              }
               className={cn(
-                "flex items-center gap-2 px-3.5 py-1.5 border border-gray-100 rounded-lg hover:border-gray-200 bg-gray-50 hover:bg-gray-100 transition-all font-bold text-xs text-gray-700 cursor-pointer shadow-sm hover:shadow-md",
+                "flex items-center justify-center h-9 w-9 text-gray-500 hover:text-[#a21b7e] transition-colors cursor-pointer bg-transparent border-0 p-0 shrink-0",
                 isSyncing && "opacity-75 cursor-not-allowed"
               )}
             >
-              <RefreshCw size={13} className={cn("text-gray-500", isSyncing && "animate-spin text-[#a21b7e]")} />
-              <span>{isSyncing ? "Sincronizando..." : "Sincronizar"}</span>
+              <RefreshCw size={16} className={cn(isSyncing && "animate-spin text-[#a21b7e]")} />
             </button>
 
             {userProfile && (
-              <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-3.5 py-1.5 rounded-lg select-none">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <div className="flex items-center h-9 px-3 bg-gray-50 border border-gray-100 rounded-lg select-none shrink-0">
                 <div className="flex flex-col items-start leading-none">
                   <span className="text-[11px] text-gray-800 font-bold max-w-[160px] truncate mb-0.5" title={userProfile.displayName || userProfile.email}>
                     Olá, {(() => {
@@ -2232,21 +2237,9 @@ export default function Dashboard() {
               </div>
             )}
 
-            {driveStatus && driveStatus.connected && (
-              <div 
-                className="w-9 h-9 rounded-sm bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600 transition-all select-none hover:bg-emerald-100/50 cursor-pointer shrink-0"
-                title={`Drive Pessoal Ativo: ${driveStatus.email}`}
-              >
-                <div className="relative">
-                  <HardDrive size={18} />
-                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white animate-pulse" />
-                </div>
-              </div>
-            )}
-
             <button
               onClick={handleLogout}
-              className="flex items-center justify-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer h-9 shrink-0"
+              className="flex items-center justify-center gap-2 h-9 px-3 bg-red-50 border border-red-100 text-red-600 text-sm font-bold hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer shrink-0"
             >
               <LogOut size={16} />
               Sair
@@ -2307,7 +2300,7 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="relative" ref={uploadMenuRef}>
               <button
                 onClick={() => {
@@ -2321,7 +2314,7 @@ export default function Dashboard() {
                     setIsUploadMenuOpen(!isUploadMenuOpen);
                   }
                 }}
-                className="flex items-center justify-center gap-2 bg-[#a21b7e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer h-9"
+                className="flex items-center justify-center gap-2 h-9 px-3 text-gray-700 hover:text-[#a21b7e] text-sm font-bold transition-colors cursor-pointer bg-transparent border-0 shadow-none shrink-0"
               >
                 <Upload size={16} />
                 Carregar
@@ -2369,7 +2362,7 @@ export default function Dashboard() {
             {userProfile?.role === 'admin' && (
               <button
                 onClick={handleCreateFolder}
-                className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-sm text-sm font-bold shadow-sm hover:bg-gray-50 transition-all cursor-pointer h-9"
+                className="flex items-center justify-center gap-2 h-9 px-3 text-gray-700 hover:text-[#a21b7e] text-sm font-bold transition-colors cursor-pointer bg-transparent border-0 shadow-none shrink-0"
               >
                 <FolderPlus size={16} />
                 Nova pasta
@@ -2389,8 +2382,8 @@ export default function Dashboard() {
                   }
                 }}
                 className={cn(
-                  "flex items-center justify-center bg-white border border-gray-200 text-gray-500 rounded-sm shadow-sm hover:bg-gray-50 hover:text-[#a21b7e] hover:border-[#a21b7e]/30 transition-all cursor-pointer h-9 w-9 shrink-0",
-                  filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) && "border-[#a21b7e] text-[#a21b7e] bg-[#a21b7e]/5"
+                  "flex items-center justify-center h-9 w-9 text-gray-500 hover:text-[#a21b7e] transition-colors cursor-pointer bg-transparent border-0 p-0 shrink-0",
+                  filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) && "text-[#a21b7e]"
                 )}
                 title={filteredAssets.map(a => a.id).every(id => selectedAssetIds.includes(id)) ? "Desmarcar Todos" : "Selecionar Todos"}
               >
@@ -2404,16 +2397,16 @@ export default function Dashboard() {
 
             <div className="h-5 w-px bg-gray-200 mx-1" />
 
-            <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100 items-center">
+            <div className="flex h-9 bg-gray-50 p-1 rounded-sm border border-gray-100 items-center shrink-0">
               <button
                 onClick={() => setViewMode("grid")}
-                className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
+                className={cn("h-7 w-7 flex items-center justify-center rounded transition-all cursor-pointer", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
               >
                 <Grid size={16} />
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "list" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
+                className={cn("h-7 w-7 flex items-center justify-center rounded transition-all cursor-pointer", viewMode === "list" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
               >
                 <ListIcon size={16} />
               </button>
@@ -2425,7 +2418,7 @@ export default function Dashboard() {
                 <button
                   onClick={() => setIsDriveDropdownOpen(!isDriveDropdownOpen)}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-sm border border-gray-200 bg-white text-xs font-bold text-gray-600 hover:text-[#a21b7e] hover:border-[#a21b7e]/30 shadow-sm transition-all cursor-pointer h-8",
+                    "flex items-center gap-2 h-9 px-3 rounded-sm border border-gray-200 bg-white text-xs font-bold text-gray-600 hover:text-[#a21b7e] hover:border-[#a21b7e]/30 shadow-sm transition-all cursor-pointer shrink-0",
                     isDriveDropdownOpen && "text-[#a21b7e] border-[#a21b7e]/30 bg-[#a21b7e]/5"
                   )}
                   title="Configurações e Sincronização do Google Drive"
