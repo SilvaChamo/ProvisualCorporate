@@ -1529,12 +1529,19 @@ export default function ClientDashboard() {
               const gDriveClientEmail = sharedEmails.find((email: string) =>
                 email !== 'provisualcorporate@gmail.com' &&
                 email !== 'silva.chamo@gmail.com' &&
-                !email.endsWith('.demo')
+                !email.endsWith('.demo') &&
+                !email.includes('gserviceaccount.com') &&
+                !email.includes('provisual-sync')
               );
 
               // Email do Drive tem prioridade (é a fonte de verdade)
               if (gDriveClientEmail) {
                 folderClientEmail = gDriveClientEmail;
+              }
+
+              // Limpar o email de serviço se ele já tiver sido guardado anteriormente por erro
+              if (folderClientEmail && (folderClientEmail.includes('gserviceaccount.com') || folderClientEmail.includes('provisual-sync') || folderClientEmail.includes('provisual_synk'))) {
+                folderClientEmail = null;
               }
 
               await setDoc(docRef, {
@@ -1580,12 +1587,19 @@ export default function ClientDashboard() {
             const gDriveClientEmail = sharedEmails.find((email: string) =>
               email !== 'provisualcorporate@gmail.com' &&
               email !== 'silva.chamo@gmail.com' &&
-              !email.endsWith('.demo')
+              !email.endsWith('.demo') &&
+              !email.includes('gserviceaccount.com') &&
+              !email.includes('provisual-sync')
             );
 
             // Email do Drive tem prioridade
             if (gDriveClientEmail) {
               folderClientEmail = gDriveClientEmail;
+            }
+
+            // Limpar o email de serviço se ele já tiver sido guardado anteriormente por erro
+            if (folderClientEmail && (folderClientEmail.includes('gserviceaccount.com') || folderClientEmail.includes('provisual-sync') || folderClientEmail.includes('provisual_synk'))) {
+              folderClientEmail = null;
             }
 
             await setDoc(docRef, {
@@ -2843,6 +2857,7 @@ export default function ClientDashboard() {
                               userProfile={userProfile}
                               isFolderAllowedForClient={isFolderAllowedForClient}
                               isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
+                              setOrganizarModal={setOrganizarModal}
                               onSelect={() => {
                                 if (asset.type === 'folder') {
                                   setSelectedFolderId(asset.driveId || asset.id);
@@ -3239,6 +3254,7 @@ export default function ClientDashboard() {
                         userProfile={userProfile}
                         isFolderAllowedForClient={isFolderAllowedForClient}
                         isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
+                        setOrganizarModal={setOrganizarModal}
                         onSelect={() => {
                           if (asset.type === 'folder') {
                             setSelectedFolderId(asset.driveId || asset.id);
