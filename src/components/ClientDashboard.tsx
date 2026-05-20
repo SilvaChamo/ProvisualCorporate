@@ -1874,20 +1874,9 @@ export default function ClientDashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleManualSync}
-              disabled={isSyncing}
-              className={cn(
-                "flex items-center gap-2 px-3.5 py-1.5 border border-gray-100 rounded-lg hover:border-gray-200 bg-gray-50 hover:bg-gray-100 transition-all font-bold text-xs text-gray-700 cursor-pointer shadow-sm hover:shadow-md",
-                isSyncing && "opacity-75 cursor-not-allowed"
-              )}
-            >
-              <RefreshCw size={13} className={cn("text-gray-500", isSyncing && "animate-spin text-[#a21b7e]")} />
-              <span>{isSyncing ? "Sincronizando..." : "Sincronizar"}</span>
-            </button>
 
             {userProfile && (
-              <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-3.5 py-1.5 rounded-lg select-none">
+              <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 px-3.5 h-9 rounded-lg select-none items-center">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                 <div className="flex flex-col items-start leading-none">
                   <span className="text-[11px] text-gray-800 font-bold max-w-[160px] truncate mb-0.5" title={(() => {
@@ -1907,12 +1896,6 @@ export default function ClientDashboard() {
                       return name.split(' ')[0].replace(/[()]/g, '');
                     })()}
                   </span>
-                  <span className={cn(
-                    "text-[9px] font-black uppercase tracking-widest",
-                    userProfile.role === 'admin' ? "text-[#a21b7e]" : "text-blue-600"
-                  )}>
-                    {userProfile.role === 'admin' ? 'Administrador' : 'Cliente'}
-                  </span>
                 </div>
               </div>
             )}
@@ -1930,7 +1913,7 @@ export default function ClientDashboard() {
         </header>
 
         {/* Path & Primary Actions */}
-        <div className="bg-white px-8 py-3 flex items-center justify-between border-b border-gray-100 z-10">
+        <div className="bg-[#a21b7e]/5 px-8 py-1.5 flex items-center justify-between border-b border-[#a21b7e]/10 z-10">
           <div className="flex items-center gap-2 text-sm font-medium">
             {selectedAsset ? (
               <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
@@ -1970,7 +1953,7 @@ export default function ClientDashboard() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100 items-center">
+            <button onClick={handleManualSync} disabled={isSyncing} className={cn("flex items-center gap-1 text-xs text-gray-500 hover:text-[#a21b7e] transition-all cursor-pointer font-bold", isSyncing && "opacity-75 cursor-not-allowed")}><RefreshCw size={13} className={cn("text-gray-500", isSyncing && "animate-spin text-[#a21b7e]")} /><span>{isSyncing ? "Sincronizando..." : "Sincronizar"}</span></button>            <div className="flex bg-gray-50 p-1 rounded-sm border border-gray-100 items-center">
               <button
                 onClick={() => setViewMode("grid")}
                 className={cn("p-1.5 rounded transition-all cursor-pointer", viewMode === "grid" ? "bg-white shadow-sm text-[#a21b7e]" : "text-gray-400 hover:text-gray-600")}
