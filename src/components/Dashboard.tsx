@@ -1274,6 +1274,7 @@ export default function Dashboard() {
         const realId = (isShortcut && file.shortcutDetails?.targetId) ? file.shortcutDetails.targetId : file.id;
 
         if (isFolder) {
+          const existingFolder = folders.find(f => f.id === realId);
           // Salvar pasta no Firestore com o mesmo ID do Drive
           await setDoc(doc(db, "folders", realId), {
             name: file.name,
@@ -1282,6 +1283,8 @@ export default function Dashboard() {
             parentId: file.trashed ? 'trash' : (folderId === 'root' ? null : folderId),
             starred: file.starred || false,
             trashed: file.trashed || false,
+            clientEmail: existingFolder?.clientEmail || null,
+            color: existingFolder?.color || '#e2b13c',
             adminToken: "Silva_Chamo_Master_Admin_2026"
           });
 
@@ -1330,6 +1333,7 @@ export default function Dashboard() {
             size: fileSize,
             url: file.webViewLink
           }],
+          clientId: existingAsset?.clientId || null,
           adminToken: "Silva_Chamo_Master_Admin_2026"
         };
 
@@ -1376,6 +1380,7 @@ export default function Dashboard() {
             if (sfSafeName.toLowerCase().includes('ds_store') || sfSafeName.startsWith('._') || sfSafeName === 'Thumbs.db' || sfSafeName === 'desktop.ini') continue;
 
             if (sfIsFolder) {
+              const existingFolder = folders.find(f => f.id === sfRealId);
               await setDoc(doc(db, "folders", sfRealId), {
                 name: sf.name,
                 date: sf.createdTime ? Timestamp.fromDate(new Date(sf.createdTime)) : serverTimestamp(),
@@ -1383,6 +1388,8 @@ export default function Dashboard() {
                 parentId: subFolderId,
                 starred: sf.starred || false,
                 trashed: sf.trashed || false,
+                clientEmail: existingFolder?.clientEmail || null,
+                color: existingFolder?.color || '#e2b13c',
                 adminToken: "Silva_Chamo_Master_Admin_2026"
               });
             } else {
@@ -1405,6 +1412,7 @@ export default function Dashboard() {
                 starred: sf.starred || false,
                 trashed: sf.trashed || false,
                 versions: [{ quality: "original", size: sfSize, url: sf.webViewLink || "" }],
+                clientId: existingSf?.clientId || null,
                 adminToken: "Silva_Chamo_Master_Admin_2026"
               });
             }
@@ -1652,11 +1660,14 @@ export default function Dashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
+              const existingFolder = folders.find(f => f.id === file.id);
               await setDoc(doc(db, "folders", file.id), {
                 name: file.name,
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
-                parentId: null
+                parentId: null,
+                clientEmail: existingFolder?.clientEmail || null,
+                color: existingFolder?.color || '#e2b13c'
               });
             }
           }
@@ -1711,7 +1722,8 @@ export default function Dashboard() {
                 name: file.name,
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
-                parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG'
+                parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
+                color: existingFolderInState?.color || '#e2b13c'
               };
               if (folderClientEmail !== undefined) {
                 payload.clientEmail = folderClientEmail;
@@ -1770,7 +1782,8 @@ export default function Dashboard() {
               name: file.name,
               date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
               ownerId: "google-drive",
-              parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG'
+              parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
+              color: existingFolderInState?.color || '#e2b13c'
             };
             if (folderClientEmail !== undefined) {
               payload.clientEmail = folderClientEmail;

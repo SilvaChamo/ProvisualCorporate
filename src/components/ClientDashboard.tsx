@@ -1186,6 +1186,7 @@ export default function ClientDashboard() {
         const realId = (isShortcut && file.shortcutDetails?.targetId) ? file.shortcutDetails.targetId : file.id;
 
         if (isFolder) {
+          const existingFolder = folders.find(f => f.id === realId);
           // Salvar pasta no Firestore com o mesmo ID do Drive
           await setDoc(doc(db, "folders", realId), {
             name: file.name,
@@ -1194,6 +1195,8 @@ export default function ClientDashboard() {
             parentId: file.trashed ? 'trash' : (folderId === 'root' ? null : folderId),
             starred: file.starred || false,
             trashed: file.trashed || false,
+            clientEmail: existingFolder?.clientEmail || null,
+            color: existingFolder?.color || '#e2b13c',
             adminToken: "Silva_Chamo_Master_Admin_2026"
           });
 
@@ -1207,6 +1210,8 @@ export default function ClientDashboard() {
             }
           }
         }
+
+        const existingAsset = assets.find(a => a.driveId === realId || a.id === realId);
 
         const assetData = {
           name: file.name,
@@ -1224,6 +1229,7 @@ export default function ClientDashboard() {
             size: fileSize,
             url: file.webViewLink
           }],
+          clientId: existingAsset?.clientId || null,
           adminToken: "Silva_Chamo_Master_Admin_2026"
         };
 
@@ -1471,11 +1477,14 @@ export default function ClientDashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
+              const existingFolder = folders.find(f => f.id === file.id);
               await setDoc(doc(db, "folders", file.id), {
                 name: file.name,
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
-                parentId: null
+                parentId: null,
+                clientEmail: existingFolder?.clientEmail || null,
+                color: existingFolder?.color || '#e2b13c'
               });
             }
           }
@@ -1523,7 +1532,8 @@ export default function ClientDashboard() {
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-                ...(folderClientEmail && { clientEmail: folderClientEmail })
+                clientEmail: folderClientEmail || null,
+                color: existingFolderInState?.color || '#e2b13c'
               });
             }
           }
@@ -1571,7 +1581,8 @@ export default function ClientDashboard() {
               date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
               ownerId: "google-drive",
               parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-              ...(folderClientEmail && { clientEmail: folderClientEmail })
+              clientEmail: folderClientEmail || null,
+              color: existingFolderInState?.color || '#e2b13c'
             });
           }
         }
