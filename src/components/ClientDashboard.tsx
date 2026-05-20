@@ -1405,6 +1405,17 @@ export default function ClientDashboard() {
     return false;
   };
 
+
+  // Auto-entrar na pasta do cliente ao carregar
+  useEffect(() => {
+    if (userProfile?.role === 'cliente' && foldersLoaded && folders.length > 0 && selectedFolderId === null) {
+      const clientFolders = getAllowedClientRootFolders(folders);
+      if (clientFolders.length > 0) {
+        setSelectedFolderId(clientFolders[0].id);
+      }
+    }
+  }, [userProfile?.role, foldersLoaded, folders]);
+
   // Efeito de segurança para impedir acessos diretos não autorizados a pastas
   useEffect(() => {
     if (userProfile?.role === 'cliente' && selectedFolderId !== null && folders.length > 0) {
@@ -1641,8 +1652,8 @@ export default function ClientDashboard() {
       // Na Gestão de Clientes:
       if (selectedFolderId === null) {
         if (userProfile?.role === 'cliente') {
-          // Filtrar para mostrar apenas a pasta correspondente a este cliente
-          result = getAllowedClientRootFolders(result);
+          // Cliente nunca deve ver a pasta raiz — entra directamente dentro dela via useEffect
+          return [];
         } else {
           // Se estivermos na raiz da Gestão de Clientes:
           // O conteúdo desta pasta ('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG') deve vir no menu "Gestão de Clientes"
