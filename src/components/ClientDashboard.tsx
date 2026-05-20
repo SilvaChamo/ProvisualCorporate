@@ -1186,17 +1186,19 @@ export default function ClientDashboard() {
         const realId = (isShortcut && file.shortcutDetails?.targetId) ? file.shortcutDetails.targetId : file.id;
 
         if (isFolder) {
-          const existingFolder = folders.find(f => f.id === realId);
+          const docRef = doc(db, "folders", realId);
+          const docSnap = await getDoc(docRef);
+          const folderData = docSnap.exists() ? docSnap.data() : null;
           // Salvar pasta no Firestore com o mesmo ID do Drive
-          await setDoc(doc(db, "folders", realId), {
+          await setDoc(docRef, {
             name: file.name,
             date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
             ownerId: "google-drive",
             parentId: file.trashed ? 'trash' : (folderId === 'root' ? null : folderId),
             starred: file.starred || false,
             trashed: file.trashed || false,
-            clientEmail: existingFolder?.clientEmail || null,
-            color: existingFolder?.color || '#e2b13c',
+            clientEmail: folderData?.clientEmail || null,
+            color: folderData?.color || '#e2b13c',
             adminToken: "Silva_Chamo_Master_Admin_2026"
           });
 
@@ -1211,7 +1213,9 @@ export default function ClientDashboard() {
           }
         }
 
-        const existingAsset = assets.find(a => a.driveId === realId || a.id === realId);
+        const docRefAsset = doc(db, "assets", realId);
+        const docSnapAsset = await getDoc(docRefAsset);
+        const assetDataDb = docSnapAsset.exists() ? docSnapAsset.data() : null;
 
         const assetData = {
           name: file.name,
@@ -1229,7 +1233,7 @@ export default function ClientDashboard() {
             size: fileSize,
             url: file.webViewLink
           }],
-          clientId: existingAsset?.clientId || null,
+          clientId: assetDataDb?.clientId || null,
           adminToken: "Silva_Chamo_Master_Admin_2026"
         };
 
@@ -1237,7 +1241,7 @@ export default function ClientDashboard() {
           try {
             // Usar o setDoc para fazer upsert na tabela assets com o ID do documento igual ao driveId (realId)
             // e garantir acionamento do notifyTableChange para atualização instantânea em tempo real!
-            await setDoc(doc(db, "assets", realId), assetData);
+            await setDoc(docRefAsset, assetData);
           } catch (upsertErr: any) {
             console.warn("[Sync Silencioso] Salvar asset ignorado:", upsertErr?.message);
           }
@@ -1410,11 +1414,14 @@ export default function ClientDashboard() {
     const email = userProfile.email?.toLowerCase() || "";
     if (!email) return [];
 
-    // Filtrar pastas onde o clientEmail contém o email do utilizador logado
-    return allFolders.filter(f =>
-      f.parentId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' &&
+    // Obter todas as pastas compartilhadas com o cliente
+    const allSharedFolders = allFolders.filter(f =>
       (f as any).clientEmail?.toLowerCase().split(',').map((e: string) => e.trim()).includes(email)
     );
+
+    // Considerar como raiz compartilhada qualquer pasta cujo pai não esteja também compartilhado
+    const sharedIds = new Set(allSharedFolders.map(f => f.id));
+    return allSharedFolders.filter(f => !f.parentId || !sharedIds.has(f.parentId));
   };
 
   // Helper para verificar se a pasta selecionada é permitida para o cliente ativo
@@ -1477,14 +1484,16 @@ export default function ClientDashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
-              const existingFolder = folders.find(f => f.id === file.id);
-              await setDoc(doc(db, "folders", file.id), {
+              const docRef = doc(db, "folders", file.id);
+              const docSnap = await getDoc(docRef);
+              const folderData = docSnap.exists() ? docSnap.data() : null;
+              await setDoc(docRef, {
                 name: file.name,
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: null,
-                clientEmail: existingFolder?.clientEmail || null,
-                color: existingFolder?.color || '#e2b13c'
+                clientEmail: folderData?.clientEmail || null,
+                color: folderData?.color || '#e2b13c'
               });
             }
           }
@@ -1508,9 +1517,10 @@ export default function ClientDashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
-              // Extrair o email do cliente pelas permissões de partilha do Drive
-              const existingFolderInState = folders.find(f => f.id === file.id);
-              let folderClientEmail = (existingFolderInState as any)?.clientEmail || null;
+              const docRef = doc(db, "folders", file.id);
+              const docSnap = await getDoc(docRef);
+              const folderData = docSnap.exists() ? docSnap.data() : null;
+              let folderClientEmail = folderData?.clientEmail || null;
 
               const sharedEmails = (file.permissions || [])
                 .map((p: any) => p.emailAddress?.toLowerCase())
@@ -1527,13 +1537,13 @@ export default function ClientDashboard() {
                 folderClientEmail = gDriveClientEmail;
               }
 
-              await setDoc(doc(db, "folders", file.id), {
+              await setDoc(docRef, {
                 name: file.name,
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
                 clientEmail: folderClientEmail || null,
-                color: existingFolderInState?.color || '#e2b13c'
+                color: folderData?.color || '#e2b13c'
               });
             }
           }
@@ -1558,8 +1568,10 @@ export default function ClientDashboard() {
         const driveFiles = await resClient.json();
         for (const file of driveFiles) {
           if (file.mimeType === 'application/vnd.google-apps.folder') {
-            const existingFolderInState = folders.find(f => f.id === file.id);
-            let folderClientEmail = (existingFolderInState as any)?.clientEmail || null;
+            const docRef = doc(db, "folders", file.id);
+            const docSnap = await getDoc(docRef);
+            const folderData = docSnap.exists() ? docSnap.data() : null;
+            let folderClientEmail = folderData?.clientEmail || null;
 
             const sharedEmails = (file.permissions || [])
               .map((p: any) => p.emailAddress?.toLowerCase())
@@ -1576,13 +1588,13 @@ export default function ClientDashboard() {
               folderClientEmail = gDriveClientEmail;
             }
 
-            await setDoc(doc(db, "folders", file.id), {
+            await setDoc(docRef, {
               name: file.name,
               date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
               ownerId: "google-drive",
               parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
               clientEmail: folderClientEmail || null,
-              color: existingFolderInState?.color || '#e2b13c'
+              color: folderData?.color || '#e2b13c'
             });
           }
         }
@@ -1604,9 +1616,10 @@ export default function ClientDashboard() {
   const filteredAssets = useMemo(() => {
     let result = assets;
 
-    // Filtrar por pasta permitida (baseado no email do cliente)
+    // Filtrar por pasta permitida (baseado no email do cliente) ou por arquivo partilhado diretamente
     if (userProfile?.role === 'cliente') {
-      result = result.filter(a => isFolderAllowedForClient(a.folderId));
+      const email = userProfile.email?.toLowerCase() || "";
+      result = result.filter(a => isFolderAllowedForClient(a.folderId) || a.clientId?.toLowerCase() === email);
     }
 
     // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed

@@ -1274,17 +1274,19 @@ export default function Dashboard() {
         const realId = (isShortcut && file.shortcutDetails?.targetId) ? file.shortcutDetails.targetId : file.id;
 
         if (isFolder) {
-          const existingFolder = folders.find(f => f.id === realId);
+          const docRef = doc(db, "folders", realId);
+          const docSnap = await getDoc(docRef);
+          const folderData = docSnap.exists() ? docSnap.data() : null;
           // Salvar pasta no Firestore com o mesmo ID do Drive
-          await setDoc(doc(db, "folders", realId), {
+          await setDoc(docRef, {
             name: file.name,
             date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
             ownerId: "google-drive",
             parentId: file.trashed ? 'trash' : (folderId === 'root' ? null : folderId),
             starred: file.starred || false,
             trashed: file.trashed || false,
-            clientEmail: existingFolder?.clientEmail || null,
-            color: existingFolder?.color || '#e2b13c',
+            clientEmail: folderData?.clientEmail || null,
+            color: folderData?.color || '#e2b13c',
             adminToken: "Silva_Chamo_Master_Admin_2026"
           });
 
@@ -1310,8 +1312,9 @@ export default function Dashboard() {
           continue;
         }
 
-        // Verificar se o asset já existe no Supabase (para não sobrescrever o folderId manualmente definido)
-        const existingAsset = assets.find(a => a.driveId === realId || a.id === realId);
+        const docRefAsset = doc(db, "assets", realId);
+        const docSnapAsset = await getDoc(docRefAsset);
+        const assetDataDb = docSnapAsset.exists() ? docSnapAsset.data() : null;
 
         const assetData = {
           name: file.name,
@@ -1322,7 +1325,7 @@ export default function Dashboard() {
           // Só actualiza se: 1) asset não existe ainda, ou 2) o ficheiro foi eliminado (trashed)
           folderId: file.trashed
             ? 'trash'
-            : (existingAsset?.folderId ?? folderId),
+            : (assetDataDb?.folderId ?? folderId),
           ownerId: "google-drive",
           driveId: realId,
           thumbnailUrl: file.thumbnailLink || "",
@@ -1333,13 +1336,13 @@ export default function Dashboard() {
             size: fileSize,
             url: file.webViewLink
           }],
-          clientId: existingAsset?.clientId || null,
+          clientId: assetDataDb?.clientId || null,
           adminToken: "Silva_Chamo_Master_Admin_2026"
         };
 
         if (!isFolder) {
           try {
-            await setDoc(doc(db, "assets", realId), assetData);
+            await setDoc(docRefAsset, assetData);
           } catch (upsertErr: any) {
             console.warn("[Sync Silencioso] Salvar asset ignorado:", upsertErr?.message);
           }
@@ -1380,16 +1383,18 @@ export default function Dashboard() {
             if (sfSafeName.toLowerCase().includes('ds_store') || sfSafeName.startsWith('._') || sfSafeName === 'Thumbs.db' || sfSafeName === 'desktop.ini') continue;
 
             if (sfIsFolder) {
-              const existingFolder = folders.find(f => f.id === sfRealId);
-              await setDoc(doc(db, "folders", sfRealId), {
+              const docRef = doc(db, "folders", sfRealId);
+              const docSnap = await getDoc(docRef);
+              const folderData = docSnap.exists() ? docSnap.data() : null;
+              await setDoc(docRef, {
                 name: sf.name,
                 date: sf.createdTime ? Timestamp.fromDate(new Date(sf.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: subFolderId,
                 starred: sf.starred || false,
                 trashed: sf.trashed || false,
-                clientEmail: existingFolder?.clientEmail || null,
-                color: existingFolder?.color || '#e2b13c',
+                clientEmail: folderData?.clientEmail || null,
+                color: folderData?.color || '#e2b13c',
                 adminToken: "Silva_Chamo_Master_Admin_2026"
               });
             } else {
@@ -1398,21 +1403,23 @@ export default function Dashboard() {
               const sfMime = sf.shortcutDetails?.targetMimeType || sf.mimeType || '';
               const sfType = sfMime.includes('image') || sfIsRaw ? 'image' : (sfMime.includes('video') ? 'video' : 'document');
               const sfSize = sf.size ? `${(parseInt(sf.size) / 1024 / 1024).toFixed(1)} MB` : '0 MB';
-              const existingSf = assets.find(a => a.driveId === sfRealId || a.id === sfRealId);
+              const docRefAsset = doc(db, "assets", sfRealId);
+              const docSnapAsset = await getDoc(docRefAsset);
+              const assetDataDb = docSnapAsset.exists() ? docSnapAsset.data() : null;
 
-              await setDoc(doc(db, "assets", sfRealId), {
+              await setDoc(docRefAsset, {
                 name: sf.name,
                 type: sfType,
                 captureDate: sf.createdTime ? Timestamp.fromDate(new Date(sf.createdTime)) : serverTimestamp(),
                 uploadDate: serverTimestamp(),
-                folderId: sf.trashed ? 'trash' : (existingSf?.folderId ?? subFolderId),
+                folderId: sf.trashed ? 'trash' : (assetDataDb?.folderId ?? subFolderId),
                 ownerId: "google-drive",
                 driveId: sfRealId,
                 thumbnailUrl: sf.thumbnailLink || "",
                 starred: sf.starred || false,
                 trashed: sf.trashed || false,
                 versions: [{ quality: "original", size: sfSize, url: sf.webViewLink || "" }],
-                clientId: existingSf?.clientId || null,
+                clientId: assetDataDb?.clientId || null,
                 adminToken: "Silva_Chamo_Master_Admin_2026"
               });
             }
@@ -1660,14 +1667,16 @@ export default function Dashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
-              const existingFolder = folders.find(f => f.id === file.id);
-              await setDoc(doc(db, "folders", file.id), {
+              const docRef = doc(db, "folders", file.id);
+              const docSnap = await getDoc(docRef);
+              const folderData = docSnap.exists() ? docSnap.data() : null;
+              await setDoc(docRef, {
                 name: file.name,
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: null,
-                clientEmail: existingFolder?.clientEmail || null,
-                color: existingFolder?.color || '#e2b13c'
+                clientEmail: folderData?.clientEmail || null,
+                color: folderData?.color || '#e2b13c'
               });
             }
           }
@@ -1691,9 +1700,10 @@ export default function Dashboard() {
           for (const file of driveFiles) {
             const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
             if (isFolder) {
-              // Preservar o client_email existente usando os dados já carregados no estado local (sem query extra ao Supabase)
-              const existingFolderInState = folders.find(f => f.id === file.id);
-              let folderClientEmail = (existingFolderInState as any)?.clientEmail || null;
+              const docRef = doc(db, "folders", file.id);
+              const docSnap = await getDoc(docRef);
+              const folderData = docSnap.exists() ? docSnap.data() : null;
+              let folderClientEmail = folderData?.clientEmail || null;
 
               // Tenta extrair das permissões do Drive
               const sharedEmails = (file.permissions || [])
@@ -1723,13 +1733,13 @@ export default function Dashboard() {
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-                color: existingFolderInState?.color || '#e2b13c'
+                color: folderData?.color || '#e2b13c'
               };
               if (folderClientEmail !== undefined) {
                 payload.clientEmail = folderClientEmail;
               }
 
-              await setDoc(doc(db, "folders", file.id), payload);
+              await setDoc(docRef, payload);
             }
           }
         }
@@ -1753,9 +1763,10 @@ export default function Dashboard() {
         const driveFiles = await resClient.json();
         for (const file of driveFiles) {
           if (file.mimeType === 'application/vnd.google-apps.folder') {
-            // Preservar o clientEmail existente usando os dados já carregados no estado local
-            const existingFolderInState = folders.find(f => f.id === file.id);
-            let folderClientEmail = (existingFolderInState as any)?.clientEmail || null;
+            const docRef = doc(db, "folders", file.id);
+            const docSnap = await getDoc(docRef);
+            const folderData = docSnap.exists() ? docSnap.data() : null;
+            let folderClientEmail = folderData?.clientEmail || null;
 
             const sharedEmails = (file.permissions || [])
               .map((p: any) => p.emailAddress?.toLowerCase())
@@ -1783,13 +1794,13 @@ export default function Dashboard() {
               date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
               ownerId: "google-drive",
               parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-              color: existingFolderInState?.color || '#e2b13c'
+              color: folderData?.color || '#e2b13c'
             };
             if (folderClientEmail !== undefined) {
               payload.clientEmail = folderClientEmail;
             }
 
-            await setDoc(doc(db, "folders", file.id), payload);
+            await setDoc(docRef, payload);
           }
         }
       }
