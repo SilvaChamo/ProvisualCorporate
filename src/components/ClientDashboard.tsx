@@ -87,6 +87,34 @@ async function fetchWithErrorMessage(url: string, options: RequestInit): Promise
   }
 }
 
+function cleanStringForSearch(str: string): string {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[^a-z0-9]/g, ' ') // substitui pontuação por espaço
+    .replace(/\s+/g, ' ') // normaliza espaços
+    .trim();
+}
+
+function matchesSearchQuery(name: string, query: string): boolean {
+  if (!query) return true;
+  if (!name) return false;
+  
+  const cleanName = cleanStringForSearch(name);
+  const cleanQuery = cleanStringForSearch(query);
+  
+  // Dividir a busca em palavras individuais, ignorando conectores comuns (de, do, da, e, o, a, etc.)
+  const ignoreWords = new Set(['de', 'do', 'da', 'e', 'o', 'a', 'os', 'as', 'em', 'um', 'uma', 'para', 'com']);
+  const queryWords = cleanQuery.split(' ').filter(w => w && !ignoreWords.has(w));
+  
+  if (queryWords.length === 0) return cleanName.includes(cleanQuery);
+  
+  // Verificar se TODAS as palavras relevantes da consulta estão no nome
+  return queryWords.every(word => cleanName.includes(word));
+}
+
 // Types
 interface AssetVersion {
   quality: "low" | "high" | "original";
@@ -434,9 +462,8 @@ export default function ClientDashboard() {
   const [geminiAnswers, setGeminiAnswers] = useState<Array<{ role: 'user' | 'gemini', text: string }>>([]);
   const [isGeminiLoading, setIsGeminiLoading] = useState(false);
   const [shareAsset, setShareAsset] = useState<Asset | null>(null);
-  const [organizeAsset, setOrganizeAsset] = useState<Asset | null>(null);
-  const [organizeMode, setOrganizeMode] = useState<'mover' | 'copiar'>('mover');
-  const [organizeTargetFolderId, setOrganizeTargetFolderId] = useState<string>("");
+  const [organizarModal, setOrganizarModal] = useState<{ folder?: any; asset?: any; mode: 'move' | 'copy' } | null>(null);
+  const [organizarSearch, setOrganizarSearch] = useState("");
   const [isCopiedText, setIsCopiedText] = useState(false);
   const [distributeModalOpen, setDistributeModalOpen] = useState(false);
   const [itemToDistribute, setItemToDistribute] = useState<{ id: string, type: 'folder' | 'asset', currentName: string } | null>(null);
@@ -1575,7 +1602,7 @@ export default function ClientDashboard() {
     if (activeTab === 'google_drive' && driveFilterType === 'trashed') {
       result = result.filter(a => a.trashed === true || a.folderId === 'trash');
       if (searchQuery) {
-        result = result.filter(a => a && a.name && typeof a.name === 'string' && a.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        result = result.filter(a => a && typeof a.name === 'string' && matchesSearchQuery(a.name, searchQuery));
       }
       return result;
     }
@@ -1586,29 +1613,33 @@ export default function ClientDashboard() {
     // Para todas as outras abas/views, remover itens que estão no lixo
     result = result.filter(a => !a.trashed && a.folderId !== 'trash');
 
-    if (selectedFolderId) {
-      // Se for uma pasta do Google Drive, o ID dela no Firestore será o ID do Google
-      result = result.filter(a => a.folderId === selectedFolderId);
-    } else if (activeTab === 'google_drive') {
-      // Mostrar apenas os arquivos que pertencem à pasta geral "arquivo" na raiz (ou arquivos sem pai se a pasta não existir)
-      if (driveFilterType === 'starred') {
-        result = result.filter(a => (a as any).ownerId === 'google-drive' && a.starred === true);
-      } else if (driveFilterType === 'recent') {
-        result = result.filter(a => (a as any).ownerId === 'google-drive')
-          .sort((a, b) => b.uploadDate.getTime() - a.uploadDate.getTime());
-      } else {
-        result = result.filter(a =>
-          (a as any).ownerId === 'google-drive' &&
-          (a.folderId === arquivoFolderId || (!a.folderId && !arquivoFolderId))
-        );
-      }
-    } else if (activeTab === 'all') {
-      result = result.filter(a => a.folderId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
-    } else if (activeTab !== 'all') {
-      result = result.filter(a => a.type === activeTab);
-    }
     if (searchQuery) {
-      result = result.filter(a => a && a.name && typeof a.name === 'string' && a.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      result = result.filter(a => a && typeof a.name === 'string' && matchesSearchQuery(a.name, searchQuery));
+      if (activeTab !== 'all' && activeTab !== 'google_drive') {
+        result = result.filter(a => a.type === activeTab);
+      }
+    } else {
+      if (selectedFolderId) {
+        // Se for uma pasta do Google Drive, o ID dela no Firestore será o ID do Google
+        result = result.filter(a => a.folderId === selectedFolderId);
+      } else if (activeTab === 'google_drive') {
+        // Mostrar apenas os arquivos que pertencem à pasta geral "arquivo" na raiz (ou arquivos sem pai se a pasta não existir)
+        if (driveFilterType === 'starred') {
+          result = result.filter(a => (a as any).ownerId === 'google-drive' && a.starred === true);
+        } else if (driveFilterType === 'recent') {
+          result = result.filter(a => (a as any).ownerId === 'google-drive')
+            .sort((a, b) => b.uploadDate.getTime() - a.uploadDate.getTime());
+        } else {
+          result = result.filter(a =>
+            (a as any).ownerId === 'google-drive' &&
+            (a.folderId === arquivoFolderId || (!a.folderId && !arquivoFolderId))
+          );
+        }
+      } else if (activeTab === 'all') {
+        result = result.filter(a => a.folderId === '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG');
+      } else if (activeTab !== 'all') {
+        result = result.filter(a => a.type === activeTab);
+      }
     }
     return result;
   }, [selectedFolderId, activeTab, driveFilterType, searchQuery, assets, arquivoFolderId]);
@@ -1630,6 +1661,15 @@ export default function ClientDashboard() {
 
     // Remover itens que estão no lixo
     result = result.filter(f => !f.trashed && f.parentId !== 'trash');
+
+    if (searchQuery) {
+      result = result.filter(f => f && typeof f.name === 'string' && matchesSearchQuery(f.name, searchQuery));
+      // Filtro extra de segurança para garantir que o cliente nunca veja pastas de outros clientes
+      if (userProfile?.role === 'cliente') {
+        result = result.filter(f => isFolderAllowedForClient(f.id));
+      }
+      return result;
+    }
 
     if (activeTab === 'google_drive') {
       // No Google Drive/Arquivo Provisual, se estivermos na raiz, mostramos as pastas da pasta geral "arquivo"
@@ -1656,10 +1696,6 @@ export default function ClientDashboard() {
     } else {
       // Para outras abas (imagens, vídeos, documentos), não mostramos pastas (pois elas filtram apenas os arquivos das abas)
       return [];
-    }
-
-    if (searchQuery) {
-      result = result.filter(f => f && f.name && typeof f.name === 'string' && f.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }
 
     // Filtro extra de segurança para garantir que o cliente nunca veja pastas de outros clientes
@@ -2443,6 +2479,7 @@ export default function ClientDashboard() {
                               key={folder.id}
                               onClick={() => {
                                 setSelectedFolderId(folder.id);
+                                setSearchQuery('');
                                 if ((folder as any).ownerId === 'google-drive') {
                                   handleGoogleSync(folder.id, undefined, true);
                                 }
@@ -2553,97 +2590,34 @@ export default function ClientDashboard() {
                                             animate={{ opacity: 1, scale: 1, x: 0 }}
                                             exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                             transition={{ duration: 0.1 }}
-                                            className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
+                                            className="absolute right-[100%] mr-1.5 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default font-sans"
                                             onClick={(e) => e.stopPropagation()}
                                           >
-                                            <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-
-                                            {folder.parentId !== "" && folder.parentId !== null && (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setActiveFolderMenuId(null);
-                                                  setActiveFolderSubmenu('none');
-                                                  setIsProcessingAction(true);
-                                                  sessionStorage.setItem('action_in_progress', 'true');
-                                                  (async () => {
-                                                    try {
-                                                      if (folder.id.length > 20) {
-                                                        const moveResponse = await fetch('/api/drive/update', {
-                                                          method: 'POST',
-                                                          headers: { 'Content-Type': 'application/json' },
-                                                          body: JSON.stringify({
-                                                            fileId: folder.id,
-                                                            addParents: 'root',
-                                                            removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                          })
-                                                        });
-                                                        if (!moveResponse.ok) {
-                                                          const errData = await moveResponse.json();
-                                                          throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                        }
-                                                      }
-                                                      await updateDoc(doc(db, "folders", folder.id), { parentId: null });
-                                                      alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
-                                                      setIsProcessingAction(false);
-                                                      sessionStorage.removeItem('action_in_progress');
-                                                    } catch (err: any) {
-                                                      alert("Erro ao mover pasta: " + err.message);
-                                                      setIsProcessingAction(false);
-                                                      sessionStorage.removeItem('action_in_progress');
-                                                    }
-                                                  })();
-                                                }}
-                                                className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                              >
-                                                <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                                              </button>
-                                            )}
-
-                                            {folders.filter(f => f.id !== folder.id && f.id !== folder.parentId).map(f => (
-                                              <button
-                                                key={f.id}
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setActiveFolderMenuId(null);
-                                                  setActiveFolderSubmenu('none');
-                                                  setIsProcessingAction(true);
-                                                  sessionStorage.setItem('action_in_progress', 'true');
-                                                  (async () => {
-                                                    try {
-                                                      if (folder.id.length > 20) {
-                                                        const moveResponse = await fetch('/api/drive/update', {
-                                                          method: 'POST',
-                                                          headers: { 'Content-Type': 'application/json' },
-                                                          body: JSON.stringify({
-                                                            fileId: folder.id,
-                                                            addParents: f.id,
-                                                            removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                          })
-                                                        });
-                                                        if (!moveResponse.ok) {
-                                                          const errData = await moveResponse.json();
-                                                          throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                        }
-                                                      }
-                                                      await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
-                                                      alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
-                                                      setIsProcessingAction(false);
-                                                      sessionStorage.removeItem('action_in_progress');
-                                                    } catch (err: any) {
-                                                      alert("Erro ao mover pasta: " + err.message);
-                                                      setIsProcessingAction(false);
-                                                      sessionStorage.removeItem('action_in_progress');
-                                                    }
-                                                  })();
-                                                }}
-                                                className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                              >
-                                                <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{f.name}</span>
-                                              </button>
-                                            ))}
+                                            <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOrganizarModal({ folder, mode: 'move' });
+                                                setActiveFolderSubmenu('none');
+                                                setActiveFolderMenuId(null);
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                            >
+                                              <FolderIcon size={14} className="text-gray-400 shrink-0" />
+                                              Mover para...
+                                            </button>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOrganizarModal({ folder, mode: 'copy' });
+                                                setActiveFolderSubmenu('none');
+                                                setActiveFolderMenuId(null);
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                            >
+                                              <Copy size={14} className="text-gray-400 shrink-0" />
+                                              Copiar para...
+                                            </button>
                                           </motion.div>
                                         )}
                                       </AnimatePresence>
@@ -2660,6 +2634,7 @@ export default function ClientDashboard() {
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setSelectedFolderId(folder.id);
+                                            setSearchQuery('');
                                             if ((folder as any).ownerId === 'google-drive') {
                                               handleGoogleSync(folder.id, undefined, true);
                                             }
@@ -2901,6 +2876,7 @@ export default function ClientDashboard() {
                         key={folder.id}
                         onClick={() => {
                           setSelectedFolderId(folder.id);
+                          setSearchQuery('');
                           if ((folder as any).ownerId === 'google-drive') {
                             handleGoogleSync(folder.id, undefined, true);
                           }
@@ -3016,95 +2992,34 @@ export default function ClientDashboard() {
                                         animate={{ opacity: 1, scale: 1, x: 0 }}
                                         exit={{ opacity: 0, scale: 0.95, x: 10 }}
                                         transition={{ duration: 0.1 }}
-                                        className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
+                                        className="absolute right-[100%] mr-1.5 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default font-sans"
                                         onClick={(e) => e.stopPropagation()}
                                       >
-                                        <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-
-                                        {folder.parentId !== "" && folder.parentId !== null && (
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setActiveFolderMenuId(null);
-                                              setActiveFolderSubmenu('none');
-                                              setIsProcessingAction(true);
-                                              sessionStorage.setItem('action_in_progress', 'true');
-                                              (async () => {
-                                                try {
-                                                  if (folder.id.length > 20) {
-                                                    const moveResponse = await fetch('/api/drive/update', {
-                                                      method: 'POST',
-                                                      headers: { 'Content-Type': 'application/json' },
-                                                      body: JSON.stringify({
-                                                        fileId: folder.id,
-                                                        addParents: 'root',
-                                                        removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                      })
-                                                    });
-                                                    if (!moveResponse.ok) {
-                                                      const errData = await moveResponse.json();
-                                                      throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                    }
-                                                  }
-                                                  await updateDoc(doc(db, "folders", folder.id), { parentId: null });
-                                                  alert(`Pasta "${folder.name}" movida para a Raiz com sucesso!`);
-                                                  handleActionSuccess();
-                                                } catch (err: any) {
-                                                  alert("Erro ao mover pasta: " + err.message);
-                                                  setIsProcessingAction(false);
-                                                  sessionStorage.removeItem('action_in_progress');
-                                                }
-                                              })();
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                                          </button>
-                                        )}
-
-                                        {folders.filter(f => f.id !== folder.id && f.id !== folder.parentId).map(f => (
-                                          <button
-                                            key={f.id}
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setActiveFolderMenuId(null);
-                                              setActiveFolderSubmenu('none');
-                                              setIsProcessingAction(true);
-                                              sessionStorage.setItem('action_in_progress', 'true');
-                                              (async () => {
-                                                try {
-                                                  if (folder.id.length > 20) {
-                                                    const moveResponse = await fetch('/api/drive/update', {
-                                                      method: 'POST',
-                                                      headers: { 'Content-Type': 'application/json' },
-                                                      body: JSON.stringify({
-                                                        fileId: folder.id,
-                                                        addParents: f.id,
-                                                        removeParents: folder.parentId === 'root' || !folder.parentId ? undefined : folder.parentId
-                                                      })
-                                                    });
-                                                    if (!moveResponse.ok) {
-                                                      const errData = await moveResponse.json();
-                                                      throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                                    }
-                                                  }
-                                                  await updateDoc(doc(db, "folders", folder.id), { parentId: f.id });
-                                                  alert(`Pasta "${folder.name}" movida para "${f.name}"!`);
-                                                  handleActionSuccess();
-                                                } catch (err: any) {
-                                                  alert("Erro ao mover pasta: " + err.message);
-                                                  setIsProcessingAction(false);
-                                                  sessionStorage.removeItem('action_in_progress');
-                                                }
-                                              })();
-                                            }}
-                                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                          >
-                                            <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{f.name}</span>
-                                          </button>
-                                        ))}
+                                        <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOrganizarModal({ folder, mode: 'move' });
+                                            setActiveFolderSubmenu('none');
+                                            setActiveFolderMenuId(null);
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                        >
+                                          <FolderIcon size={14} className="text-gray-400 shrink-0" />
+                                          Mover para...
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOrganizarModal({ folder, mode: 'copy' });
+                                            setActiveFolderSubmenu('none');
+                                            setActiveFolderMenuId(null);
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                        >
+                                          <Copy size={14} className="text-gray-400 shrink-0" />
+                                          Copiar para...
+                                        </button>
                                       </motion.div>
                                     )}
                                   </AnimatePresence>
@@ -3121,6 +3036,7 @@ export default function ClientDashboard() {
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedFolderId(folder.id);
+                                        setSearchQuery('');
                                         if ((folder as any).ownerId === 'google-drive') {
                                           handleGoogleSync(folder.id, undefined, true);
                                         }
@@ -3872,6 +3788,211 @@ export default function ClientDashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {(() => {
+          if (!organizarModal) return null;
+          const isFolder = !!organizarModal.folder;
+          const item = isFolder ? organizarModal.folder : organizarModal.asset;
+          if (!item) return null;
+
+          const currentParentId = isFolder ? item.parentId : item.folderId;
+          const isAtRoot = !currentParentId || currentParentId === 'root' || currentParentId === '';
+          const currentParentName = isAtRoot
+            ? 'Raiz (Meu Drive)'
+            : (folders.find(f => f.id === currentParentId)?.name || 'Pasta desconhecida');
+
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40"
+              onClick={() => { setOrganizarModal(null); setOrganizarSearch(''); }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 16 }}
+                transition={{ duration: 0.18 }}
+                className="bg-white rounded-xl shadow-2xl w-[420px] max-w-[95vw] flex flex-col overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-6 pt-5 pb-4 border-b border-gray-100">
+                  <h2 className="text-[15px] font-black text-gray-800">
+                    {organizarModal.mode === 'move' ? 'Mover' : 'Copiar'} &ldquo;{item.name}&rdquo; para
+                  </h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[11px] text-gray-400">Localização actual:</span>
+                    <span className="text-[11px] font-bold text-[#a21b7e] bg-[#a21b7e]/8 px-2 py-0.5 rounded">
+                      {currentParentName}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex border-b border-gray-100">
+                  {(['move', 'copy'] as const).map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setOrganizarModal({ ...organizarModal, mode: m })}
+                      className={cn(
+                        "flex-1 py-2.5 text-xs font-black uppercase tracking-wider transition-colors",
+                        organizarModal.mode === m
+                          ? "text-[#a21b7e] border-b-2 border-[#a21b7e]"
+                          : "text-gray-400 hover:text-gray-600"
+                      )}
+                    >
+                      {m === 'move' ? '📁 Mover' : '📋 Copiar'}
+                    </button>
+                  ))}
+                </div>
+                <div className="px-4 pt-3 pb-2">
+                  <div className="relative">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar pasta de destino..."
+                      value={organizarSearch}
+                      onChange={e => setOrganizarSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#a21b7e] transition-all"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto max-h-[300px] px-2 pb-2 custom-scrollbar">
+                  {!isAtRoot && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          setIsProcessingAction(true);
+                          const itemId = item.id;
+                          const itemDriveId = isFolder ? item.id : item.driveId;
+
+                          if (itemDriveId && itemDriveId.length > 20) {
+                            const r = await fetch('/api/drive/update', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                fileId: itemDriveId,
+                                addParents: 'root',
+                                removeParents: currentParentId && currentParentId !== 'root' ? currentParentId : undefined
+                              })
+                            });
+                            if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+                          }
+
+                          if (organizarModal.mode === 'move') {
+                            if (isFolder) {
+                              await updateDoc(doc(db, 'folders', itemId), { parentId: null });
+                            } else {
+                              await updateDoc(doc(db, 'assets', itemId), { folderId: "" });
+                            }
+                            alert(`"${item.name}" movido para a Raiz com sucesso!`);
+                          } else {
+                            if (isFolder) {
+                              alert("Copiar pastas não é suportado no momento.");
+                            } else {
+                              const newAsset = {
+                                ...item,
+                                folderId: "",
+                                captureDate: new Date(),
+                                createdAt: new Date()
+                              };
+                              delete (newAsset as any).id;
+                              await addDoc(collection(db, "assets"), newAsset);
+                              alert(`Cópia de "${item.name}" criada na Raiz!`);
+                            }
+                          }
+                          setOrganizarModal(null); setOrganizarSearch(''); handleActionSuccess();
+                        } catch (err: any) { alert('Erro: ' + err.message); setIsProcessingAction(false); }
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left group transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                        <FolderIcon size={16} className="text-gray-500" />
+                      </div>
+                      <div>
+                        <div className="text-[13px] font-bold text-gray-700 group-hover:text-[#a21b7e] transition-colors">Raiz (Meu Drive)</div>
+                        <div className="text-[10px] text-gray-400">Pasta principal do drive</div>
+                      </div>
+                    </button>
+                  )}
+                  {folders
+                    .filter(f => {
+                      if (f.id === item.id || f.id === currentParentId || (f as any).trashed || (f as any).deleted) return false;
+                      if (userProfile?.role === 'cliente' && !isFolderAllowedForClient(f.id)) return false;
+                      return organizarSearch === '' || f.name.toLowerCase().includes(organizarSearch.toLowerCase());
+                    })
+                    .map(f => (
+                      <button
+                        key={f.id}
+                        onClick={async () => {
+                          try {
+                            setIsProcessingAction(true);
+                            const itemId = item.id;
+                            const itemDriveId = isFolder ? item.id : item.driveId;
+
+                            if (itemDriveId && itemDriveId.length > 20) {
+                              const r = await fetch('/api/drive/update', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  fileId: itemDriveId,
+                                  addParents: f.id,
+                                  removeParents: currentParentId && currentParentId !== 'root' ? currentParentId : undefined
+                                })
+                              });
+                              if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+                            }
+
+                            if (organizarModal.mode === 'move') {
+                              if (isFolder) {
+                                await updateDoc(doc(db, 'folders', itemId), { parentId: f.id });
+                              } else {
+                                await updateDoc(doc(db, 'assets', itemId), { folderId: f.id });
+                              }
+                              alert(`"${item.name}" movido para "${f.name}"!`);
+                            } else {
+                              if (isFolder) {
+                                alert("Copiar pastas não é suportado no momento.");
+                              } else {
+                                const newAsset = {
+                                  ...item,
+                                  folderId: f.id,
+                                  captureDate: new Date(),
+                                  createdAt: new Date()
+                                };
+                                delete (newAsset as any).id;
+                                await addDoc(collection(db, "assets"), newAsset);
+                                alert(`Cópia de "${item.name}" criada em "${f.name}"!`);
+                              }
+                            }
+                            setOrganizarModal(null); setOrganizarSearch(''); handleActionSuccess();
+                          } catch (err: any) { alert('Erro: ' + err.message); setIsProcessingAction(false); }
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left group transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: ((f as any).color || '#e2b13c') + '22' }}>
+                          <FolderIcon size={16} style={{ color: (f as any).color || '#e2b13c' }} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-bold text-gray-700 group-hover:text-[#a21b7e] transition-colors truncate">{f.name}</div>
+                          {(f as any).clientEmail && <div className="text-[10px] text-gray-400 truncate">{(f as any).clientEmail}</div>}
+                        </div>
+                      </button>
+                    ))}
+                </div>
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+                  <span className="text-[10px] text-gray-400">Clique numa pasta para confirmar</span>
+                  <button onClick={() => { setOrganizarModal(null); setOrganizarSearch(''); }} className="px-5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    Cancelar
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 }
@@ -3944,6 +4065,8 @@ interface AssetCardProps {
   onDistribute?: (item: { id: string, type: string, currentName: string }) => void;
   userProfile?: UserProfile | null;
   isFolderAllowedForClient?: (folderId: string) => boolean;
+  setOrganizarModal: (val: any) => void;
+  accounts?: any[];
 }
 
 function AssetCard({
@@ -3959,10 +4082,12 @@ function AssetCard({
   onToggleBulkSelect,
   hasSelectionActive = false,
   userProfile,
-  isFolderAllowedForClient
+  isFolderAllowedForClient,
+  setOrganizarModal,
+  accounts = []
 }: AssetCardProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar'>('none');
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar' | 'atribuir'>('none');
 
   const runAction = async (actionFn: () => Promise<void>) => {
     try {
@@ -4115,207 +4240,6 @@ function AssetCard({
                         <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Abrir no Drive</span>
                       </button>
                     )}
-                  </motion.div>
-                )}
-
-                {activeSubmenu === 'organizar' && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                    animate={{ opacity: 1, scale: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                    transition={{ duration: 0.1 }}
-                    className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* Seção Mover */}
-                    <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-
-                    {asset.folderId !== "" && asset.folderId !== "root" && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowMenu(false);
-                          setActiveSubmenu('none');
-                          runAction(async () => {
-                            if (asset.driveId) {
-                              const moveResponse = await fetch('/api/drive/update', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  fileId: asset.driveId,
-                                  addParents: 'root',
-                                  removeParents: asset.folderId === 'root' || asset.folderId === '' ? undefined : asset.folderId
-                                })
-                              });
-                              if (!moveResponse.ok) {
-                                const errData = await moveResponse.json();
-                                throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                              }
-                            }
-                            await updateDoc(doc(db, "assets", asset.id), { folderId: "" });
-                            alert(`Ficheiro "${asset.name}" movido para a Raiz com sucesso!`);
-                            /* window.location.reload() removed */
-                          });
-                        }}
-                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                      >
-                        <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                      </button>
-                    )}
-
-                    {folders.filter(f => f.id !== asset.folderId).map(folder => (
-                      <button
-                        key={folder.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowMenu(false);
-                          setActiveSubmenu('none');
-                          runAction(async () => {
-                            if (asset.driveId) {
-                              const moveResponse = await fetch('/api/drive/update', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  fileId: asset.driveId,
-                                  addParents: folder.id,
-                                  removeParents: asset.folderId === 'root' || asset.folderId === '' ? undefined : asset.folderId
-                                })
-                              });
-                              if (!moveResponse.ok) {
-                                const errData = await moveResponse.json();
-                                throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                              }
-                            }
-                            await updateDoc(doc(db, "assets", asset.id), { folderId: folder.id });
-                            alert(`Ficheiro "${asset.name}" movido para a pasta "${folder.name}"!`);
-                            /* window.location.reload() removed */
-                          });
-                        }}
-                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                      >
-                        <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{folder.name}</span>
-                      </button>
-                    ))}
-
-                    <div className="my-1.5 border-t border-gray-100" />
-
-                    {/* Seção Copiar */}
-                    <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Copiar para</div>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowMenu(false);
-                        setActiveSubmenu('none');
-                        runAction(async () => {
-                          let newDriveId = asset.driveId || "";
-                          let newUrl = asset.versions[0]?.url || asset.webViewLink || "";
-
-                          // 1. Copiar fisicamente no Google Drive real
-                          if (asset.driveId) {
-                            const copyResponse = await fetch('/api/drive/copy', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                fileId: asset.driveId,
-                                destinationFolderId: 'root',
-                                newName: `${asset.name} (Cópia)`
-                              })
-                            });
-                            if (!copyResponse.ok) {
-                              const errData = await copyResponse.json();
-                              throw new Error(errData.error || 'Erro ao copiar no Google Drive');
-                            }
-                            const copyData = await copyResponse.json();
-                            newDriveId = copyData.id;
-                            newUrl = copyData.webViewLink;
-                          }
-
-                          // 2. Salvar no Firestore com os novos dados físicos
-                          const newAsset = {
-                            ...asset,
-                            name: `${asset.name} (Cópia)`,
-                            folderId: "",
-                            driveId: newDriveId,
-                            versions: [{
-                              quality: "original",
-                              size: asset.versions?.[0]?.size || "0 MB",
-                              url: newUrl
-                            }],
-                            captureDate: new Date(),
-                            createdAt: new Date()
-                          };
-                          delete (newAsset as any).id;
-                          await addDoc(collection(db, "assets"), newAsset);
-                          alert(`Cópia do ficheiro criada na Raiz!`);
-                          /* window.location.reload() removed */
-                        });
-                      }}
-                      className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                    >
-                      <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                    </button>
-
-                    {(userProfile?.role === 'cliente' ? folders.filter(f => isFolderAllowedForClient(f.id)) : folders).map(folder => (
-                      <button
-                        key={folder.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowMenu(false);
-                          setActiveSubmenu('none');
-                          runAction(async () => {
-                            let newDriveId = asset.driveId || "";
-                            let newUrl = asset.versions[0]?.url || asset.webViewLink || "";
-
-                            // 1. Copiar fisicamente no Google Drive real
-                            if (asset.driveId) {
-                              const copyResponse = await fetch('/api/drive/copy', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  fileId: asset.driveId,
-                                  destinationFolderId: folder.id,
-                                  newName: `${asset.name} (Cópia)`
-                                })
-                              });
-                              if (!copyResponse.ok) {
-                                const errData = await copyResponse.json();
-                                throw new Error(errData.error || 'Erro ao copiar no Google Drive');
-                              }
-                              const copyData = await copyResponse.json();
-                              newDriveId = copyData.id;
-                              newUrl = copyData.webViewLink;
-                            }
-
-                            // 2. Salvar no Firestore com os novos dados físicos
-                            const newAsset = {
-                              ...asset,
-                              name: `${asset.name} (Cópia)`,
-                              folderId: folder.id,
-                              driveId: newDriveId,
-                              versions: [{
-                                quality: "original",
-                                size: asset.versions?.[0]?.size || "0 MB",
-                                url: newUrl
-                              }],
-                              captureDate: new Date(),
-                              createdAt: new Date()
-                            };
-                            delete (newAsset as any).id;
-                            await addDoc(collection(db, "assets"), newAsset);
-                            alert(`Cópia do ficheiro criada na pasta "${folder.name}"!`);
-                            /* window.location.reload() removed */
-                          });
-                        }}
-                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                      >
-                        <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{folder.name}</span>
-                      </button>
-                    ))}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -4503,13 +4427,52 @@ function AssetCard({
                     e.stopPropagation();
                     setActiveSubmenu(activeSubmenu === 'organizar' ? 'none' : 'organizar');
                   }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
                     <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
                   </div>
                   <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                  <AnimatePresence>
+                    {activeSubmenu === 'organizar' && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                        transition={{ duration: 0.1 }}
+                        className="absolute left-[100%] ml-1.5 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOrganizarModal({ asset, mode: 'move' });
+                            setActiveSubmenu('none');
+                            setShowMenu(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                        >
+                          <FolderIcon size={14} className="text-gray-400 shrink-0" />
+                          Mover para...
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOrganizarModal({ asset, mode: 'copy' });
+                            setActiveSubmenu('none');
+                            setShowMenu(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                        >
+                          <Copy size={14} className="text-gray-400 shrink-0" />
+                          Copiar para...
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </button>
 
                 <button
@@ -4616,6 +4579,8 @@ interface AssetRowProps {
   onDistribute?: (item: { id: string, type: string, currentName: string }) => void;
   userProfile?: UserProfile | null;
   isFolderAllowedForClient?: (folderId: string) => boolean;
+  setOrganizarModal: (val: any) => void;
+  accounts?: any[];
 }
 
 function AssetRow({
@@ -4632,10 +4597,12 @@ function AssetRow({
   hasSelectionActive = false,
   onDistribute,
   userProfile,
-  isFolderAllowedForClient
+  isFolderAllowedForClient,
+  setOrganizarModal,
+  accounts = []
 }: AssetRowProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar'>('none');
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar' | 'atribuir'>('none');
 
   const runAction = async (actionFn: () => Promise<void>) => {
     try {
@@ -4810,208 +4777,7 @@ function AssetRow({
                       )}
                     </motion.div>
                   )}
-
-                  {activeSubmenu === 'organizar' && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                      transition={{ duration: 0.1 }}
-                      className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default max-h-[300px] overflow-y-auto"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Seção Mover */}
-                      <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Mover para</div>
-
-                      {asset.folderId !== "" && asset.folderId !== "root" && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowMenu(false);
-                            setActiveSubmenu('none');
-                            runAction(async () => {
-                              if (asset.driveId) {
-                                const moveResponse = await fetch('/api/drive/update', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    fileId: asset.driveId,
-                                    addParents: 'root',
-                                    removeParents: asset.folderId === 'root' || asset.folderId === '' ? undefined : asset.folderId
-                                  })
-                                });
-                                if (!moveResponse.ok) {
-                                  const errData = await moveResponse.json();
-                                  throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                }
-                              }
-                              await updateDoc(doc(db, "assets", asset.id), { folderId: "" });
-                              alert(`Ficheiro "${asset.name}" movido para a Raiz com sucesso!`);
-                              /* window.location.reload() removed */
-                            });
-                          }}
-                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                        >
-                          <FolderIcon size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                        </button>
-                      )}
-
-                      {folders.filter(f => f.id !== asset.folderId).map(folder => (
-                        <button
-                          key={folder.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowMenu(false);
-                            setActiveSubmenu('none');
-                            runAction(async () => {
-                              if (asset.driveId) {
-                                const moveResponse = await fetch('/api/drive/update', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    fileId: asset.driveId,
-                                    addParents: folder.id,
-                                    removeParents: asset.folderId === 'root' || asset.folderId === '' ? undefined : asset.folderId
-                                  })
-                                });
-                                if (!moveResponse.ok) {
-                                  const errData = await moveResponse.json();
-                                  throw new Error(errData.error || 'Erro ao mover no Google Drive');
-                                }
-                              }
-                              await updateDoc(doc(db, "assets", asset.id), { folderId: folder.id });
-                              alert(`Ficheiro "${asset.name}" movido para a pasta "${folder.name}"!`);
-                              /* window.location.reload() removed */
-                            });
-                          }}
-                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                        >
-                          <FolderIcon size={14} className="text-yellow-500 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{folder.name}</span>
-                        </button>
-                      ))}
-
-                      <div className="my-1.5 border-t border-gray-100" />
-
-                      {/* Seção Copiar */}
-                      <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Copiar para</div>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowMenu(false);
-                          setActiveSubmenu('none');
-                          runAction(async () => {
-                            let newDriveId = asset.driveId || "";
-                            let newUrl = asset.versions[0]?.url || asset.webViewLink || "";
-
-                            // 1. Copiar fisicamente no Google Drive real
-                            if (asset.driveId) {
-                              const copyResponse = await fetch('/api/drive/copy', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  fileId: asset.driveId,
-                                  destinationFolderId: 'root',
-                                  newName: `${asset.name} (Cópia)`
-                                })
-                              });
-                              if (!copyResponse.ok) {
-                                const errData = await copyResponse.json();
-                                throw new Error(errData.error || 'Erro ao copiar no Google Drive');
-                              }
-                              const copyData = await copyResponse.json();
-                              newDriveId = copyData.id;
-                              newUrl = copyData.webViewLink;
-                            }
-
-                            // 2. Salvar no Firestore com os novos dados físicos
-                            const newAsset = {
-                              ...asset,
-                              name: `${asset.name} (Cópia)`,
-                              folderId: "",
-                              driveId: newDriveId,
-                              versions: [{
-                                quality: "original",
-                                size: asset.versions?.[0]?.size || "0 MB",
-                                url: newUrl
-                              }],
-                              captureDate: new Date(),
-                              createdAt: new Date()
-                            };
-                            delete (newAsset as any).id;
-                            await addDoc(collection(db, "assets"), newAsset);
-                            alert(`Cópia do ficheiro criada na Raiz!`);
-                            /* window.location.reload() removed */
-                          });
-                        }}
-                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                      >
-                        <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">Raiz (Meu Drive)</span>
-                      </button>
-
-                      {(userProfile?.role === 'cliente' ? folders.filter(f => isFolderAllowedForClient(f.id)) : folders).map(folder => (
-                        <button
-                          key={folder.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowMenu(false);
-                            setActiveSubmenu('none');
-                            runAction(async () => {
-                              let newDriveId = asset.driveId || "";
-                              let newUrl = asset.versions[0]?.url || asset.webViewLink || "";
-
-                              // 1. Copiar fisicamente no Google Drive real
-                              if (asset.driveId) {
-                                const copyResponse = await fetch('/api/drive/copy', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    fileId: asset.driveId,
-                                    destinationFolderId: folder.id,
-                                    newName: `${asset.name} (Cópia)`
-                                  })
-                                });
-                                if (!copyResponse.ok) {
-                                  const errData = await copyResponse.json();
-                                  throw new Error(errData.error || 'Erro ao copiar no Google Drive');
-                                }
-                                const copyData = await copyResponse.json();
-                                newDriveId = copyData.id;
-                                newUrl = copyData.webViewLink;
-                              }
-
-                              // 2. Salvar no Firestore com os novos dados físicos
-                              const newAsset = {
-                                ...asset,
-                                name: `${asset.name} (Cópia)`,
-                                folderId: folder.id,
-                                driveId: newDriveId,
-                                versions: [{
-                                  quality: "original",
-                                  size: asset.versions?.[0]?.size || "0 MB",
-                                  url: newUrl
-                                }],
-                                captureDate: new Date(),
-                                createdAt: new Date()
-                              };
-                              delete (newAsset as any).id;
-                              await addDoc(collection(db, "assets"), newAsset);
-                              alert(`Cópia do ficheiro criada na pasta "${folder.name}"!`);
-                              /* window.location.reload() removed */
-                            });
-                          }}
-                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                        >
-                          <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors truncate">{folder.name}</span>
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                  </AnimatePresence>
 
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -5196,13 +4962,52 @@ function AssetRow({
                       e.stopPropagation();
                       setActiveSubmenu(activeSubmenu === 'organizar' ? 'none' : 'organizar');
                     }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
                       <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
                     </div>
                     <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                    <AnimatePresence>
+                      {activeSubmenu === 'organizar' && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                          animate={{ opacity: 1, scale: 1, x: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                          transition={{ duration: 0.1 }}
+                          className="absolute left-[100%] ml-1.5 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOrganizarModal({ asset, mode: 'move' });
+                              setActiveSubmenu('none');
+                              setShowMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                          >
+                            <FolderIcon size={14} className="text-gray-400 shrink-0" />
+                            Mover para...
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOrganizarModal({ asset, mode: 'copy' });
+                              setActiveSubmenu('none');
+                              setShowMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                          >
+                            <Copy size={14} className="text-gray-400 shrink-0" />
+                            Copiar para...
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </button>
 
                   <button
