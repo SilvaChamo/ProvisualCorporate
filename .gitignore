@@ -7,3 +7,5 @@ provisual-corporate-a16cee3d2250.json
 node-compile-cache
 google-oauth.json
 google-tokens.json
+*.backup
+scratch/
