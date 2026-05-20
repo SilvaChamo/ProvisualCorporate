@@ -268,13 +268,36 @@ export function onSnapshot(ref: any, callback: (snapshot: any) => void, errorCal
   
   const fetchAndNotify = async () => {
     try {
-      const { data, error } = await supabase.from(table).select('*');
-      if (error) {
-        if (errorCallback) errorCallback(error);
-        return;
+      // Buscar dados de forma paginada para contornar o limite de 1000 registros do PostgREST/Supabase
+      let allData: any[] = [];
+      let de = 0;
+      const limiteBloco = 1000;
+      let temMais = true;
+      
+      while (temMais) {
+        const { data, error } = await supabase
+          .from(table)
+          .select('*')
+          .range(de, de + limiteBloco - 1);
+          
+        if (error) {
+          if (errorCallback) errorCallback(error);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+          if (data.length < limiteBloco) {
+            temMais = false;
+          } else {
+            de += limiteBloco;
+          }
+        } else {
+          temMais = false;
+        }
       }
       
-      const docs = (data || []).map(item => {
+      const docs = allData.map(item => {
         // Map to camelCase
         const mapped: any = {};
         Object.keys(item).forEach(key => {
