@@ -1460,7 +1460,7 @@ export default function ClientDashboard() {
     if (userProfile?.role === 'cliente' && selectedFolderId === null && foldersLoaded && folders.length > 0) {
       if (activeTab === 'all' || activeTab === 'google_drive') {
         const allowedClientRootFolders = getAllowedClientRootFolders(folders);
-        if (allowedClientRootFolders.length === 1) {
+        if (allowedClientRootFolders.length > 0) {
           setSelectedFolderId(allowedClientRootFolders[0].id);
         }
       }
