@@ -1861,13 +1861,8 @@ export default function ClientDashboard() {
     } else if (item.type === 'drive_root') {
       handleGoogleSync(undefined, undefined, true);
     } else if (item.type === 'folder') {
-      const folder = folders.find(f => f.id === item.id);
-      if (folder && (folder as any).ownerId === 'google-drive') {
-        setSelectedFolderId(item.id);
-        handleGoogleSync(item.id, undefined, true);
-      } else {
-        setSelectedFolderId(item.id);
-      }
+      setSelectedFolderId(item.id);
+      handleGoogleSync(item.id, undefined, true);
     }
   };
 
@@ -2564,9 +2559,7 @@ export default function ClientDashboard() {
                               onClick={() => {
                                 setSelectedFolderId(folder.id);
                                 setSearchQuery('');
-                                if ((folder as any).ownerId === 'google-drive') {
-                                  handleGoogleSync(folder.id, undefined, true);
-                                }
+                                handleGoogleSync(folder.id, undefined, true);
                               }}
                               onContextMenu={(e) => {
                                 e.preventDefault();
@@ -2719,9 +2712,7 @@ export default function ClientDashboard() {
                                             e.stopPropagation();
                                             setSelectedFolderId(folder.id);
                                             setSearchQuery('');
-                                            if ((folder as any).ownerId === 'google-drive') {
-                                              handleGoogleSync(folder.id, undefined, true);
-                                            }
+                                            handleGoogleSync(folder.id, undefined, true);
                                             setActiveFolderMenuId(null);
                                           }}
                                           className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
@@ -2962,9 +2953,7 @@ export default function ClientDashboard() {
                         onClick={() => {
                           setSelectedFolderId(folder.id);
                           setSearchQuery('');
-                          if ((folder as any).ownerId === 'google-drive') {
-                            handleGoogleSync(folder.id, undefined, true);
-                          }
+                          handleGoogleSync(folder.id, undefined, true);
                         }}
                         onContextMenu={(e) => {
                           e.preventDefault();
@@ -3122,9 +3111,7 @@ export default function ClientDashboard() {
                                         e.stopPropagation();
                                         setSelectedFolderId(folder.id);
                                         setSearchQuery('');
-                                        if ((folder as any).ownerId === 'google-drive') {
-                                          handleGoogleSync(folder.id, undefined, true);
-                                        }
+                                        handleGoogleSync(folder.id, undefined, true);
                                         setActiveFolderMenuId(null);
                                       }}
                                       className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
