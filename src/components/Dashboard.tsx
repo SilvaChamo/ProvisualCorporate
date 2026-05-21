@@ -435,6 +435,7 @@ export default function Dashboard() {
   // Estado para conexão híbrida pessoal de Google Drive do Silva
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; type: string; email: string; configNeeded: boolean } | null>(null);
   const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
+  const [isSyncingBackground, setIsSyncingBackground] = useState(false);
 
   // Estados para Gestão de Contas de Acesso dos Clientes
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -1226,6 +1227,8 @@ export default function Dashboard() {
     if (!isBackground) {
       setIsUploading(true);
       setUploadProgress(10);
+    } else {
+      setIsSyncingBackground(true);
     }
 
     try {
@@ -1472,6 +1475,8 @@ export default function Dashboard() {
         setIsUploading(false);
         setUploadProgress(0);
       }
+    } finally {
+      if (isBackground) setIsSyncingBackground(false);
     }
   };
 
@@ -1646,7 +1651,9 @@ export default function Dashboard() {
       if (activeTab === 'all' || activeTab === 'google_drive') {
         const allowedClientRootFolders = getAllowedClientRootFolders(folders);
         if (allowedClientRootFolders.length > 0) {
-          setSelectedFolderId(allowedClientRootFolders[0].id);
+          const folderIdToEnter = allowedClientRootFolders[0].id;
+          setSelectedFolderId(folderIdToEnter);
+          handleGoogleSync(folderIdToEnter, undefined, true); // <--- INICIA O SYNC EM BACKGROUND
         }
       }
     }
@@ -2857,15 +2864,25 @@ export default function Dashboard() {
                 <p className="text-xs font-semibold text-gray-500 mt-4 tracking-wide uppercase">Carregando...</p>
               </div>
             ) : filteredAssets.length === 0 && filteredFolders.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center p-20 text-center">
-                <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
-                  <Search size={48} className="text-gray-100" />
+              isSyncingBackground ? (
+                <div className="h-full w-full flex flex-col items-center justify-center bg-gray-50 min-h-[400px] animate-in fade-in duration-300">
+                  <div className="relative w-12 h-12 flex items-center justify-center">
+                    <div className="absolute inset-0 border-4 border-gray-200 rounded-full" />
+                    <div className="absolute inset-0 border-4 border-[#a21b7e] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                  <p className="text-xs font-semibold text-gray-500 mt-4 tracking-wide uppercase">Sincronizando com Google Drive...</p>
                 </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">Nada por aqui...</h3>
-                <p className="text-sm text-gray-400 max-w-xs">
-                  Sua pasta está vazia ou nenhum arquivo corresponde à sua busca.
-                </p>
-              </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-20 text-center">
+                  <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
+                    <Search size={48} className="text-gray-100" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">Nada por aqui...</h3>
+                  <p className="text-sm text-gray-400 max-w-xs">
+                    Sua pasta está vazia ou nenhum arquivo corresponde à sua busca.
+                  </p>
+                </div>
+              )
             ) : (
               <>
                 {viewMode === "grid" ? (
