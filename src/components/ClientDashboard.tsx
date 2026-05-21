@@ -101,16 +101,16 @@ function cleanStringForSearch(str: string): string {
 function matchesSearchQuery(name: string, query: string): boolean {
   if (!query) return true;
   if (!name) return false;
-  
+
   const cleanName = cleanStringForSearch(name);
   const cleanQuery = cleanStringForSearch(query);
-  
+
   // Dividir a busca em palavras individuais, ignorando conectores comuns (de, do, da, e, o, a, etc.)
   const ignoreWords = new Set(['de', 'do', 'da', 'e', 'o', 'a', 'os', 'as', 'em', 'um', 'uma', 'para', 'com']);
   const queryWords = cleanQuery.split(' ').filter(w => w && !ignoreWords.has(w));
-  
+
   if (queryWords.length === 0) return cleanName.includes(cleanQuery);
-  
+
   // Verificar se TODAS as palavras relevantes da consulta estão no nome
   return queryWords.every(word => cleanName.includes(word));
 }
@@ -400,7 +400,7 @@ interface UserProfile {
 
 export default function ClientDashboard() {
   const [currentUser, setCurrentUser] = useState<any>(null);
-  
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setCurrentUser(session?.user || null);
@@ -1154,7 +1154,7 @@ export default function ClientDashboard() {
           try {
             const text = await response.text();
             errMsg = text.substring(0, 150) || errMsg;
-          } catch (__) {}
+          } catch (__) { }
         }
         throw new Error(errMsg);
       }
@@ -1164,7 +1164,7 @@ export default function ClientDashboard() {
         driveFiles = await response.json();
       } catch (jsonErr) {
         let textVal = '';
-        try { textVal = await response.text(); } catch (_) {}
+        try { textVal = await response.text(); } catch (_) { }
         throw new Error("Resposta inválida do servidor: " + (textVal.substring(0, 150) || jsonErr.message));
       }
       if (!isBackground) setUploadProgress(50);
@@ -1455,7 +1455,19 @@ export default function ClientDashboard() {
     }
   }, [userProfile?.role, selectedFolderId, folders]);
 
-  
+  // Efeito para navegar automaticamente para dentro da pasta partilhada se for cliente
+  useEffect(() => {
+    if (userProfile?.role === 'cliente' && selectedFolderId === null && foldersLoaded && folders.length > 0) {
+      if (activeTab === 'all' || activeTab === 'google_drive') {
+        const allowedClientRootFolders = getAllowedClientRootFolders(folders);
+        if (allowedClientRootFolders.length === 1) {
+          setSelectedFolderId(allowedClientRootFolders[0].id);
+        }
+      }
+    }
+  }, [userProfile?.role, selectedFolderId, foldersLoaded, folders, activeTab]);
+
+
 
   useEffect(() => {
     const fetchStorage = async () => {
@@ -2094,19 +2106,19 @@ export default function ClientDashboard() {
                           <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest block">Status do Drive</span>
                           <div className="flex items-center gap-2 mt-1">
                             <span className={cn(
-                              "w-2 h-2 rounded-full shrink-0", 
-                              driveStatus?.type === "oauth2" 
-                                ? "bg-emerald-500 animate-pulse" 
+                              "w-2 h-2 rounded-full shrink-0",
+                              driveStatus?.type === "oauth2"
+                                ? "bg-emerald-500 animate-pulse"
                                 : driveStatus?.type === "service_account"
-                                ? "bg-blue-500 animate-pulse" 
-                                : "bg-red-500"
+                                  ? "bg-blue-500 animate-pulse"
+                                  : "bg-red-500"
                             )} />
                             <span className="text-xs font-bold text-gray-700 truncate">
-                              {driveStatus?.type === "oauth2" 
-                                ? "Cota Pessoal Ativa" 
+                              {driveStatus?.type === "oauth2"
+                                ? "Cota Pessoal Ativa"
                                 : driveStatus?.type === "service_account"
-                                ? "Conta de Serviço Ativa" 
-                                : "Google Drive Desconectado"}
+                                  ? "Conta de Serviço Ativa"
+                                  : "Google Drive Desconectado"}
                             </span>
                           </div>
                           {driveStatus?.connected && (
@@ -2254,7 +2266,7 @@ export default function ClientDashboard() {
                                   const parts = rawName.split('|');
                                   const parsed = parts.length === 3
                                     ? { responsible: parts[0], name: parts[1], logo: parts[2] }
-                                    : (parts.length === 2 
+                                    : (parts.length === 2
                                       ? { responsible: "", name: parts[0], logo: parts[1] }
                                       : { responsible: "", name: rawName, logo: "" });
                                   return (
@@ -2384,7 +2396,7 @@ export default function ClientDashboard() {
                           required
                         />
                       </div>
-                      
+
                       {/* Lado Direito: Caixa de Upload da Foto/Logo (20% da largura, cobrindo a altura dos dois campos) */}
                       <div className="w-[88px] shrink-0">
                         <label className="relative block w-[88px] h-[88px] border-2 border-dashed border-gray-200 hover:border-[#a21b7e] rounded-lg cursor-pointer overflow-hidden transition-all bg-gray-50 group">
@@ -2590,7 +2602,7 @@ export default function ClientDashboard() {
                                           >
                                             <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-                                            
+
 
                                             <button
                                               onClick={(e) => {
@@ -2993,7 +3005,7 @@ export default function ClientDashboard() {
                                       >
                                         <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-                                        
+
 
                                         <button
                                           onClick={(e) => {
@@ -3768,8 +3780,8 @@ export default function ClientDashboard() {
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                   {accounts.filter(a => a.role === 'cliente').map(client => {
                     const rawName = client.displayName || "";
-                    const parsed = rawName.includes('|') 
-                      ? { name: rawName.split('|')[0], logo: rawName.split('|')[1] } 
+                    const parsed = rawName.includes('|')
+                      ? { name: rawName.split('|')[0], logo: rawName.split('|')[1] }
                       : { name: rawName, logo: "" };
 
                     return (
@@ -4236,7 +4248,7 @@ function AssetCard({
                   >
                     <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-                    
+
 
                     <button
                       onClick={(e) => {
@@ -4771,7 +4783,7 @@ function AssetRow({
                     >
                       <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-                      
+
 
                       <button
                         onClick={(e) => {
@@ -4834,7 +4846,7 @@ function AssetRow({
                       )}
                     </motion.div>
                   )}
-                  </AnimatePresence>
+                </AnimatePresence>
 
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}

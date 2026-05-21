@@ -1640,6 +1640,18 @@ export default function Dashboard() {
     }
   }, [userProfile?.role, selectedFolderId, folders]);
 
+  // Efeito para navegar automaticamente para dentro da pasta partilhada se for cliente
+  useEffect(() => {
+    if (userProfile?.role === 'cliente' && selectedFolderId === null && foldersLoaded && folders.length > 0) {
+      if (activeTab === 'all' || activeTab === 'google_drive') {
+        const allowedClientRootFolders = getAllowedClientRootFolders(folders);
+        if (allowedClientRootFolders.length === 1) {
+          setSelectedFolderId(allowedClientRootFolders[0].id);
+        }
+      }
+    }
+  }, [userProfile?.role, selectedFolderId, foldersLoaded, folders, activeTab]);
+
 
 
   useEffect(() => {
