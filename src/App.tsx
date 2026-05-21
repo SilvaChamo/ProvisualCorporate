@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./components/Login";
+import Home from "./components/Home";
 import Dashboard from "./components/Dashboard";
 import ClientDashboard from "./components/ClientDashboard";
 import { useState, useEffect } from "react";
@@ -83,16 +84,8 @@ export default function App() {
                 : <Navigate to="/login" replace />
             }
           />
-          <Route
-            path="/"
-            element={
-              user
-                ? <Navigate to={isAdmin ? "/dashboard" : "/cliente"} replace />
-                : <Navigate to="/login" replace />
-            }
-          />
-          {/* Super admin bypass: silva.chamo@gmail.com always goes to /dashboard */}
-          <Route path="*" element={<Navigate to={user ? (isAdmin ? "/dashboard" : "/cliente") : "/login"} replace />} />
+          <Route path="/" element={<Home />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </Router>

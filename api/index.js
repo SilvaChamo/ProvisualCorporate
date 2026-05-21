@@ -118,6 +118,38 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", environment: "vercel-serverless", timestamp: new Date().toISOString() });
 });
 
+const HOME_CONTENT_KEY = "home_page_content";
+
+app.get("/api/site/home", async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", HOME_CONTENT_KEY)
+      .single();
+    if (error && error.code !== "PGRST116") throw error;
+    res.json({ content: data?.value ?? null });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Erro ao carregar conteúdo da home." });
+  }
+});
+
+app.put("/api/site/home", async (req, res) => {
+  try {
+    const content = req.body?.content;
+    if (!content || typeof content !== "object") {
+      return res.status(400).json({ error: "Conteúdo inválido." });
+    }
+    const { error } = await supabase
+      .from("settings")
+      .upsert({ key: HOME_CONTENT_KEY, value: content });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Erro ao guardar conteúdo da home." });
+  }
+});
+
 app.post("/api/drive/list", async (req, res) => {
   const { folderId, filterType } = req.body;
 

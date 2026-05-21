@@ -50,8 +50,10 @@ import {
   AlertCircle,
   Database,
   Link,
-  X
+  X,
+  Globe
 } from "lucide-react";
+import HomeSiteEditor from "./HomeSiteEditor";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, handleFirestoreError, OperationType } from "../lib/utils";
@@ -410,7 +412,7 @@ export default function Dashboard() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
     return sessionStorage.getItem('prov_selected_folder_id') || null;
   });
-  const [activeTab, setActiveTab] = useState<'all' | 'image' | 'video' | 'document' | 'other' | 'google_drive' | 'contas_acesso'>(() => {
+  const [activeTab, setActiveTab] = useState<'all' | 'image' | 'video' | 'document' | 'other' | 'google_drive' | 'contas_acesso' | 'site_home'>(() => {
     return (sessionStorage.getItem('prov_active_tab') as any) || 'all';
   });
   const [isClientsMenuOpen, setIsClientsMenuOpen] = useState(true);
@@ -1214,7 +1216,7 @@ export default function Dashboard() {
     // Se a aba ativa for 'all' (Dados do Cliente), mantemos a aba ativa como 'all' para consistência de navegação.
     // Caso contrário, alteramos para a aba 'google_drive'.
     if (!isBackground) {
-      if (activeTab !== 'all' && activeTab !== 'contas_acesso') {
+      if (activeTab !== 'all' && activeTab !== 'contas_acesso' && activeTab !== 'site_home') {
         setActiveTab('google_drive');
         setDriveFilterType(filterType || null);
       }
@@ -2079,12 +2081,20 @@ export default function Dashboard() {
           </h3>
           <nav className="space-y-0.5">
             {userProfile?.role === 'admin' && (
-              <SidebarItem
-                icon={<Users size={20} />}
-                label="Contas de Acesso"
-                active={activeTab === 'contas_acesso'}
-                onClick={() => { setActiveTab('contas_acesso'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
-              />
+              <>
+                <SidebarItem
+                  icon={<Globe size={20} />}
+                  label="Página Inicial"
+                  active={activeTab === 'site_home'}
+                  onClick={() => { setActiveTab('site_home'); setSelectedFolderId(null); setDriveFilterType(null); }}
+                />
+                <SidebarItem
+                  icon={<Users size={20} />}
+                  label="Contas de Acesso"
+                  active={activeTab === 'contas_acesso'}
+                  onClick={() => { setActiveTab('contas_acesso'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
+                />
+              </>
             )}
             <SidebarItem
               icon={<Database size={20} />}
@@ -2527,8 +2537,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Files Area */}
-        {activeTab === 'contas_acesso' && userProfile?.role === 'admin' ? (
+        {/* Site home editor */}
+        {activeTab === 'site_home' && userProfile?.role === 'admin' ? (
+          <HomeSiteEditor />
+        ) : activeTab === 'contas_acesso' && userProfile?.role === 'admin' ? (
           <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 p-8">
             <div className="max-w-6xl mx-auto space-y-6">
               {/* Header da Tela */}
