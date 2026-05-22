@@ -172,6 +172,16 @@ const TEAM_MEMBERS = [
   },
 ];
 
+const TEAM_VISIBLE = 2;
+const TEAM_EXTENDED = [
+  ...TEAM_MEMBERS.slice(-TEAM_VISIBLE),
+  ...TEAM_MEMBERS,
+  ...TEAM_MEMBERS.slice(0, TEAM_VISIBLE),
+];
+const TEAM_START = TEAM_VISIBLE;
+const TEAM_END = TEAM_START + TEAM_MEMBERS.length;
+const TEAM_RESET_BACK = TEAM_END - TEAM_VISIBLE;
+
 export default function Home() {
   const [content, setContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -180,6 +190,8 @@ export default function Home() {
   const [slideIndex, setSlideIndex] = useState(0);
   const [quickLinkSlide, setQuickLinkSlide] = useState(0);
   const [quickLinkResetting, setQuickLinkResetting] = useState(false);
+  const [teamSlide, setTeamSlide] = useState(TEAM_START);
+  const [teamResetting, setTeamResetting] = useState(false);
   const [activeTeamCard, setActiveTeamCard] = useState(2);
 
   useEffect(() => {
@@ -227,6 +239,33 @@ export default function Home() {
     }, 520);
     return () => clearTimeout(t);
   }, [quickLinkSlide]);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTeamSlide((i) => i + 1);
+    }, 6000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (teamSlide !== TEAM_END) return;
+    const t = setTimeout(() => {
+      setTeamResetting(true);
+      setTeamSlide(TEAM_START);
+      requestAnimationFrame(() => setTeamResetting(false));
+    }, 520);
+    return () => clearTimeout(t);
+  }, [teamSlide]);
+
+  useEffect(() => {
+    if (teamSlide !== TEAM_START - TEAM_VISIBLE) return;
+    const t = setTimeout(() => {
+      setTeamResetting(true);
+      setTeamSlide(TEAM_RESET_BACK);
+      requestAnimationFrame(() => setTeamResetting(false));
+    }, 520);
+    return () => clearTimeout(t);
+  }, [teamSlide]);
 
   const scrollTo = (href: string) => {
     setMenuOpen(false);
@@ -513,7 +552,7 @@ export default function Home() {
             <div className="grid gap-8 lg:grid-cols-2 lg:items-stretch">
               <div className="relative h-[380px] sm:h-[420px] lg:h-[500px]">
                 <img
-                  src="/INICIO/Home%20-%20ProvisualCorporate_files/sobre.webp"
+                  src="/INICIO/sobre.webp"
                   alt="Equipa ProVisual Corporate"
                   className="h-full w-full rounded-2xl object-cover"
                 />
@@ -655,7 +694,141 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="equipa" className="relative scroll-mt-[75px] bg-white pb-14 lg:pb-16">
+      <section id="equipa" className="py-16 scroll-mt-[75px] lg:py-24">
+        <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
+            <div className="relative z-10 lg:col-start-1 lg:row-start-1 lg:-mr-12 xl:-mr-16">
+              <div className="flex h-full w-full flex-col items-start justify-center rounded-2xl bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.08)] sm:p-10">
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Nossa equipa</span>
+                  <span className="h-px w-8 bg-[#D7D7D7]" />
+                </div>
+
+                <h2 className="mb-4 text-4xl font-bold leading-tight text-[#333] sm:text-5xl lg:text-[3.25rem]">
+                  Criatividade & <span className="font-light">Excelência</span>
+                </h2>
+
+                <h3 className="text-lg font-bold text-[#333]">
+                  Profissionais <span className="font-light">dedicados</span>
+                </h3>
+
+                <p className="mt-3 text-sm leading-relaxed text-gray-600 sm:text-base">
+                  Profissionais multidisciplinares unidos pela criatividade, precisão técnica e
+                  compromisso com resultados que fortalecem a presença das marcas em Moçambique.
+                </p>
+
+                <Link
+                  to="/#contactos"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollTo("#contactos");
+                  }}
+                  className="mt-8 inline-flex self-start items-center gap-2 rounded-lg bg-[#a21b7e] px-8 py-3 text-sm font-medium uppercase tracking-wider text-white transition-colors hover:bg-[#8e176e]"
+                >
+                  Contacte-nos
+                  <ChevronRight size={16} />
+                </Link>
+              </div>
+            </div>
+
+            <div className="relative z-20 flex h-full min-h-[420px] items-center lg:col-start-2 lg:row-start-1 lg:min-h-0 lg:pl-2">
+              <div className="flex w-full items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTeamSlide((i) => i - 1)}
+                  aria-label="Profissional anterior"
+                  className="relative z-30 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3d001d] text-[#c958a8] transition-colors hover:bg-[#8e176e] hover:text-white"
+                >
+                  <ChevronLeft size={20} strokeWidth={2.25} />
+                </button>
+
+                <div className="relative z-20 min-w-0 flex-1 self-stretch overflow-hidden">
+                  <motion.div
+                    className="flex h-full"
+                    style={{
+                      width: `${(TEAM_EXTENDED.length / TEAM_VISIBLE) * 100}%`,
+                    }}
+                    animate={{
+                      x: `-${teamSlide * (100 / TEAM_EXTENDED.length)}%`,
+                    }}
+                    transition={
+                      teamResetting
+                        ? { duration: 0 }
+                        : { duration: 0.5, ease: "easeInOut" }
+                    }
+                  >
+                    {TEAM_EXTENDED.map((member, index) => (
+                      <div
+                        key={`${member.name}-${index}`}
+                        className="box-border shrink-0 px-2"
+                        style={{ width: `${100 / TEAM_EXTENDED.length}%` }}
+                      >
+                        <article className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
+                          <div className="relative h-[68%] min-h-[180px] shrink-0 overflow-hidden rounded-t-lg sm:min-h-[210px]">
+                            <img
+                              src={member.image}
+                              alt={member.name}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <div className="flex flex-1 flex-col items-center justify-center px-4 py-4 text-center">
+                            <h4 className="flex items-center justify-center gap-3 text-base font-bold text-[#333] sm:gap-4 sm:text-lg">
+                              <span className="h-px w-10 bg-[#a21b7e] sm:w-12" aria-hidden="true" />
+                              {member.name}
+                              <span className="h-px w-10 bg-[#a21b7e] sm:w-12" aria-hidden="true" />
+                            </h4>
+                            <p className="mt-1 text-sm text-[#a21b7e]">{member.role}</p>
+                            <div className="mt-2 flex justify-center gap-2.5">
+                              <a
+                                href={member.social.facebook}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={`Facebook de ${member.name}`}
+                                className="text-[#a21b7e] transition-colors hover:text-[#8e176e]"
+                              >
+                                <Facebook size={13} strokeWidth={2} />
+                              </a>
+                              <a
+                                href={member.social.linkedin}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={`LinkedIn de ${member.name}`}
+                                className="text-[#a21b7e] transition-colors hover:text-[#8e176e]"
+                              >
+                                <Linkedin size={13} strokeWidth={2} />
+                              </a>
+                              <a
+                                href={member.social.instagram}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={`Instagram de ${member.name}`}
+                                className="text-[#a21b7e] transition-colors hover:text-[#8e176e]"
+                              >
+                                <Instagram size={13} strokeWidth={2} />
+                              </a>
+                            </div>
+                          </div>
+                        </article>
+                      </div>
+                    ))}
+                  </motion.div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setTeamSlide((i) => i + 1)}
+                  aria-label="Profissional seguinte"
+                  className="relative z-30 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3d001d] text-[#c958a8] transition-colors hover:bg-[#8e176e] hover:text-white"
+                >
+                  <ChevronRight size={20} strokeWidth={2.25} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="equipa-especialistas" className="relative scroll-mt-[75px] bg-white pb-14 lg:pb-16">
         <div className="relative h-[280px] overflow-hidden sm:h-[320px] lg:h-[350px]">
           <img
             src="/INICIO/Coberturas.jpg"
