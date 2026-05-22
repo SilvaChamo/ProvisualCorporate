@@ -9,3 +9,4 @@ google-oauth.json
 google-tokens.json
 *.backup
 scratch/
+.cloude/
