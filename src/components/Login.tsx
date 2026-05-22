@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Users2, Eye, EyeOff, HelpCircle, Phone, Mail, MessageSquare, ExternalLink } from "lucide-react";
+import { Eye, EyeOff, HelpCircle, Phone, Mail, MessageSquare, ExternalLink, Home } from "lucide-react";
 import { cn } from "../lib/utils";
 import { supabase, db } from "../lib/supabase";
 
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, where } from "../lib/supabase";
-import logoHorizontal from "../Logo/logo_horizontal_clean.png";
 import simboloImg from "../Logo/Simbolo.png";
 
 export default function Login() {
@@ -70,7 +70,7 @@ export default function Login() {
         if (user) {
           const userDoc = await getDoc(doc(db, "users", user.id));
           const role = userDoc.exists() ? userDoc.data()?.role : "admin";
-          window.location.href = role === "admin" ? "/dashboard" : "/cliente";
+          window.location.href = role === "admin" ? "/dashboard" : "/arquivo";
           return;
         }
       }
@@ -98,7 +98,7 @@ export default function Login() {
               role: userData.role || "cliente"
             };
             localStorage.setItem("provisual_local_admin", JSON.stringify(simulatedUser));
-            window.location.href = simulatedUser.role === "admin" ? "/dashboard" : "/cliente";
+            window.location.href = simulatedUser.role === "admin" ? "/dashboard" : "/arquivo";
             return;
           } else {
             setError("Senha de acesso incorreta para esta conta.");
@@ -136,10 +136,20 @@ export default function Login() {
               <img src={simboloImg} alt="ProVisual Simbolo" className="w-full h-full object-contain" />
             </div>
           </div>
-          <h1 className="text-6xl font-bold mb-4 tracking-tight">ProVisual</h1>
-          <p className="text-xl font-medium max-w-md mx-auto leading-relaxed mb-12">
-            Bem-vindo ao portal corporativo de ativos visuais da Pro Visual Corporate.
+          <h1 className="text-6xl font-bold mb-4 tracking-tight">ProVisual Corporate</h1>
+          <p className="text-xl font-medium max-w-md mx-auto leading-relaxed text-center">
+            Bem-vindo ao portal corporativo de ativos visuais da ProVisual Corporate.
           </p>
+          <div className="flex justify-center mt-5 mb-12">
+            <Link
+              to="/"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-white/40 text-white hover:bg-white/10 transition-colors"
+              aria-label="Voltar à página inicial"
+              title="Página inicial"
+            >
+              <Home size={18} />
+            </Link>
+          </div>
         </motion.div>
       </div>
 

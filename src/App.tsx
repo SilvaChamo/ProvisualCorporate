@@ -3,6 +3,11 @@ import Login from "./components/Login";
 import Home from "./components/Home";
 import Dashboard from "./components/Dashboard";
 import ClientDashboard from "./components/ClientDashboard";
+import GaleriaPage from "./components/site/GaleriaPage";
+import GaleriaAlbumPage from "./components/site/GaleriaAlbumPage";
+import VideosPage from "./components/site/VideosPage";
+import ServicosPage from "./components/site/ServicosPage";
+import ServicoDetailPage from "./components/site/ServicoDetailPage";
 import { useState, useEffect } from "react";
 import { supabase } from "./lib/supabase";
 
@@ -53,10 +58,7 @@ export default function App() {
     );
   }
 
-  // Determine which dashboard to show based on role
   const isAdmin = userRole === "admin";
-  const DashboardComponent = isAdmin ? Dashboard : ClientDashboard;
-  const dashboardPath = isAdmin ? "/dashboard/*" : "/cliente/*";
 
   return (
     <Router>
@@ -64,7 +66,7 @@ export default function App() {
         <Routes>
           <Route
             path="/login"
-            element={user ? <Navigate to={isAdmin ? "/dashboard" : "/cliente"} replace /> : <Login />}
+            element={user ? <Navigate to={isAdmin ? "/dashboard" : "/arquivo"} replace /> : <Login />}
           />
           <Route
             path="/dashboard/*"
@@ -72,19 +74,27 @@ export default function App() {
               user
                 ? isAdmin
                   ? <Dashboard />
-                  : <Navigate to="/cliente" replace />
+                  : <Navigate to="/arquivo" replace />
                 : <Navigate to="/login" replace />
             }
           />
           <Route
-            path="/cliente/*"
+            path="/arquivo/*"
             element={
               user
-                ? <ClientDashboard />
+                ? isAdmin
+                  ? <Navigate to="/dashboard" replace />
+                  : <ClientDashboard />
                 : <Navigate to="/login" replace />
             }
           />
           <Route path="/" element={<Home />} />
+          <Route path="/galeria" element={<GaleriaPage />} />
+          <Route path="/galeria/:slug" element={<GaleriaAlbumPage />} />
+          <Route path="/videos" element={<VideosPage />} />
+          <Route path="/servicos" element={<ServicosPage />} />
+          <Route path="/servicos/:slug" element={<ServicoDetailPage />} />
+          <Route path="/cliente/*" element={<Navigate to="/arquivo" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

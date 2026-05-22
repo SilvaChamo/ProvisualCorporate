@@ -1652,7 +1652,15 @@ export default function ClientDashboard() {
     // Filtrar por pasta permitida (baseado no email do cliente) ou por arquivo partilhado diretamente
     if (userProfile?.role === 'cliente') {
       const email = userProfile.email?.toLowerCase() || "";
-      result = result.filter(a => isFolderAllowedForClient(a.folderId) || a.clientId?.toLowerCase() === email);
+      const allowedRoot = getAllowedClientRootFolders(folders).map(f => f.id);
+      console.log("Client email:", email, "Allowed roots:", allowedRoot);
+      result = result.filter(a => {
+        const allowed = isFolderAllowedForClient(a.folderId) || a.clientId?.toLowerCase() === email;
+        if (!allowed && selectedFolderId && a.folderId === selectedFolderId) {
+          console.log(`Asset ${a.name} in selected folder REJECTED by client permissions. folderId=${a.folderId}`);
+        }
+        return allowed;
+      });
     }
 
     // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed

@@ -2,6 +2,7 @@ export interface HomeSlide {
   category: string;
   title: string;
   subtitle: string;
+  image: string;
 }
 
 export interface HomeService {
@@ -49,29 +50,32 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
     tagline: "Entre qualidade e eficiência",
     ctaPrimary: "Iniciar",
     ctaSecondary: "Arquivo Provisual",
-    backgroundImage:
-      "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1920&q=80",
+    backgroundImage: "/INICIO/Coberturas.jpg",
   },
   slides: [
     {
       category: "FOTOS CORPORATIVAS",
       title: "Presença, Estilo e Identidade",
       subtitle: "Gestão visual que reforça a imagem da sua organização.",
+      image: "/INICIO/MMEC40-scaled.jpg",
     },
     {
-      category: "MARCA",
+      category: "VÍDEOS PUBLICITÁRIOS",
       title: "Marca, Visibilidade e Confiança",
       subtitle: "Comunicação estratégica para destacar-se no mercado.",
+      image: "/INICIO/PAINEIS5-scaled.jpg",
     },
     {
-      category: "INFORMAÇÃO",
+      category: "VÍDEOS INSTITUCIONAIS",
       title: "Informação, Promoção e Vida",
       subtitle: "Conteúdos que conectam a sua marca ao público certo.",
+      image: "/INICIO/Coberturas.jpg",
     },
     {
-      category: "ARTE",
+      category: "DOCUMENTÁRIOS",
       title: "Factos, histórias e arte",
       subtitle: "Produção criativa com impacto e narrativa autêntica.",
+      image: "/INICIO/COmunidade.jpg",
     },
   ],
   about: {
@@ -141,7 +145,15 @@ export function mergeHomeContent(partial?: Partial<HomeContent> | null): HomeCon
   if (!partial) return DEFAULT_HOME_CONTENT;
   return {
     hero: { ...DEFAULT_HOME_CONTENT.hero, ...partial.hero },
-    slides: partial.slides?.length ? partial.slides : DEFAULT_HOME_CONTENT.slides,
+    slides: partial.slides?.length
+      ? partial.slides.map((slide, index) => ({
+          ...DEFAULT_HOME_CONTENT.slides[index % DEFAULT_HOME_CONTENT.slides.length],
+          ...slide,
+          image:
+            slide.image ||
+            DEFAULT_HOME_CONTENT.slides[index % DEFAULT_HOME_CONTENT.slides.length]?.image,
+        }))
+      : DEFAULT_HOME_CONTENT.slides,
     about: { ...DEFAULT_HOME_CONTENT.about, ...partial.about },
     servicesIntro: partial.servicesIntro ?? DEFAULT_HOME_CONTENT.servicesIntro,
     services: partial.services?.length ? partial.services : DEFAULT_HOME_CONTENT.services,

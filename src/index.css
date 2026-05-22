@@ -2,27 +2,36 @@
 
 @theme {
   --color-provisual: #a21b7e;
+  --color-site-bg: #e8dfe4;
+  --color-site-bg-soft: #f0e8ec;
+  --font-sans: "Cairo Play", ui-sans-serif, system-ui, sans-serif;
   --font-cairo: "Cairo Play", sans-serif;
   --color-border: #e5e7eb;
   --color-input: #f9fafb;
 }
 
-/* Global Reset */
-* {
-  font-family: "Cairo Play", sans-serif !important;
-}
-
 html {
-  font-size: 16px; /* Tamanho equilibrado e profissional */
+  font-size: 16px;
+  font-family: var(--font-sans);
 }
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply text-gray-900 font-sans;
   margin: 0;
+  font-family: var(--font-sans);
+  min-height: 100%;
+  background: linear-gradient(165deg, var(--color-site-bg-soft) 0%, #e4d9df 52%, var(--color-site-bg) 100%);
+  background-attachment: fixed;
 }
 
 #root {
   width: 100%;
+  min-height: 100%;
+  font-family: var(--font-sans);
+}
+
+.site-bg {
+  background: transparent;
 }
 
 /* Custom Utilities */
@@ -36,4 +45,77 @@ body {
 
 .border-provisual {
   border-color: #a21b7e;
+}
+
+@property --quick-link-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.quick-link-candy {
+  position: relative;
+  border-radius: 1rem;
+  padding: 2px;
+  overflow: hidden;
+}
+
+.quick-link-candy-gradient {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 220%;
+  height: 220%;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from var(--quick-link-angle),
+    #000000 0%,
+    #a21b7e 22%,
+    #3d001d 45%,
+    #c958a8 68%,
+    #000000 100%
+  );
+  opacity: 0.45;
+  transition: opacity 0.45s ease;
+  animation: quick-link-border-spin 5s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.group:hover .quick-link-candy-gradient,
+.quick-link-candy:hover .quick-link-candy-gradient {
+  opacity: 1;
+  animation-duration: 2.5s;
+}
+
+@keyframes quick-link-border-spin {
+  to {
+    --quick-link-angle: 360deg;
+  }
+}
+
+.quick-link-candy-inner {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  border-radius: calc(1rem - 2px);
+}
+
+@keyframes typewriter-cursor-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.typewriter-cursor {
+  transition: opacity 0.08s linear;
+}
+
+.typewriter-cursor-active {
+  animation: typewriter-cursor-blink 1s step-end infinite;
 }

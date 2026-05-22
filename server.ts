@@ -630,6 +630,9 @@ async function startServer() {
     }
   });
 
+  // Ficheiros estáticos da home (slides originais)
+  app.use("/INICIO", express.static(path.join(process.cwd(), "INICIO")));
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
