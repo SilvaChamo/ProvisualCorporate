@@ -169,6 +169,34 @@ async function startServer() {
     return { auth, type: "service_account" };
   }
 
+  async function listAllDriveFiles(
+    drive: ReturnType<typeof google.drive>,
+    queryStr: string,
+    orderByStr: string
+  ) {
+    const allFiles: any[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const response = await drive.files.list({
+        q: queryStr,
+        orderBy: orderByStr,
+        fields: 'nextPageToken, files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails, starred, trashed, permissions)',
+        pageSize: 1000,
+        pageToken,
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true
+      });
+
+      if (response.data.files?.length) {
+        allFiles.push(...response.data.files);
+      }
+      pageToken = response.data.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    return allFiles;
+  }
+
   app.post("/api/drive/list", async (req, res) => {
     const { folderId, filterType } = req.body;
 
@@ -196,16 +224,10 @@ async function startServer() {
         queryStr = `trashed = true`;
       }
 
-      const response = await drive.files.list({
-        q: queryStr,
-        orderBy: orderByStr,
-        fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails, starred, trashed, permissions)',
-        pageSize: 100,
-        includeItemsFromAllDrives: true,
-        supportsAllDrives: true
-      });
+      const files = await listAllDriveFiles(drive, queryStr, orderByStr);
+      console.log(`Total de itens encontrados: ${files.length}`);
 
-      res.json(response.data.files);
+      res.json(files);
     } catch (error: any) {
       console.error("Google Drive Error:", error);
       res.status(500).json({ error: error.message });

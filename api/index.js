@@ -173,15 +173,27 @@ app.post("/api/drive/list", async (req, res) => {
       queryStr = `trashed = true`;
     }
 
-    const response = await drive.files.list({
-      q: queryStr,
-      orderBy: orderByStr,
-      fields: 'files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails, permissions)',
-      pageSize: 100,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true
-    });
-    res.json(response.data.files || []);
+    const allFiles = [];
+    let pageToken;
+
+    do {
+      const response = await drive.files.list({
+        q: queryStr,
+        orderBy: orderByStr,
+        fields: 'nextPageToken, files(id, name, mimeType, webViewLink, size, thumbnailLink, createdTime, shortcutDetails, starred, trashed, permissions)',
+        pageSize: 1000,
+        pageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
+      });
+
+      if (response.data.files?.length) {
+        allFiles.push(...response.data.files);
+      }
+      pageToken = response.data.nextPageToken || undefined;
+    } while (pageToken);
+
+    res.json(allFiles);
   } catch (error) {
     console.error("List Error:", error);
     res.status(500).json({ error: error.message });

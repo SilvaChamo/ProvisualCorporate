@@ -436,6 +436,10 @@ export default function Dashboard() {
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; type: string; email: string; configNeeded: boolean } | null>(null);
   const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
   const [isSyncingBackground, setIsSyncingBackground] = useState(false);
+  const pendingSyncRef = useRef<{ targetFolderId?: string; filterType?: string; isBackground: boolean } | null>(null);
+  const restoredFolderRef = useRef<string | null>(sessionStorage.getItem('prov_selected_folder_id'));
+  const syncInProgressRef = useRef(false);
+  const queuedSyncRef = useRef<{ targetFolderId?: string; filterType?: string; isBackground: boolean } | null>(null);
 
   // Estados para Gestão de Contas de Acesso dos Clientes
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -1209,9 +1213,15 @@ export default function Dashboard() {
 
   const handleGoogleSync = async (targetFolderId?: string, filterType?: string, isBackground = false) => {
     if (!assetsLoaded || !foldersLoaded) {
+      pendingSyncRef.current = { targetFolderId, filterType, isBackground };
       console.log("Aguardando carregamento de metadados do Supabase antes de sincronizar...");
       return;
     }
+    if (syncInProgressRef.current) {
+      queuedSyncRef.current = { targetFolderId, filterType, isBackground };
+      return;
+    }
+    syncInProgressRef.current = true;
     const folderId = targetFolderId || 'root';
 
     // Se a aba ativa for 'all' (Dados do Cliente), mantemos a aba ativa como 'all' para consistência de navegação.
@@ -1261,6 +1271,8 @@ export default function Dashboard() {
         throw new Error("Resposta inválida do servidor: " + (textVal.substring(0, 150) || jsonErr.message));
       }
       if (!isBackground) setUploadProgress(50);
+
+      console.log(`[Sync] Pasta ${folderId}: ${driveFiles.length} itens recebidos do Google Drive`);
 
       // Converter arquivos do Drive para o formato do nosso sistema
       for (const file of driveFiles) {
@@ -1326,11 +1338,7 @@ export default function Dashboard() {
           type: fileType,
           captureDate: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
           uploadDate: serverTimestamp(),
-          // Preservar folderId existente (evita que o sync mova ficheiros que foram organizados manualmente)
-          // Só actualiza se: 1) asset não existe ainda, ou 2) o ficheiro foi eliminado (trashed)
-          folderId: file.trashed
-            ? 'trash'
-            : (assetDataDb?.folderId ?? folderId),
+          folderId: file.trashed ? 'trash' : folderId,
           ownerId: "google-drive",
           driveId: realId,
           thumbnailUrl: file.thumbnailLink || "",
@@ -1417,7 +1425,7 @@ export default function Dashboard() {
                 type: sfType,
                 captureDate: sf.createdTime ? Timestamp.fromDate(new Date(sf.createdTime)) : serverTimestamp(),
                 uploadDate: serverTimestamp(),
-                folderId: sf.trashed ? 'trash' : (assetDataDb?.folderId ?? subFolderId),
+                folderId: sf.trashed ? 'trash' : subFolderId,
                 ownerId: "google-drive",
                 driveId: sfRealId,
                 thumbnailUrl: sf.thumbnailLink || "",
@@ -1476,7 +1484,13 @@ export default function Dashboard() {
         setUploadProgress(0);
       }
     } finally {
+      syncInProgressRef.current = false;
       if (isBackground) setIsSyncingBackground(false);
+      const queued = queuedSyncRef.current;
+      if (queued) {
+        queuedSyncRef.current = null;
+        handleGoogleSync(queued.targetFolderId, queued.filterType, queued.isBackground);
+      }
     }
   };
 
@@ -1564,6 +1578,34 @@ export default function Dashboard() {
     return () => unsubscribe();
   }, []);
 
+  // Retentar sync pendente quando metadados estiverem carregados
+  useEffect(() => {
+    if (assetsLoaded && foldersLoaded && pendingSyncRef.current) {
+      const pending = pendingSyncRef.current;
+      pendingSyncRef.current = null;
+      handleGoogleSync(pending.targetFolderId, pending.filterType, pending.isBackground);
+    }
+  }, [assetsLoaded, foldersLoaded]);
+
+  // Sincronizar pasta restaurada do sessionStorage ao recarregar a página
+  useEffect(() => {
+    if (!foldersLoaded || !assetsLoaded) return;
+    const restoredId = restoredFolderRef.current;
+    if (restoredId) {
+      restoredFolderRef.current = null;
+      handleGoogleSync(restoredId, undefined, true);
+    }
+  }, [foldersLoaded, assetsLoaded]);
+
+  // Sincronizar automaticamente ao navegar para qualquer pasta
+  const lastAutoSyncedFolderRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!foldersLoaded || !assetsLoaded || !selectedFolderId) return;
+    if (lastAutoSyncedFolderRef.current === selectedFolderId) return;
+    lastAutoSyncedFolderRef.current = selectedFolderId;
+    handleGoogleSync(selectedFolderId, undefined, true);
+  }, [selectedFolderId, foldersLoaded, assetsLoaded]);
+
   // Fetch Accounts
   useEffect(() => {
     const q = query(collection(db, "users"));
@@ -1625,7 +1667,7 @@ export default function Dashboard() {
     // Rastrear a hierarquia para cima até achar uma pasta autorizada
     let currentId: string | null = folderId;
     let depth = 0;
-    while (currentId && depth < 20) {
+    while (currentId && depth < 100) {
       if (allowedIds.has(currentId)) return true;
       const folder = folders.find(f => f.id === currentId);
       currentId = folder ? folder.parentId : null;
@@ -1844,7 +1886,10 @@ export default function Dashboard() {
 
     // Filtrar por pasta permitida (baseado no email do cliente)
     if (userProfile?.role === 'cliente') {
-      result = result.filter(a => isFolderAllowedForClient(a.folderId));
+      const browsingAllowedFolder = selectedFolderId && isFolderAllowedForClient(selectedFolderId);
+      if (!browsingAllowedFolder) {
+        result = result.filter(a => isFolderAllowedForClient(a.folderId));
+      }
     }
 
     // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed
@@ -1896,7 +1941,7 @@ export default function Dashboard() {
       }
     }
     return result;
-  }, [selectedFolderId, activeTab, driveFilterType, searchQuery, assets, arquivoFolderId]);
+  }, [selectedFolderId, activeTab, driveFilterType, searchQuery, assets, arquivoFolderId, folders, userProfile]);
 
   const displayedAssets = useMemo(() => {
     if (activeTab === 'image') {

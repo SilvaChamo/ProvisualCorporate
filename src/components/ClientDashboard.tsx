@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   X,
   Folder as FolderIcon,
@@ -57,7 +57,6 @@ import { cn, handleFirestoreError, OperationType } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc, supabase, db } from "../lib/supabase";
 
-import { useRef } from "react";
 import logoHorizontal from "../Logo/logo_horizontal_clean.png";
 import logoJpg from "../Logo/logo_main_jpg.jpg";
 
@@ -441,6 +440,10 @@ export default function ClientDashboard() {
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; type: string; email: string; configNeeded: boolean } | null>(null);
   const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
   const [isSyncingBackground, setIsSyncingBackground] = useState(false);
+  const pendingSyncRef = useRef<{ targetFolderId?: string; filterType?: string; isBackground: boolean } | null>(null);
+  const restoredFolderRef = useRef<string | null>(sessionStorage.getItem('prov_selected_folder_id'));
+  const syncInProgressRef = useRef(false);
+  const queuedSyncRef = useRef<{ targetFolderId?: string; filterType?: string; isBackground: boolean } | null>(null);
 
   // Estados para Gestão de Contas de Acesso dos Clientes
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -1119,10 +1122,97 @@ export default function ClientDashboard() {
 
   const handleGoogleSync = async (targetFolderId?: string, filterType?: string, isBackground = false) => {
     if (!assetsLoaded || !foldersLoaded) {
+      pendingSyncRef.current = { targetFolderId, filterType, isBackground };
       console.log("Aguardando carregamento de metadados do Firebase antes de sincronizar...");
       return;
     }
+    if (syncInProgressRef.current) {
+      queuedSyncRef.current = { targetFolderId, filterType, isBackground };
+      return;
+    }
+    syncInProgressRef.current = true;
     const folderId = targetFolderId || 'root';
+
+    const syncDriveFilesToDb = async (driveFiles: any[], parentFolderId: string) => {
+      const saveFile = async (file: any) => {
+        const isShortcut = file.mimeType === 'application/vnd.google-apps.shortcut';
+        const targetMimeType = isShortcut ? file.shortcutDetails?.targetMimeType : null;
+        const isFolder = file.mimeType === 'application/vnd.google-apps.folder' ||
+          (isShortcut && targetMimeType === 'application/vnd.google-apps.folder');
+        const extension = file.name.split('.').pop()?.toLowerCase() || '';
+        const isRaw = ['cr2', 'cr3', 'nef', 'arw', 'dng', 'raf', 'orf'].includes(extension);
+
+        const mimeTypeToUse = targetMimeType || file.mimeType;
+        const fileType = isFolder ? 'folder' : (mimeTypeToUse.includes('image') || isRaw ? 'image' : (mimeTypeToUse.includes('video') ? 'video' : 'document'));
+        const fileSize = file.size ? `${(parseInt(file.size) / 1024 / 1024).toFixed(1)} MB` : (isFolder ? '-' : '0 MB');
+
+        const realId = (isShortcut && file.shortcutDetails?.targetId) ? file.shortcutDetails.targetId : file.id;
+        const resolvedParentId = parentFolderId === 'root' ? null : parentFolderId;
+
+        if (isFolder) {
+          const docRef = doc(db, "folders", realId);
+          const docSnap = await getDoc(docRef);
+          const folderData = docSnap.exists() ? docSnap.data() : null;
+          await setDoc(docRef, {
+            name: file.name,
+            date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
+            ownerId: "google-drive",
+            parentId: file.trashed ? 'trash' : resolvedParentId,
+            starred: file.starred || false,
+            trashed: file.trashed || false,
+            clientEmail: folderData?.clientEmail || null,
+            color: folderData?.color || '#e2b13c',
+            adminToken: "Silva_Chamo_Master_Admin_2026"
+          });
+
+          const residual = assets.find(a => a.driveId === realId);
+          if (residual) {
+            try {
+              await deleteDoc(doc(db, "assets", residual.id));
+            } catch (err) {
+              console.warn("Erro ao limpar asset residual:", err);
+            }
+          }
+        }
+
+        const docRefAsset = doc(db, "assets", realId);
+        const docSnapAsset = await getDoc(docRefAsset);
+        const assetDataDb = docSnapAsset.exists() ? docSnapAsset.data() : null;
+
+        const assetData = {
+          name: file.name,
+          type: fileType,
+          captureDate: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
+          uploadDate: serverTimestamp(),
+          folderId: file.trashed ? 'trash' : parentFolderId,
+          ownerId: "google-drive",
+          driveId: realId,
+          thumbnailUrl: file.thumbnailLink || "",
+          starred: file.starred || false,
+          trashed: file.trashed || false,
+          versions: [{
+            quality: "original",
+            size: fileSize,
+            url: file.webViewLink
+          }],
+          clientId: assetDataDb?.clientId || null,
+          adminToken: "Silva_Chamo_Master_Admin_2026"
+        };
+
+        if (!isFolder) {
+          try {
+            await setDoc(docRefAsset, assetData);
+          } catch (upsertErr: any) {
+            console.warn("[Sync Silencioso] Salvar asset ignorado:", upsertErr?.message);
+          }
+        }
+      };
+
+      const SAVE_BATCH = 20;
+      for (let i = 0; i < driveFiles.length; i += SAVE_BATCH) {
+        await Promise.all(driveFiles.slice(i, i + SAVE_BATCH).map(saveFile));
+      }
+    };
 
     // Se a aba ativa for 'all' (Dados do Cliente), mantemos a aba ativa como 'all' para consistência de navegação.
     // Caso contrário, alteramos para a aba 'google_drive'.
@@ -1172,82 +1262,35 @@ export default function ClientDashboard() {
       }
       if (!isBackground) setUploadProgress(50);
 
-      // Converter arquivos do Drive para o formato do nosso sistema
-      for (const file of driveFiles) {
-        const isShortcut = file.mimeType === 'application/vnd.google-apps.shortcut';
-        const targetMimeType = isShortcut ? file.shortcutDetails?.targetMimeType : null;
-        const isFolder = file.mimeType === 'application/vnd.google-apps.folder' ||
-          (isShortcut && targetMimeType === 'application/vnd.google-apps.folder');
-        const extension = file.name.split('.').pop()?.toLowerCase() || '';
-        const isRaw = ['cr2', 'cr3', 'nef', 'arw', 'dng', 'raf', 'orf'].includes(extension);
+      console.log(`[Sync] Pasta ${folderId}: ${driveFiles.length} itens recebidos do Google Drive`);
+      await syncDriveFilesToDb(driveFiles, folderId);
 
-        const mimeTypeToUse = targetMimeType || file.mimeType;
-        const fileType = isFolder ? 'folder' : (mimeTypeToUse.includes('image') || isRaw ? 'image' : (mimeTypeToUse.includes('video') ? 'video' : 'document'));
-        const fileSize = file.size ? `${(parseInt(file.size) / 1024 / 1024).toFixed(1)} MB` : (isFolder ? '-' : '0 MB');
+      // Sincronizar também o conteúdo das subpastas diretas (1 nível)
+      const subFolders = driveFiles.filter((f: any) => {
+        const isShortcut = f.mimeType === 'application/vnd.google-apps.shortcut';
+        const isFolder = f.mimeType === 'application/vnd.google-apps.folder' ||
+          (isShortcut && f.shortcutDetails?.targetMimeType === 'application/vnd.google-apps.folder');
+        return isFolder && !f.trashed;
+      });
 
-        // Resolver o ID real do alvo se for um atalho
-        const realId = (isShortcut && file.shortcutDetails?.targetId) ? file.shortcutDetails.targetId : file.id;
+      for (const subFolder of subFolders) {
+        const subFolderId = (subFolder.mimeType === 'application/vnd.google-apps.shortcut' && subFolder.shortcutDetails?.targetId)
+          ? subFolder.shortcutDetails.targetId
+          : subFolder.id;
 
-        if (isFolder) {
-          const docRef = doc(db, "folders", realId);
-          const docSnap = await getDoc(docRef);
-          const folderData = docSnap.exists() ? docSnap.data() : null;
-          // Salvar pasta no Firestore com o mesmo ID do Drive
-          await setDoc(docRef, {
-            name: file.name,
-            date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
-            ownerId: "google-drive",
-            parentId: file.trashed ? 'trash' : (folderId === 'root' ? null : folderId),
-            starred: file.starred || false,
-            trashed: file.trashed || false,
-            clientEmail: folderData?.clientEmail || null,
-            color: folderData?.color || '#e2b13c',
-            adminToken: "Silva_Chamo_Master_Admin_2026"
+        try {
+          const subResponse = await fetch('/api/drive/list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folderId: subFolderId })
           });
 
-          // Limpar qualquer asset residual que tenha sido cadastrado incorretamente com esse ID de pasta/atalho
-          const residual = assets.find(a => a.driveId === realId);
-          if (residual) {
-            try {
-              await deleteDoc(doc(db, "assets", residual.id));
-            } catch (err) {
-              console.warn("Erro ao limpar asset residual:", err);
-            }
-          }
-        }
-
-        const docRefAsset = doc(db, "assets", realId);
-        const docSnapAsset = await getDoc(docRefAsset);
-        const assetDataDb = docSnapAsset.exists() ? docSnapAsset.data() : null;
-
-        const assetData = {
-          name: file.name,
-          type: fileType,
-          captureDate: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
-          uploadDate: serverTimestamp(),
-          folderId: file.trashed ? 'trash' : folderId,
-          ownerId: "google-drive",
-          driveId: realId,
-          thumbnailUrl: file.thumbnailLink || "",
-          starred: file.starred || false,
-          trashed: file.trashed || false,
-          versions: [{
-            quality: "original",
-            size: fileSize,
-            url: file.webViewLink
-          }],
-          clientId: assetDataDb?.clientId || null,
-          adminToken: "Silva_Chamo_Master_Admin_2026"
-        };
-
-        if (!isFolder) {
-          try {
-            // Usar o setDoc para fazer upsert na tabela assets com o ID do documento igual ao driveId (realId)
-            // e garantir acionamento do notifyTableChange para atualização instantânea em tempo real!
-            await setDoc(docRefAsset, assetData);
-          } catch (upsertErr: any) {
-            console.warn("[Sync Silencioso] Salvar asset ignorado:", upsertErr?.message);
-          }
+          if (!subResponse.ok) continue;
+          const subFiles = await subResponse.json();
+          console.log(`[Sync Recursivo] Subpasta ${subFolder.name}: ${subFiles.length} itens`);
+          await syncDriveFilesToDb(subFiles, subFolderId);
+        } catch (subErr: any) {
+          console.warn(`[Sync Recursivo] Falhou para a sub-pasta ${subFolder.name}:`, subErr.message);
         }
       }
 
@@ -1293,7 +1336,13 @@ export default function ClientDashboard() {
         setUploadProgress(0);
       }
     } finally {
+      syncInProgressRef.current = false;
       if (isBackground) setIsSyncingBackground(false);
+      const queued = queuedSyncRef.current;
+      if (queued) {
+        queuedSyncRef.current = null;
+        handleGoogleSync(queued.targetFolderId, queued.filterType, queued.isBackground);
+      }
     }
   };
 
@@ -1377,6 +1426,34 @@ export default function ClientDashboard() {
     return () => unsubscribe();
   }, []);
 
+  // Retentar sync pendente quando metadados estiverem carregados
+  useEffect(() => {
+    if (assetsLoaded && foldersLoaded && pendingSyncRef.current) {
+      const pending = pendingSyncRef.current;
+      pendingSyncRef.current = null;
+      handleGoogleSync(pending.targetFolderId, pending.filterType, pending.isBackground);
+    }
+  }, [assetsLoaded, foldersLoaded]);
+
+  // Sincronizar pasta restaurada do sessionStorage ao recarregar a página
+  useEffect(() => {
+    if (!foldersLoaded || !assetsLoaded) return;
+    const restoredId = restoredFolderRef.current;
+    if (restoredId) {
+      restoredFolderRef.current = null;
+      handleGoogleSync(restoredId, undefined, true);
+    }
+  }, [foldersLoaded, assetsLoaded]);
+
+  // Sincronizar automaticamente ao navegar para qualquer pasta
+  const lastAutoSyncedFolderRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!foldersLoaded || !assetsLoaded || !selectedFolderId) return;
+    if (lastAutoSyncedFolderRef.current === selectedFolderId) return;
+    lastAutoSyncedFolderRef.current = selectedFolderId;
+    handleGoogleSync(selectedFolderId, undefined, true);
+  }, [selectedFolderId, foldersLoaded, assetsLoaded]);
+
   // Fetch Accounts
   useEffect(() => {
     const q = query(collection(db, "users"));
@@ -1440,7 +1517,7 @@ export default function ClientDashboard() {
     // Rastrear a hierarquia para cima até achar uma pasta autorizada
     let currentId: string | null = folderId;
     let depth = 0;
-    while (currentId && depth < 20) {
+    while (currentId && depth < 100) {
       if (allowedIds.has(currentId)) return true;
       const folder = folders.find(f => f.id === currentId);
       currentId = folder ? folder.parentId : null;
@@ -1652,15 +1729,13 @@ export default function ClientDashboard() {
     // Filtrar por pasta permitida (baseado no email do cliente) ou por arquivo partilhado diretamente
     if (userProfile?.role === 'cliente') {
       const email = userProfile.email?.toLowerCase() || "";
-      const allowedRoot = getAllowedClientRootFolders(folders).map(f => f.id);
-      console.log("Client email:", email, "Allowed roots:", allowedRoot);
-      result = result.filter(a => {
-        const allowed = isFolderAllowedForClient(a.folderId) || a.clientId?.toLowerCase() === email;
-        if (!allowed && selectedFolderId && a.folderId === selectedFolderId) {
-          console.log(`Asset ${a.name} in selected folder REJECTED by client permissions. folderId=${a.folderId}`);
-        }
-        return allowed;
-      });
+      const browsingAllowedFolder = selectedFolderId && isFolderAllowedForClient(selectedFolderId);
+
+      if (!browsingAllowedFolder) {
+        result = result.filter(a => {
+          return isFolderAllowedForClient(a.folderId) || a.clientId?.toLowerCase() === email;
+        });
+      }
     }
 
     // Se estivermos visualizando o Lixo, mostra apenas os itens marcados como trashed
@@ -1707,7 +1782,7 @@ export default function ClientDashboard() {
       }
     }
     return result;
-  }, [selectedFolderId, activeTab, driveFilterType, searchQuery, assets, arquivoFolderId]);
+  }, [selectedFolderId, activeTab, driveFilterType, searchQuery, assets, arquivoFolderId, folders, userProfile]);
 
   const displayedAssets = useMemo(() => {
     if (activeTab === 'image') {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -73,10 +73,6 @@ function SocialIcon({ icon, size = 16 }: { icon: typeof SOCIAL_LINKS[number]["ic
 }
 
 const QUICK_LINKS = QUICK_LINK_ROUTES;
-
-const QUICK_LINKS_VISIBLE = 3;
-const QUICK_LINK_EXTENDED = [...QUICK_LINKS, ...QUICK_LINKS.slice(0, QUICK_LINKS_VISIBLE)];
-const QUICK_LINK_MAX_SLIDE = QUICK_LINKS.length;
 
 const ABOUT_ITEMS = [
   {
@@ -172,15 +168,17 @@ const TEAM_MEMBERS = [
   },
 ];
 
-const TEAM_VISIBLE = 2;
-const TEAM_EXTENDED = [
-  ...TEAM_MEMBERS.slice(-TEAM_VISIBLE),
-  ...TEAM_MEMBERS,
-  ...TEAM_MEMBERS.slice(0, TEAM_VISIBLE),
-];
-const TEAM_START = TEAM_VISIBLE;
-const TEAM_END = TEAM_START + TEAM_MEMBERS.length;
-const TEAM_RESET_BACK = TEAM_END - TEAM_VISIBLE;
+function getQuickLinksVisible(width: number) {
+  if (width < 768) return 1;
+  if (width < 1024) return 2;
+  return 3;
+}
+
+function getTeamVisible(width: number) {
+  if (width < 768) return 1;
+  if (width < 1024) return 2;
+  return 2;
+}
 
 export default function Home() {
   const [content, setContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
@@ -190,9 +188,55 @@ export default function Home() {
   const [slideIndex, setSlideIndex] = useState(0);
   const [quickLinkSlide, setQuickLinkSlide] = useState(0);
   const [quickLinkResetting, setQuickLinkResetting] = useState(false);
-  const [teamSlide, setTeamSlide] = useState(TEAM_START);
+  const [teamSlide, setTeamSlide] = useState(2);
   const [teamResetting, setTeamResetting] = useState(false);
   const [activeTeamCard, setActiveTeamCard] = useState(2);
+  const [activeProcessCard, setActiveProcessCard] = useState(0);
+  const [quickLinksVisible, setQuickLinksVisible] = useState(() =>
+    typeof window !== "undefined" ? getQuickLinksVisible(window.innerWidth) : 3,
+  );
+  const [teamVisible, setTeamVisible] = useState(() =>
+    typeof window !== "undefined" ? getTeamVisible(window.innerWidth) : 2,
+  );
+
+  const quickLinkExtended = useMemo(
+    () => [...QUICK_LINKS, ...QUICK_LINKS.slice(0, quickLinksVisible)],
+    [quickLinksVisible],
+  );
+  const quickLinkMaxSlide = QUICK_LINKS.length;
+
+  const teamExtended = useMemo(
+    () => [
+      ...TEAM_MEMBERS.slice(-teamVisible),
+      ...TEAM_MEMBERS,
+      ...TEAM_MEMBERS.slice(0, teamVisible),
+    ],
+    [teamVisible],
+  );
+  const teamStart = teamVisible;
+  const teamEnd = teamStart + TEAM_MEMBERS.length;
+  const teamResetBack = teamEnd - teamVisible;
+
+  useEffect(() => {
+    const onResize = () => {
+      const nextQuick = getQuickLinksVisible(window.innerWidth);
+      const nextTeam = getTeamVisible(window.innerWidth);
+      setQuickLinksVisible((prev) => (prev === nextQuick ? prev : nextQuick));
+      setTeamVisible((prev) => (prev === nextTeam ? prev : nextTeam));
+    };
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    setQuickLinkSlide(0);
+    setQuickLinkResetting(false);
+  }, [quickLinksVisible]);
+
+  useEffect(() => {
+    setTeamSlide(teamStart);
+    setTeamResetting(false);
+  }, [teamVisible, teamStart]);
 
   useEffect(() => {
     fetch("/api/site/home")
@@ -231,14 +275,14 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (quickLinkSlide !== QUICK_LINK_MAX_SLIDE) return;
+    if (quickLinkSlide !== quickLinkMaxSlide) return;
     const t = setTimeout(() => {
       setQuickLinkResetting(true);
       setQuickLinkSlide(0);
       requestAnimationFrame(() => setQuickLinkResetting(false));
     }, 520);
     return () => clearTimeout(t);
-  }, [quickLinkSlide]);
+  }, [quickLinkSlide, quickLinkMaxSlide]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -248,24 +292,24 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (teamSlide !== TEAM_END) return;
+    if (teamSlide !== teamEnd) return;
     const t = setTimeout(() => {
       setTeamResetting(true);
-      setTeamSlide(TEAM_START);
+      setTeamSlide(teamStart);
       requestAnimationFrame(() => setTeamResetting(false));
     }, 520);
     return () => clearTimeout(t);
-  }, [teamSlide]);
+  }, [teamSlide, teamEnd, teamStart]);
 
   useEffect(() => {
-    if (teamSlide !== TEAM_START - TEAM_VISIBLE) return;
+    if (teamSlide !== teamStart - teamVisible) return;
     const t = setTimeout(() => {
       setTeamResetting(true);
-      setTeamSlide(TEAM_RESET_BACK);
+      setTeamSlide(teamResetBack);
       requestAnimationFrame(() => setTeamResetting(false));
     }, 520);
     return () => clearTimeout(t);
-  }, [teamSlide]);
+  }, [teamSlide, teamStart, teamVisible, teamResetBack]);
 
   const scrollTo = (href: string) => {
     setMenuOpen(false);
@@ -411,7 +455,7 @@ export default function Home() {
             }}
           />
         </AnimatePresence>
-        <div className="absolute inset-0 bg-black/55" />
+        <div className="absolute inset-0 bg-black/65" />
 
         <button
           type="button"
@@ -430,8 +474,8 @@ export default function Home() {
           <ChevronRight size={26} className="text-[#c958a8] group-hover:text-white transition-colors" strokeWidth={2.25} />
         </button>
 
-        <div className="relative z-10 h-full flex flex-col items-center px-6 pb-10 pt-20">
-          <div className="text-center w-full mt-[120px]">
+        <div className="relative z-10 flex h-full flex-col items-center px-4 pb-8 pt-16 sm:px-6 sm:pb-10 sm:pt-20">
+          <div className="text-center w-full mt-16 sm:mt-[100px] md:mt-[120px]">
             <div className="flex flex-col items-center">
               <div className="flex items-center justify-center gap-4 mb-5">
                 <span className="h-px w-10 bg-white/60" />
@@ -477,16 +521,16 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Carrossel infinito — 3 cards inteiros visíveis, desliza 1 à esquerda */}
-          <div className="w-[60%] mt-[80px] mb-[100px] shrink-0">
+          {/* Carrossel — 1 card mobile, 2 tablet, 3 desktop */}
+          <div className="mt-10 mb-12 w-full max-w-[1200px] shrink-0 sm:mt-16 sm:mb-20 md:w-[85%] lg:w-[60%]">
             <div className="overflow-hidden w-full">
               <motion.div
                 className="flex"
                 style={{
-                  width: `${(QUICK_LINK_EXTENDED.length / QUICK_LINKS_VISIBLE) * 100}%`,
+                  width: `${(quickLinkExtended.length / quickLinksVisible) * 100}%`,
                 }}
                 animate={{
-                  x: `-${quickLinkSlide * (100 / QUICK_LINK_EXTENDED.length)}%`,
+                  x: `-${quickLinkSlide * (100 / quickLinkExtended.length)}%`,
                 }}
                 transition={
                   quickLinkResetting
@@ -494,7 +538,7 @@ export default function Home() {
                     : { duration: 0.5, ease: "easeInOut" }
                 }
               >
-                {QUICK_LINK_EXTENDED.map((item, index) => {
+                {quickLinkExtended.map((item, index) => {
                   const card = (
                     <div className="quick-link-candy h-full rounded-2xl">
                       <div className="quick-link-candy-gradient" aria-hidden="true" />
@@ -507,7 +551,7 @@ export default function Home() {
                   );
 
                   const cardKey = `${item.label}-${index}`;
-                  const slotWidth = 100 / QUICK_LINK_EXTENDED.length;
+                  const slotWidth = 100 / quickLinkExtended.length;
 
                   return (
                     <div
@@ -548,7 +592,7 @@ export default function Home() {
       {/* Container branco — secção Sobre nós completa */}
       <div className="relative z-20 -mt-[50px] mb-10 max-w-[1400px] mx-auto px-6 lg:px-10">
         <div className="overflow-hidden rounded-2xl bg-white shadow-[0_5px_5px_5px_rgba(0,0,0,0.08)]">
-          <section id="sobre" className="scroll-mt-[75px] p-10">
+          <section id="sobre" className="scroll-mt-[75px] p-6 sm:p-8 lg:p-10">
             <div className="grid gap-8 lg:grid-cols-2 lg:items-stretch">
               <div className="relative h-[380px] sm:h-[420px] lg:h-[500px]">
                 <img
@@ -618,11 +662,12 @@ export default function Home() {
         className="relative py-24 lg:py-28 scroll-mt-[75px] overflow-hidden"
       >
         <div
-          className="absolute inset-0 bg-cover bg-center scale-105"
-          style={{ backgroundImage: "url(/INICIO/COmunidade.jpg)" }}
+          className="process-section-kenburns absolute inset-0"
+          style={{ backgroundImage: "url(/INICIO/producao-grafica.webp)" }}
+          aria-hidden="true"
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#3d001d]/94 via-[#a21b7e]/80 to-[#120810]/95" />
-        <div className="absolute inset-0 bg-black/20" />
+        <div className="absolute inset-0 bg-[#3d001d]/55" aria-hidden="true" />
+        <div className="absolute inset-0 bg-black/25" aria-hidden="true" />
 
         <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-10">
           <div className="max-w-3xl mx-auto text-center mb-14 lg:mb-16">
@@ -644,41 +689,74 @@ export default function Home() {
 
           <div className="relative">
             <div
-              className="hidden lg:block absolute top-[72px] left-[12%] right-[12%] h-px border-t border-dashed border-white/35"
+              className="hidden lg:block absolute top-[72px] left-[6%] right-[6%] h-px border-t border-dashed border-white/35"
               aria-hidden="true"
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-5">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 lg:items-stretch lg:gap-5">
               {PRODUCTION_PROCESS.map((item, index) => {
                 const Icon = item.icon;
-                const stagger = index % 2 === 1 ? "lg:translate-y-10" : "lg:-translate-y-2";
+                const isActive = activeProcessCard === index;
 
                 return (
                   <article
                     key={item.step}
+                    onMouseEnter={() => setActiveProcessCard(index)}
                     className={cn(
-                      "group relative rounded-2xl bg-white/[0.97] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.18)] transition-transform duration-500 hover:-translate-y-1",
-                      stagger,
+                      "relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-[#a21b7e] bg-white shadow-[0_8px_24px_rgba(162,27,126,0.22),0_2px_10px_rgba(162,27,126,0.12)] transition-shadow duration-500",
+                      isActive &&
+                        "shadow-[0_12px_30px_rgba(162,27,126,0.3),0_4px_14px_rgba(162,27,126,0.18)]",
                     )}
                   >
-                    <span
-                      className="pointer-events-none absolute -top-1 right-3 text-[4.5rem] font-bold leading-none text-[#a21b7e]/[0.08] select-none"
-                      aria-hidden="true"
-                    >
-                      {item.step}
-                    </span>
-
-                    <div className="relative mb-5 flex items-center gap-4">
-                      <div className="relative z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#a21b7e] to-[#3d001d] text-white shadow-lg shadow-[#a21b7e]/30">
-                        <Icon size={24} strokeWidth={1.75} />
+                    <div className="flex shrink-0 items-center justify-between px-6 py-5">
+                      <div
+                        className={cn(
+                          "flex h-[3.75rem] w-[3.75rem] shrink-0 items-center justify-center rounded-full border-2 border-[#a21b7e] bg-[#a21b7e]/10 p-2.5 transition-colors duration-300",
+                          isActive && "border-[#3d001d] bg-[#3d001d]",
+                        )}
+                      >
+                        <Icon
+                          size={28}
+                          strokeWidth={1.75}
+                          className={cn(
+                            "text-[#a21b7e] transition-colors duration-300",
+                            isActive && "text-white",
+                          )}
+                        />
                       </div>
-                      <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#a21b7e]">
-                        Etapa {item.step}
+                      <span className="text-[4.75rem] font-bold leading-none tabular-nums text-[#a21b7e]/15">
+                        {item.step}
                       </span>
                     </div>
 
-                    <h3 className="relative text-xl font-bold text-[#2a2a2a] mb-3">{item.title}</h3>
-                    <p className="relative text-sm leading-relaxed text-gray-600">{item.description}</p>
+                    <div className="relative flex min-h-[11rem] flex-1 flex-col overflow-hidden px-6 pb-6 pt-4">
+                      <div
+                        className={cn(
+                          "absolute inset-0 bg-[#3d001d]/90 transition-transform duration-300 ease-out",
+                          isActive
+                            ? "translate-y-0 border-b-2 border-[#a21b7e]"
+                            : "translate-y-full",
+                        )}
+                        aria-hidden="true"
+                      />
+
+                      <h3
+                        className={cn(
+                          "relative z-10 mb-3 text-[1.35rem] font-extrabold leading-snug text-[#2a2a2a] transition-colors duration-300 sm:text-2xl",
+                          isActive && "text-white",
+                        )}
+                      >
+                        {item.title}
+                      </h3>
+                      <p
+                        className={cn(
+                          "relative z-10 flex-1 text-sm leading-relaxed text-gray-600 transition-colors duration-300",
+                          isActive && "text-white/85",
+                        )}
+                      >
+                        {item.description}
+                      </p>
+                    </div>
 
                     {index < PRODUCTION_PROCESS.length - 1 && (
                       <div
@@ -731,8 +809,8 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="relative z-20 flex h-full min-h-[420px] items-center lg:col-start-2 lg:row-start-1 lg:min-h-0 lg:pl-2">
-              <div className="flex w-full items-center gap-2 sm:gap-3">
+            <div className="relative z-20 flex h-full min-h-[360px] items-center sm:min-h-[420px] lg:col-start-2 lg:row-start-1 lg:min-h-0 lg:pl-2">
+              <div className="flex w-full items-center gap-1.5 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setTeamSlide((i) => i - 1)}
@@ -746,10 +824,10 @@ export default function Home() {
                   <motion.div
                     className="flex h-full"
                     style={{
-                      width: `${(TEAM_EXTENDED.length / TEAM_VISIBLE) * 100}%`,
+                      width: `${(teamExtended.length / teamVisible) * 100}%`,
                     }}
                     animate={{
-                      x: `-${teamSlide * (100 / TEAM_EXTENDED.length)}%`,
+                      x: `-${teamSlide * (100 / teamExtended.length)}%`,
                     }}
                     transition={
                       teamResetting
@@ -757,11 +835,11 @@ export default function Home() {
                         : { duration: 0.5, ease: "easeInOut" }
                     }
                   >
-                    {TEAM_EXTENDED.map((member, index) => (
+                    {teamExtended.map((member, index) => (
                       <div
                         key={`${member.name}-${index}`}
-                        className="box-border shrink-0 px-2"
-                        style={{ width: `${100 / TEAM_EXTENDED.length}%` }}
+                        className="box-border shrink-0 px-1.5 sm:px-2"
+                        style={{ width: `${100 / teamExtended.length}%` }}
                       >
                         <article className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
                           <div className="relative h-[68%] min-h-[180px] shrink-0 overflow-hidden rounded-t-lg sm:min-h-[210px]">
@@ -849,7 +927,7 @@ export default function Home() {
         </div>
 
         <div className="relative mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="grid grid-cols-1 gap-6 sm:-mt-20 sm:grid-cols-2 sm:gap-5 lg:-mt-28 lg:grid-cols-4 lg:gap-4 xl:-mt-32">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:-mt-20 md:gap-5 lg:-mt-28 lg:grid-cols-4 lg:gap-4 xl:-mt-32">
             {TEAM_MEMBERS.map((member, index) => {
               const isActive = activeTeamCard === index;
 
@@ -1017,7 +1095,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-12 items-start">
+          <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:items-start lg:gap-12">
             <div>
               <h3 className="text-2xl font-bold mb-4">
                 Entre em <span className="font-light">contacto</span>

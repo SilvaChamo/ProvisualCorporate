@@ -13,6 +13,8 @@
 html {
   font-size: 16px;
   font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -118,4 +120,21 @@ body {
 
 .typewriter-cursor-active {
   animation: typewriter-cursor-blink 1s step-end infinite;
+}
+
+.process-section-kenburns {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: process-section-kenburns 18s ease-in-out infinite alternate;
+}
+
+@keyframes process-section-kenburns {
+  from {
+    background-size: 100%;
+  }
+  to {
+    background-size: 115%;
+  }
 }

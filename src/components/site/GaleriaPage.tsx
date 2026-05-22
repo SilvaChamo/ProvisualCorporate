@@ -8,7 +8,7 @@ export default function GaleriaPage() {
       title="Galeria"
       breadcrumbs={[{ label: "Início", href: "/" }, { label: "Galeria" }]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {GALLERY_ALBUMS.map((album) => (
           <div key={album.slug}>
             <GalleryAlbumCard album={album} compact />

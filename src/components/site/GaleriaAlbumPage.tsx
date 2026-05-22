@@ -48,7 +48,7 @@ export default function GaleriaAlbumPage() {
         { label: "Galeria", href: "/galeria" },
       ]}
     >
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
         {pagePhotos.map((photo, index) => {
           const globalIndex = start + index;
           return (
