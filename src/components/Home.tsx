@@ -778,7 +778,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="relative z-0 box-border flex min-h-[350px] items-center justify-center rounded-2xl border border-[#a21b7e]/18 bg-[#a21b7e]/[0.025] px-3 py-4 pl-6 sm:min-h-[370px] sm:px-4 sm:pl-8 lg:min-h-0 lg:px-4 lg:pl-14">
+            <div className="relative z-0 box-border flex min-h-[350px] items-center justify-center rounded-2xl border border-[#a21b7e]/18 bg-[#a21b7e]/[0.025] px-3 py-4 pl-6 shadow-[0_8px_24px_5px_rgba(0,0,0,0.12)] sm:min-h-[370px] sm:px-4 sm:pl-8 lg:min-h-0 lg:px-4 lg:pl-14">
               <div className="flex w-full items-center justify-center gap-1.5 sm:gap-3">
                 <button
                   type="button"
@@ -1024,7 +1024,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="arquivo" className="relative mt-[40px] scroll-mt-[75px] overflow-hidden bg-[#a21b7e] px-6 py-8 text-white lg:py-10">
+      <section id="arquivo" className="relative mt-[40px] scroll-mt-[75px] overflow-hidden bg-[#a21b7e] px-6 py-[50px] text-white">
         <div className="arquivo-section-fx pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
           <div className="arquivo-grid-lines" />
         </div>
@@ -1127,17 +1127,19 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="client-logo-grid">
-            {content.clientLogos.map((logo) => (
-              <div key={logo.name + logo.image} className="client-logo-cell">
-                <OptimizedDriveImage
-                  src={logo.image}
-                  alt={logo.name}
-                  size="sm"
-                  className="h-full w-full object-fill"
-                />
-              </div>
-            ))}
+          <div className="client-logo-carousel" aria-label="Logotipos de clientes">
+            <div className="client-logo-carousel-track">
+              {[...content.clientLogos, ...content.clientLogos].map((logo, index) => (
+                <div key={`${logo.name}-${index}`} className="client-logo-cell">
+                  <OptimizedDriveImage
+                    src={logo.image}
+                    alt={logo.name}
+                    size="sm"
+                    className="h-full w-full object-fill"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

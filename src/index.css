@@ -205,28 +205,37 @@ body {
   @apply text-sm leading-relaxed sm:text-base;
 }
 
-.client-logo-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+.client-logo-carousel {
+  container-type: inline-size;
+  overflow: hidden;
   width: 100%;
 }
 
-@media (min-width: 768px) {
-  .client-logo-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
+.client-logo-carousel-track {
+  display: flex;
+  width: max-content;
+  gap: 12px;
+  animation: client-logo-marquee 38s linear infinite;
+}
+
+.client-logo-carousel:hover .client-logo-carousel-track {
+  animation-play-state: paused;
 }
 
 .client-logo-cell {
   position: relative;
+  flex: 0 0 calc((100cqw - 12px) / 2);
   aspect-ratio: 5 / 3;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
   background: transparent;
   padding: 0;
   line-height: 0;
+}
+
+@media (min-width: 768px) {
+  .client-logo-cell {
+    flex-basis: calc((100cqw - 48px) / 5);
+  }
 }
 
 .client-logo-cell img {
@@ -238,6 +247,16 @@ body {
   margin: 0;
   padding: 0;
   object-fit: fill;
+}
+
+@keyframes client-logo-marquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 .contact-field-label {
