@@ -561,8 +561,8 @@ async function startServer() {
         return res.status(404).send("Thumbnail não disponível");
       }
 
-      // Ajusta o tamanho do thumbnail para ser de altíssima qualidade (s800)
-      const sizeLink = thumbnailLink.replace(/=s\d+/, '=s800');
+      const requestedSize = Math.min(Math.max(parseInt(String(req.query.sz || "800"), 10) || 800, 200), 1600);
+      const sizeLink = thumbnailLink.replace(/=s\d+/, `=s${requestedSize}`);
 
       // Faz download seguro usando o token de acesso da nossa autenticação
       const tokenResponse = await auth.getAccessToken();

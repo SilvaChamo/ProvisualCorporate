@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import SiteShell from "./SiteShell";
 import { GALLERY_ALBUMS } from "../../lib/sitePages";
+import { driveDisplayUrl } from "../../lib/driveImageUrl";
 import { fetchSiteGalleryAlbums, fetchSiteGalleryPhotos } from "../../lib/siteGalleryApi";
 import GalleryAlbumCarousel from "./GalleryAlbumCarousel";
 import PhotoLightbox from "./PhotoLightbox";
@@ -95,9 +96,10 @@ export default function GaleriaAlbumPage() {
                   aria-label={`Ver imagem ${globalIndex + 1} de ${album.title}`}
                 >
                   <img
-                    src={photo.includes("/api/drive/") ? photo.replace("/media?", "/thumbnail?") : photo}
+                    src={driveDisplayUrl(photo, "sm")}
                     alt={`${album.title} ${globalIndex + 1}`}
                     loading="lazy"
+                    decoding="async"
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                 </button>

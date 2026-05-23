@@ -32,6 +32,9 @@ import {
   type HomeContent,
 } from "../lib/homeContent";
 import { fetchSiteHomeContent } from "../lib/siteGalleryApi";
+import { driveDisplayUrl, preloadDriveImages } from "../lib/driveImageUrl";
+import SiteOffCanvasMenu from "./site/SiteOffCanvasMenu";
+import OptimizedDriveImage from "./site/OptimizedDriveImage";
 import { cn } from "../lib/utils";
 
 const NAV_LINKS = [
@@ -201,6 +204,14 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const urls = [
+      content.hero.backgroundImage,
+      ...content.slides.map((s) => s.image),
+    ].filter(Boolean);
+    preloadDriveImages(urls, "lg");
+  }, [content.hero.backgroundImage, content.slides]);
+
+  useEffect(() => {
     const BANNER_HEIGHT = 805;
 
     const onScroll = () => {
@@ -272,10 +283,12 @@ export default function Home() {
   };
 
   const activeSlide = content.slides[slideIndex] ?? content.slides[0];
-  const slideImage =
+  const slideImage = driveDisplayUrl(
     activeSlide?.image ||
-    DEFAULT_HOME_CONTENT.slides[slideIndex]?.image ||
-    content.hero.backgroundImage;
+      DEFAULT_HOME_CONTENT.slides[slideIndex]?.image ||
+      content.hero.backgroundImage,
+    "lg",
+  );
 
   const prevSlide = () =>
     setSlideIndex((i) => (i - 1 + content.slides.length) % content.slides.length);
@@ -322,11 +335,11 @@ export default function Home() {
             ))}
           </nav>
 
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2">
             <Link
               to="/login"
               className={cn(
-                "hidden sm:inline-flex text-[15px] lg:text-base font-normal rounded-full px-6 py-1.5 transition-all duration-500 whitespace-nowrap",
+                "inline-flex text-xs sm:text-[15px] font-normal rounded-full px-3 sm:px-6 py-1 sm:py-1.5 transition-all duration-500 whitespace-nowrap",
                 scrolled
                   ? "text-[#a21b7e] border border-[#a21b7e] hover:bg-[#a21b7e]/5"
                   : "text-white border border-white/70 hover:bg-white/10",
@@ -338,73 +351,43 @@ export default function Home() {
               type="button"
               onClick={() => setMenuOpen(!menuOpen)}
               className={cn(
-                "lg:hidden p-2 transition-colors duration-500",
+                "lg:hidden p-1.5 transition-colors duration-500",
                 scrolled ? "text-gray-700" : "text-white",
               )}
               aria-label="Menu"
             >
-              {menuOpen ? <X size={26} /> : <Menu size={26} />}
+              {menuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
           </div>
         </div>
 
-        <AnimatePresence>
-          {menuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className={cn(
-                "lg:hidden border-t transition-colors duration-500",
-                scrolled ? "bg-white border-gray-100" : "bg-black/50 border-[#a21b7e]/25",
-              )}
-            >
-              <div className="px-6 py-4 flex flex-col gap-3">
-                {NAV_LINKS.map((link) => (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      scrollTo(link.href);
-                    }}
-                    className={cn(
-                      "text-base py-2.5 transition-colors duration-500",
-                      scrolled ? "text-gray-700 hover:text-[#a21b7e]" : "text-white/90 hover:text-white",
-                    )}
-                  >
-                    {link.label}
-                  </a>
-                ))}
-                <Link
-                  to="/login"
-                  className={cn(
-                    "mt-2 text-center text-sm py-2.5 rounded-full transition-all duration-500",
-                    scrolled
-                      ? "border border-[#a21b7e] text-[#a21b7e] hover:bg-[#a21b7e]/5"
-                      : "border border-white/70 text-white hover:bg-white/10",
-                  )}
-                >
-                  Entrar
-                </Link>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <SiteOffCanvasMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          tone={scrolled ? "home-scrolled" : "home"}
+          links={NAV_LINKS.map((link) => ({
+            href: link.href,
+            label: link.label,
+            onNavigate: () => scrollTo(link.href),
+          }))}
+        />
       </header>
 
       {/* Banner + menu integrados como no site original */}
       <section id="inicio" className="relative h-[805px] overflow-hidden text-white">
         <AnimatePresence initial={false}>
-          <motion.div
+          <motion.img
             key={slideImage}
+            src={slideImage}
+            alt=""
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1.8, ease: "easeInOut" }}
-            className="absolute inset-0 bg-cover bg-center will-change-transform"
+            transition={{ duration: 0.9, ease: "easeInOut" }}
+            fetchPriority="high"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover will-change-transform"
             style={{
-              backgroundImage: `url(${slideImage})`,
               transformOrigin: "center center",
               transform: `translate3d(0, ${bannerParallaxY}px, 0) scale(1.12)`,
             }}
@@ -550,9 +533,10 @@ export default function Home() {
           <section id="sobre" className="scroll-mt-[75px] p-6 sm:p-8 lg:p-10">
             <div className="grid gap-8 lg:grid-cols-2 lg:items-stretch">
               <div className="relative h-[380px] sm:h-[420px] lg:h-[500px]">
-                <img
+                <OptimizedDriveImage
                   src={content.aboutImage}
                   alt="Equipa ProVisual Corporate"
+                  size="md"
                   className="h-full w-full rounded-2xl object-cover"
                 />
               </div>
@@ -618,7 +602,7 @@ export default function Home() {
       >
         <div
           className="process-section-kenburns absolute inset-0"
-          style={{ backgroundImage: `url(${content.processBackground})` }}
+          style={{ backgroundImage: `url(${driveDisplayUrl(content.processBackground, "md")})` }}
           aria-hidden="true"
         />
         <div className="absolute inset-0 bg-[#3d001d]/55" aria-hidden="true" />
@@ -798,9 +782,10 @@ export default function Home() {
                       >
                         <article className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
                           <div className="relative h-[68%] min-h-[180px] shrink-0 overflow-hidden rounded-t-lg sm:min-h-[210px]">
-                            <img
+                            <OptimizedDriveImage
                               src={member.image}
                               alt={member.name}
+                              size="sm"
                               className="h-full w-full object-cover"
                             />
                           </div>
@@ -863,10 +848,11 @@ export default function Home() {
 
       <section id="equipa-especialistas" className="relative scroll-mt-[75px] bg-white pb-14 lg:pb-16">
         <div className="relative h-[280px] overflow-hidden sm:h-[320px] lg:h-[350px]">
-          <img
+          <OptimizedDriveImage
             src={content.teamBanner}
             alt=""
             aria-hidden="true"
+            size="lg"
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-[#ff6a00]/88" aria-hidden="true" />
@@ -907,9 +893,10 @@ export default function Home() {
 
                   <div className="relative px-4 pb-4 pt-9">
                     <div className="relative mx-auto mb-5 h-[118px] w-[118px]">
-                      <img
+                      <OptimizedDriveImage
                         src={member.image}
                         alt={member.name}
+                        size="sm"
                         className={cn(
                           "h-full w-full rounded-full object-cover transition-all duration-300",
                           isActive

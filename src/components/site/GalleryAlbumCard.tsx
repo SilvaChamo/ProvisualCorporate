@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { GalleryAlbum } from "../../lib/sitePages";
+import { driveDisplayUrl } from "../../lib/driveImageUrl";
 
 interface GalleryAlbumCardProps {
   album: GalleryAlbum;
@@ -7,12 +8,16 @@ interface GalleryAlbumCardProps {
 }
 
 export default function GalleryAlbumCard({ album, compact = false }: GalleryAlbumCardProps) {
+  const cover = driveDisplayUrl(album.image, compact ? "sm" : "md");
+
   if (compact) {
     return (
       <article className="group relative aspect-[16/10] rounded-lg overflow-hidden shadow-md">
         <img
-          src={album.image}
+          src={cover}
           alt={album.title}
+          loading="lazy"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-center px-3 py-2">
@@ -32,8 +37,10 @@ export default function GalleryAlbumCard({ album, compact = false }: GalleryAlbu
   return (
     <article className="group relative aspect-[4/3] rounded-xl overflow-hidden shadow-lg">
       <img
-        src={album.image}
+        src={cover}
         alt={album.title}
+        loading="lazy"
+        decoding="async"
         className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
       <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-center px-6">

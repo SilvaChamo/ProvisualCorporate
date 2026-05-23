@@ -6,6 +6,7 @@ import { SITE_NAV_LINKS } from "../../lib/siteNav";
 import SitePageHeader from "./SitePageHeader";
 import type { BreadcrumbItem } from "./SiteBreadcrumb.types";
 import SiteFooter from "./SiteFooter";
+import SiteOffCanvasMenu from "./SiteOffCanvasMenu";
 
 interface SiteShellProps {
   children: React.ReactNode;
@@ -19,9 +20,9 @@ export default function SiteShell({ children, title, breadcrumbs }: SiteShellPro
   return (
     <div className="site-bg min-h-screen text-gray-900 font-sans">
       <header className="sticky top-0 z-50 bg-white shadow-sm">
-        <div className="max-w-[1400px] mx-auto px-6 lg:px-10 h-[75px] grid grid-cols-[auto_1fr_auto] items-center gap-4">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 h-[75px] grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <Link to="/" className="shrink-0 flex items-center h-full">
-            <img src={logoHorizontal} alt="ProVisual Corporate" className="h-[52px] w-auto object-contain" />
+            <img src={logoHorizontal} alt="ProVisual Corporate" className="h-[48px] sm:h-[52px] w-auto object-contain" />
           </Link>
 
           <nav className="hidden lg:flex items-center justify-center gap-6 xl:gap-8 flex-wrap">
@@ -36,44 +37,33 @@ export default function SiteShell({ children, title, breadcrumbs }: SiteShellPro
             ))}
           </nav>
 
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2">
             <Link
               to="/login"
-              className="hidden sm:inline-flex text-[15px] lg:text-base font-normal text-[#a21b7e] border border-[#a21b7e] rounded-full px-6 py-2 hover:bg-[#a21b7e]/5 transition-colors whitespace-nowrap"
+              className="inline-flex text-xs sm:text-[15px] font-normal text-[#a21b7e] border border-[#a21b7e] rounded-full px-3 sm:px-6 py-1 sm:py-2 hover:bg-[#a21b7e]/5 transition-colors whitespace-nowrap"
             >
               Gestão
             </Link>
             <button
               type="button"
               onClick={() => setMenuOpen(!menuOpen)}
-              className="lg:hidden p-2 text-gray-700"
+              className="lg:hidden p-1.5 text-gray-700"
               aria-label="Menu"
             >
-              {menuOpen ? <X size={26} /> : <Menu size={26} />}
+              {menuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
           </div>
         </div>
 
-        {menuOpen && (
-          <div className="lg:hidden bg-white border-t border-gray-100 px-6 py-4 flex flex-col gap-3">
-            {SITE_NAV_LINKS.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="text-base text-gray-700 py-2.5"
-                onClick={() => setMenuOpen(false)}
-              >
-                {link.label}
-              </a>
-            ))}
-            <Link
-              to="/login"
-              className="mt-2 text-center border border-[#a21b7e] text-[#a21b7e] text-sm py-2 rounded-full"
-            >
-              Gestão
-            </Link>
-          </div>
-        )}
+        <SiteOffCanvasMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          tone="light"
+          links={SITE_NAV_LINKS.map((link) => ({
+            href: link.href,
+            label: link.label,
+          }))}
+        />
 
         {title && <SitePageHeader title={title} breadcrumbs={breadcrumbs} />}
       </header>
