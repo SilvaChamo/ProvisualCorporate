@@ -1225,12 +1225,12 @@ export default function Home() {
                   window.location.href = `mailto:${content.contact.email}?subject=${encodeURIComponent("Contacto via site")}&body=${encodeURIComponent(`Nome: ${nome}\nEmail: ${email}\n\n${mensagem}`)}`;
                 }}
               >
-                <div className="site-section-header mb-4 max-w-none px-[80px] text-left">
+                <div className="px-[80px] pb-4">
                   <h2 className="site-section-title mb-0 text-gray-900">
                     Fale <span className="font-light">connosco</span>
                   </h2>
                 </div>
-                <span className="mb-8 block h-px w-full bg-[#D7D7D7]" aria-hidden="true" />
+                <div className="mb-8 h-px w-full bg-[#D7D7D7]" aria-hidden="true" />
 
                 <div className="space-y-4 px-[80px]">
                   <div>
