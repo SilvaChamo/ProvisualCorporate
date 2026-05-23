@@ -16,9 +16,49 @@ import {
   resolveHomeContentImages,
 } from "../lib/siteDriveHelpers.js";
 
-// Importações estáticas de configuração para que a Vercel as inclua diretamente no bundle
-import serviceKeys from "../provisual-corporate-a16cee3d2250.json";
-import oauthKeys from "../google-oauth.json";
+function loadOAuthKeys() {
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    return {
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+    };
+  }
+  const candidates = [
+    path.join(process.cwd(), "google-oauth.json"),
+    path.join(process.cwd(), "..", "google-oauth.json"),
+  ];
+  for (const filePath of candidates) {
+    try {
+      if (fs.existsSync(filePath)) {
+        return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+function loadServiceKeys() {
+  if (process.env.GOOGLE_KEYS) {
+    try {
+      return JSON.parse(process.env.GOOGLE_KEYS);
+    } catch (_) {}
+  }
+  const candidates = [
+    path.join(process.cwd(), "provisual-corporate-a16cee3d2250.json"),
+    path.join(process.cwd(), "..", "provisual-corporate-a16cee3d2250.json"),
+  ];
+  for (const filePath of candidates) {
+    try {
+      if (fs.existsSync(filePath)) {
+        return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+const oauthKeys = loadOAuthKeys();
+const serviceKeys = loadServiceKeys();
 
 const app = express();
 app.use(express.json());
@@ -38,7 +78,7 @@ async function getGoogleAuth() {
   const localTokensPath = path.join(process.cwd(), "google-tokens.json");
 
   // Se tivermos as credenciais OAuth do Silva
-  if (oauthKeys && oauthKeys.client_id && oauthKeys.client_secret && !oauthKeys.client_id.includes("COLE_AQUI")) {
+  if (oauthKeys && oauthKeys.client_id && oauthKeys.client_secret && !String(oauthKeys.client_id).includes("COLE_AQUI")) {
     try {
       let tokens = null;
       
