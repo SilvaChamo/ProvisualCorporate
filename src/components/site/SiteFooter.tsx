@@ -1,13 +1,44 @@
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronUp } from "lucide-react";
 import logoColorido from "../../Logo/logo_horizontal.png";
 import { FOOTER_LINK_COLUMNS } from "../../lib/siteNav";
 import FooterMapBlock from "./FooterMapBlock";
 import HomeLeavingLink from "../HomeLeavingLink";
+import { cn } from "../../lib/utils";
 
 export default function SiteFooter() {
   const scrollTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
   const isHome = useLocation().pathname === "/";
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    if (isHome) {
+      const hero = document.getElementById("inicio");
+      if (!hero) {
+        setShowScrollTop(true);
+        return;
+      }
+
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          setShowScrollTop(!entry.isIntersecting);
+        },
+        { threshold: 0.15 },
+      );
+
+      observer.observe(hero);
+      return () => observer.disconnect();
+    }
+
+    const onScroll = () => {
+      setShowScrollTop(window.scrollY > 320);
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isHome]);
 
   return (
     <>
@@ -73,7 +104,12 @@ export default function SiteFooter() {
         </div>
       </div>
 
-      <div className="fixed bottom-6 right-6 z-[90] flex flex-col gap-3">
+      <div
+        className={cn(
+          "fixed bottom-6 right-6 z-[90] flex flex-col gap-3 transition-all duration-300",
+          showScrollTop ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0",
+        )}
+      >
         <button
           type="button"
           onClick={scrollTop}

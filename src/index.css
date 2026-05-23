@@ -224,7 +224,7 @@ body {
 
 .client-logo-cell {
   position: relative;
-  flex: 0 0 calc((100cqw - 12px) / 2);
+  flex: 0 0 64px;
   aspect-ratio: 5 / 3;
   overflow: hidden;
   background: transparent;
@@ -234,7 +234,7 @@ body {
 
 @media (min-width: 768px) {
   .client-logo-cell {
-    flex-basis: calc((100cqw - 48px) / 5);
+    flex-basis: 80px;
   }
 }
 

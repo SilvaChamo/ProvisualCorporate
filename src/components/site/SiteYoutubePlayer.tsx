@@ -8,6 +8,7 @@ import { cn } from "../../lib/utils";
 type YTPlayer = {
   destroy: () => void;
   playVideo: () => void;
+  pauseVideo: () => void;
   stopVideo: () => void;
   setPlaybackQuality: (quality: string) => void;
   getAvailableQualityLevels: () => Array<{ quality: string }>;
@@ -99,6 +100,7 @@ function applyPreferredQuality(player: YTPlayer) {
 type SiteYoutubePlayerProps = {
   videoId: string;
   autoplay?: boolean;
+  playWhenVisible?: boolean;
   className?: string;
   saveScrollOnLeave?: boolean;
   moreVideosHref?: string;
@@ -109,6 +111,7 @@ type SiteYoutubePlayerProps = {
 export default function SiteYoutubePlayer({
   videoId,
   autoplay = false,
+  playWhenVisible = false,
   className,
   saveScrollOnLeave = false,
   moreVideosHref = "/videos",
@@ -118,6 +121,8 @@ export default function SiteYoutubePlayer({
   const reactId = useId();
   const containerId = `yt-player-${reactId.replace(/:/g, "")}`;
   const playerRef = useRef<YTPlayer | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const visibleRef = useRef(false);
   const [ended, setEnded] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -167,6 +172,37 @@ export default function SiteYoutubePlayer({
     };
   }, [videoId, autoplay, containerId]);
 
+  useEffect(() => {
+    if (!playWhenVisible || !ready) return;
+
+    const root = rootRef.current;
+    if (!root) return;
+
+    const syncPlayback = (isVisible: boolean) => {
+      visibleRef.current = isVisible;
+      const player = playerRef.current;
+      if (!player) return;
+
+      if (isVisible) {
+        setEnded(false);
+        player.playVideo();
+      } else {
+        player.pauseVideo();
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        syncPlayback(entry.isIntersecting);
+      },
+      { threshold: 0.35 },
+    );
+
+    observer.observe(root);
+
+    return () => observer.disconnect();
+  }, [playWhenVisible, ready, videoId]);
+
   const replay = () => {
     setEnded(false);
     playerRef.current?.playVideo();
@@ -178,7 +214,10 @@ export default function SiteYoutubePlayer({
     "inline-flex items-center gap-2 rounded-lg bg-[#a21b7e] px-8 py-3 text-sm font-medium uppercase tracking-wider text-white transition-colors hover:bg-[#8e176e]";
 
   return (
-    <div className={cn("relative aspect-video w-full overflow-hidden bg-black", className)}>
+    <div
+      ref={rootRef}
+      className={cn("relative aspect-video w-full overflow-hidden bg-black", className)}
+    >
       <div id={containerId} className="absolute inset-0 h-full w-full" />
 
       {!ready && (

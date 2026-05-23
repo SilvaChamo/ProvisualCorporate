@@ -890,7 +890,7 @@ export default function Home() {
           <div className="absolute inset-0 bg-[#3d001d]/82" aria-hidden="true" />
           <div className="absolute inset-0 bg-[#a21b7e]/35" aria-hidden="true" />
 
-          <div className="relative z-10 flex h-full flex-col items-center justify-start px-6 pb-8 pt-[40px] text-center text-white sm:pb-10 lg:pb-12">
+          <div className="relative z-10 flex h-full flex-col items-center justify-start px-6 pb-8 pt-[75px] text-center text-white sm:pb-10 lg:pb-12">
             <div className="site-section-kicker site-section-kicker--center">
               <span className="site-section-kicker-line site-section-kicker-line--light" aria-hidden="true" />
               <p className="site-antetitle text-[#e888c8]">Serviços</p>
@@ -980,6 +980,7 @@ export default function Home() {
           <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-stretch">
             <SiteYoutubePlayer
               videoId={featuredVideoId}
+              playWhenVisible
               saveScrollOnLeave
               className="rounded-xl shadow-lg"
             />
@@ -1206,7 +1207,7 @@ export default function Home() {
               </div>
 
               <form
-                className="bg-white py-5 sm:py-6"
+                className="bg-white pb-5 pt-0 sm:pb-6"
                 onSubmit={(e) => {
                   e.preventDefault();
                   const form = e.target as HTMLFormElement;
@@ -1219,7 +1220,7 @@ export default function Home() {
                   window.location.href = `mailto:${content.contact.email}?subject=${encodeURIComponent("Contacto via site")}&body=${encodeURIComponent(`Nome: ${nome}\nEmail: ${email}\n\n${mensagem}`)}`;
                 }}
               >
-                <div className="bg-[#fafafa] px-[80px] pb-2 pt-3">
+                <div className="bg-[#fafafa] px-[80px] pb-2 pt-0">
                   <h2 className="site-section-title mb-0 text-gray-900">
                     Fale <span className="font-light">connosco</span>
                   </h2>
