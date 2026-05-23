@@ -167,7 +167,7 @@ function getTeamVisible(width: number) {
 
 function getLogoVisible(width: number) {
   if (width < 768) return 2;
-  return 5;
+  return 6;
 }
 
 export default function Home() {
@@ -193,7 +193,7 @@ export default function Home() {
     typeof window !== "undefined" ? getTeamVisible(window.innerWidth) : 2,
   );
   const [logoVisible, setLogoVisible] = useState(() =>
-    typeof window !== "undefined" ? getLogoVisible(window.innerWidth) : 5,
+    typeof window !== "undefined" ? getLogoVisible(window.innerWidth) : 6,
   );
 
   const quickLinkExtended = useMemo(
@@ -391,22 +391,14 @@ export default function Home() {
   return (
     <div className="site-bg min-h-screen text-gray-900 overflow-x-hidden font-sans">
       <header
-        className={cn(
-          "fixed top-0 left-0 right-0 z-50 h-[70px] transition-all duration-500 ease-in-out",
-          scrolled
-            ? "bg-white shadow-sm border-b border-gray-100"
-            : "bg-black/25 border-b border-[#a21b7e]/30",
-        )}
+        className="fixed top-0 left-0 right-0 z-50 h-[70px] border-b border-gray-100 bg-white shadow-sm transition-all duration-500 ease-in-out"
       >
         <div className="max-w-[1400px] mx-auto px-6 lg:px-10 h-full grid grid-cols-[auto_1fr_auto] items-center gap-4">
           <a href="#inicio" onClick={() => scrollTo("#inicio")} className="shrink-0 flex items-center h-full">
             <img
               src={logoHorizontal}
               alt="ProVisual Corporate"
-              className={cn(
-                "h-10 w-auto object-contain transition-all duration-500",
-                !scrolled && "brightness-110",
-              )}
+              className="h-10 w-auto object-contain transition-all duration-500"
             />
           </a>
 
@@ -419,10 +411,7 @@ export default function Home() {
                   e.preventDefault();
                   scrollTo(link.href);
                 }}
-                className={cn(
-                  "text-[15px] lg:text-base font-normal transition-colors duration-500 whitespace-nowrap",
-                  scrolled ? "text-gray-700 hover:text-[#a21b7e]" : "text-white/90 hover:text-white",
-                )}
+                className="text-[15px] lg:text-base font-normal text-gray-700 transition-colors duration-500 whitespace-nowrap hover:text-[#a21b7e]"
               >
                 {link.label}
               </a>
@@ -432,22 +421,14 @@ export default function Home() {
           <div className="flex items-center justify-end gap-1.5 sm:gap-2">
             <Link
               to="/login"
-              className={cn(
-                "hidden lg:inline-flex text-[15px] font-normal rounded-full px-6 py-1.5 transition-all duration-500 whitespace-nowrap",
-                scrolled
-                  ? "text-[#a21b7e] border border-[#a21b7e] hover:bg-[#a21b7e]/5"
-                  : "text-white border border-white/70 hover:bg-white/10",
-              )}
+              className="hidden lg:inline-flex text-[15px] font-normal rounded-full border border-[#a21b7e] px-6 py-1.5 text-[#a21b7e] transition-all duration-500 whitespace-nowrap hover:bg-[#a21b7e]/5"
             >
               Entrar
             </Link>
             <button
               type="button"
               onClick={() => setMenuOpen(!menuOpen)}
-              className={cn(
-                "lg:hidden p-1.5 transition-colors duration-500",
-                scrolled ? "text-gray-700" : "text-white",
-              )}
+              className="p-1.5 text-gray-700 transition-colors duration-500 lg:hidden"
               aria-label="Menu"
             >
               {menuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -458,7 +439,7 @@ export default function Home() {
         <SiteOffCanvasMenu
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
-          tone={scrolled ? "home-scrolled" : "home"}
+          tone="home-scrolled"
           loginHref="/login"
           loginLabel="Entrar"
           links={NAV_LINKS.map((link) => ({
@@ -1118,7 +1099,7 @@ export default function Home() {
           </div>
           <HomeLeavingLink
             to="/arquivo"
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-8 py-3 text-sm font-medium uppercase tracking-wider text-[#a21b7e] shadow-lg transition-colors hover:bg-white/90"
+            className="mt-[30px] inline-flex items-center gap-2 rounded-lg bg-white px-8 py-3 text-sm font-medium uppercase tracking-wider text-[#a21b7e] shadow-lg transition-colors hover:bg-white/90"
           >
             Entrar no arquivo
             <ChevronRight size={16} />
@@ -1174,9 +1155,9 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="clientes" className="scroll-mt-[75px] bg-white py-16 lg:py-24">
+      <section id="clientes" className="scroll-mt-[75px] bg-white py-10 lg:py-12">
         <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="mb-14 flex items-center justify-center gap-4">
+          <div className="mb-8 flex items-center justify-center gap-4 py-2">
             <span className="site-section-kicker-line site-section-kicker-line--dark" aria-hidden="true" />
             <h2 className="site-section-title mb-0 text-gray-900">Nossos clientes</h2>
             <span className="site-section-kicker-line site-section-kicker-line--dark" aria-hidden="true" />
