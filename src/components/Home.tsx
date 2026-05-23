@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -151,6 +151,12 @@ function getQuickLinksVisible(width: number) {
   return 3;
 }
 
+function getTeamVisible(width: number) {
+  if (width < 768) return 1;
+  if (width < 1024) return 2;
+  return 2;
+}
+
 export default function Home() {
   const [content, setContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -159,15 +165,17 @@ export default function Home() {
   const [slideIndex, setSlideIndex] = useState(0);
   const [quickLinkSlide, setQuickLinkSlide] = useState(0);
   const [quickLinkResetting, setQuickLinkResetting] = useState(false);
+  const [teamSlide, setTeamSlide] = useState(2);
+  const [teamResetting, setTeamResetting] = useState(false);
   const [activeServiceCard, setActiveServiceCard] = useState(0);
   const [activeProcessCard, setActiveProcessCard] = useState(0);
   const [featuredVideoId, setFeaturedVideoId] = useState(VIDEO_ITEMS[0]?.youtubeId ?? "");
   const [quickLinksVisible, setQuickLinksVisible] = useState(() =>
     typeof window !== "undefined" ? getQuickLinksVisible(window.innerWidth) : 3,
   );
-
-  const teamLeftRef = useRef<HTMLDivElement>(null);
-  const [teamGridHeight, setTeamGridHeight] = useState<number | null>(null);
+  const [teamVisible, setTeamVisible] = useState(() =>
+    typeof window !== "undefined" ? getTeamVisible(window.innerWidth) : 2,
+  );
 
   const quickLinkExtended = useMemo(
     () => [...QUICK_LINKS, ...QUICK_LINKS.slice(0, quickLinksVisible)],
@@ -177,10 +185,24 @@ export default function Home() {
 
   const teamMembers = content.teamMembers;
 
+  const teamExtended = useMemo(
+    () => [
+      ...teamMembers.slice(-teamVisible),
+      ...teamMembers,
+      ...teamMembers.slice(0, teamVisible),
+    ],
+    [teamMembers, teamVisible],
+  );
+  const teamStart = teamVisible;
+  const teamEnd = teamStart + teamMembers.length;
+  const teamResetBack = teamEnd - teamVisible;
+
   useEffect(() => {
     const onResize = () => {
       const nextQuick = getQuickLinksVisible(window.innerWidth);
+      const nextTeam = getTeamVisible(window.innerWidth);
       setQuickLinksVisible((prev) => (prev === nextQuick ? prev : nextQuick));
+      setTeamVisible((prev) => (prev === nextTeam ? prev : nextTeam));
     };
     window.addEventListener("resize", onResize, { passive: true });
     return () => window.removeEventListener("resize", onResize);
@@ -192,30 +214,13 @@ export default function Home() {
   }, [quickLinksVisible]);
 
   useEffect(() => {
-    fetchSiteHomeContent().then(setContent).catch(() => setContent(DEFAULT_HOME_CONTENT));
-  }, []);
+    setTeamSlide(teamStart);
+    setTeamResetting(false);
+  }, [teamVisible, teamStart]);
 
   useEffect(() => {
-    const el = teamLeftRef.current;
-    if (!el) return;
-
-    const update = () => {
-      if (window.innerWidth < 1024) {
-        setTeamGridHeight(null);
-        return;
-      }
-      setTeamGridHeight(el.offsetHeight);
-    };
-
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    window.addEventListener("resize", update, { passive: true });
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, [content]);
+    fetchSiteHomeContent().then(setContent).catch(() => setContent(DEFAULT_HOME_CONTENT));
+  }, []);
 
   useEffect(() => {
     const urls = [
@@ -263,6 +268,33 @@ export default function Home() {
     }, 520);
     return () => clearTimeout(t);
   }, [quickLinkSlide, quickLinkMaxSlide]);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTeamSlide((i) => i + 1);
+    }, 6000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (teamSlide !== teamEnd) return;
+    const t = setTimeout(() => {
+      setTeamResetting(true);
+      setTeamSlide(teamStart);
+      requestAnimationFrame(() => setTeamResetting(false));
+    }, 520);
+    return () => clearTimeout(t);
+  }, [teamSlide, teamEnd, teamStart]);
+
+  useEffect(() => {
+    if (teamSlide !== teamStart - teamVisible) return;
+    const t = setTimeout(() => {
+      setTeamResetting(true);
+      setTeamSlide(teamResetBack);
+      requestAnimationFrame(() => setTeamResetting(false));
+    }, 520);
+    return () => clearTimeout(t);
+  }, [teamSlide, teamStart, teamVisible, teamResetBack]);
 
   const scrollTo = (href: string) => {
     setMenuOpen(false);
@@ -699,27 +731,25 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="equipa" className="scroll-mt-[75px] py-16 lg:py-24">
+      <section id="equipa" className="scroll-mt-[75px] py-12 lg:py-20">
         <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-            <div ref={teamLeftRef}>
-              <div className="flex w-full flex-col items-start rounded-2xl bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.08)] sm:p-10">
-                <div className="mb-4 flex items-center gap-2">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
+            <div className="relative z-10 flex flex-col justify-center lg:-mr-[68px] lg:py-[45px] xl:-mr-[84px]">
+              <div className="flex w-full flex-col items-start justify-center rounded-2xl bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.08)] sm:p-8">
+                <div className="mb-3 flex items-center gap-2">
                   <span className="text-sm text-gray-500">Nossa equipa</span>
                   <span className="h-px w-8 bg-[#D7D7D7]" />
                 </div>
 
-                <h2 className="mb-4 text-4xl font-bold leading-tight text-[#333] sm:text-5xl lg:text-[3.25rem]">
-                  Criatividade <span className="text-[#22c55e]">&</span>
-                  <br />
-                  <span className="font-light">Excelência</span>
+                <h2 className="mb-3 text-4xl font-bold leading-tight text-[#333] sm:text-5xl lg:text-[3.25rem]">
+                  Criatividade & <span className="font-light">Excelência</span>
                 </h2>
 
                 <h3 className="text-lg font-bold text-[#333]">
                   Profissionais <span className="font-light">dedicados</span>
                 </h3>
 
-                <p className="mt-3 text-sm leading-relaxed text-gray-600 sm:text-base">
+                <p className="mt-2 text-sm leading-relaxed text-gray-600 sm:text-base">
                   Profissionais multidisciplinares unidos pela criatividade, precisão técnica e
                   compromisso com resultados que fortalecem a presença das marcas em Moçambique.
                 </p>
@@ -730,7 +760,7 @@ export default function Home() {
                     e.preventDefault();
                     scrollTo("#contactos");
                   }}
-                  className="mt-8 inline-flex self-start items-center gap-2 rounded-lg bg-[#a21b7e] px-8 py-3 text-sm font-medium uppercase tracking-wider text-white transition-colors hover:bg-[#8e176e]"
+                  className="mt-6 inline-flex self-start items-center gap-2 rounded-lg bg-[#a21b7e] px-8 py-3 text-sm font-medium uppercase tracking-wider text-white transition-colors hover:bg-[#8e176e]"
                 >
                   Contacte-nos
                   <ChevronRight size={16} />
@@ -738,72 +768,99 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="w-full min-w-0">
-              <div
-                className={cn(
-                  "grid w-full min-h-0 grid-cols-2 grid-rows-2 gap-4 sm:gap-5 lg:gap-6",
-                  teamGridHeight == null && "h-[240px] sm:h-[280px]",
-                )}
-                style={teamGridHeight != null ? { height: teamGridHeight } : undefined}
-              >
-                {teamMembers.slice(0, 4).map((member) => (
-                  <article
-                    key={member.name}
-                    className="group relative h-full min-h-0 overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]"
+            <div className="relative z-0 box-border flex min-h-[350px] items-center justify-center rounded-2xl border border-[#a21b7e]/18 bg-[#a21b7e]/[0.025] px-3 py-4 pl-6 sm:min-h-[370px] sm:px-4 sm:pl-8 lg:min-h-0 lg:px-4 lg:pl-14">
+              <div className="flex w-full items-center justify-center gap-1.5 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTeamSlide((i) => i - 1)}
+                  aria-label="Profissional anterior"
+                  className="relative z-10 flex h-11 w-11 shrink-0 self-center items-center justify-center rounded-full bg-[#3d001d] text-[#c958a8] transition-colors hover:bg-[#8e176e] hover:text-white"
+                >
+                  <ChevronLeft size={20} strokeWidth={2.25} />
+                </button>
+
+                <div className="team-carousel-viewport relative z-10 min-w-0 flex-1">
+                  <motion.div
+                    className="flex items-center"
+                    style={{
+                      width: `${(teamExtended.length / teamVisible) * 100}%`,
+                    }}
+                    animate={{
+                      x: `-${teamSlide * (100 / teamExtended.length)}%`,
+                    }}
+                    transition={
+                      teamResetting
+                        ? { duration: 0 }
+                        : { duration: 0.5, ease: "easeInOut" }
+                    }
                   >
-                    <div className="relative h-full min-h-0 overflow-hidden">
-                      <OptimizedDriveImage
-                        src={member.image}
-                        alt={member.name}
-                        size="md"
-                        className="h-full w-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.03]"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 z-10 translate-y-3 opacity-0 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                        <div
-                          className="pointer-events-none absolute inset-x-0 bottom-0 h-[140%] bg-gradient-to-t from-[#3d001d]/90 via-[#3d001d]/65 via-35% to-transparent"
-                          aria-hidden="true"
-                        />
-                        <div className="relative flex min-h-[80px] flex-col items-center justify-center px-3 py-3 text-center sm:min-h-[92px] sm:px-4 sm:py-3.5">
-                          <h4 className="flex items-center justify-center gap-2 text-sm font-bold text-white sm:gap-2.5 sm:text-base">
-                            <span className="h-px w-5 bg-white/70 sm:w-6" aria-hidden="true" />
-                            {member.name}
-                            <span className="h-px w-5 bg-white/70 sm:w-6" aria-hidden="true" />
-                          </h4>
-                          <p className="mt-1 text-xs text-white/85 sm:text-sm">{member.role}</p>
-                          <div className="mt-2 flex justify-center gap-2.5 sm:gap-3">
-                            <a
-                              href={member.social.facebook}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label={`Facebook de ${member.name}`}
-                              className="text-white/90 transition-colors hover:text-white"
-                            >
-                              <Facebook size={15} strokeWidth={2} />
-                            </a>
-                            <a
-                              href={member.social.linkedin}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label={`LinkedIn de ${member.name}`}
-                              className="text-white/90 transition-colors hover:text-white"
-                            >
-                              <Linkedin size={15} strokeWidth={2} />
-                            </a>
-                            <a
-                              href={member.social.instagram}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label={`Instagram de ${member.name}`}
-                              className="text-white/90 transition-colors hover:text-white"
-                            >
-                              <Instagram size={15} strokeWidth={2} />
-                            </a>
+                    {teamExtended.map((member, index) => (
+                      <div
+                        key={`${member.name}-${index}`}
+                        className="box-border flex shrink-0 justify-center px-1.5 sm:px-2"
+                        style={{ width: `${100 / teamExtended.length}%` }}
+                      >
+                        <article className="team-card-shadow mx-auto flex w-full max-w-[240px] flex-col overflow-hidden rounded-lg border border-[#a21b7e]/12 bg-white sm:max-w-[260px]">
+                          <div className="relative h-[255px] shrink-0 overflow-hidden rounded-t-lg sm:h-[282px]">
+                            <OptimizedDriveImage
+                              src={member.image}
+                              alt={member.name}
+                              size="sm"
+                              className="h-full w-full object-cover"
+                            />
                           </div>
-                        </div>
+                          <div className="h-2 shrink-0 bg-[#a21b7e]" aria-hidden="true" />
+                          <div className="flex shrink-0 flex-col items-center justify-center px-3 py-3 text-center">
+                            <h4 className="flex items-center justify-center gap-2 text-base font-bold text-[#333] sm:gap-3 sm:text-lg">
+                              <span className="h-px w-7 bg-[#a21b7e] sm:w-9" aria-hidden="true" />
+                              {member.name}
+                              <span className="h-px w-7 bg-[#a21b7e] sm:w-9" aria-hidden="true" />
+                            </h4>
+                            <p className="mt-1 text-sm text-[#a21b7e]">{member.role}</p>
+                            <div className="mt-2 flex justify-center gap-2.5">
+                              <a
+                                href={member.social.facebook}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={`Facebook de ${member.name}`}
+                                className="text-[#a21b7e] transition-colors hover:text-[#8e176e]"
+                              >
+                                <Facebook size={15} strokeWidth={2} />
+                              </a>
+                              <a
+                                href={member.social.linkedin}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={`LinkedIn de ${member.name}`}
+                                className="text-[#a21b7e] transition-colors hover:text-[#8e176e]"
+                              >
+                                <Linkedin size={15} strokeWidth={2} />
+                              </a>
+                              <a
+                                href={member.social.instagram}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={`Instagram de ${member.name}`}
+                                className="text-[#a21b7e] transition-colors hover:text-[#8e176e]"
+                              >
+                                <Instagram size={15} strokeWidth={2} />
+                              </a>
+                            </div>
+                          </div>
+                        </article>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    ))}
+                  </motion.div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setTeamSlide((i) => i + 1)}
+                  aria-label="Profissional seguinte"
+                  className="relative z-10 flex h-11 w-11 shrink-0 self-center items-center justify-center rounded-full bg-[#3d001d] text-[#c958a8] transition-colors hover:bg-[#8e176e] hover:text-white"
+                >
+                  <ChevronRight size={20} strokeWidth={2.25} />
+                </button>
               </div>
             </div>
           </div>

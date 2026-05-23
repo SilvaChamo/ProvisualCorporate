@@ -86,7 +86,7 @@ const TEAM_PHOTO = (file: string) => `/INICIO/Equipa/${encodeURIComponent(file)}
 const DEFAULT_TEAM_MEMBERS: HomeTeamMember[] = [
   {
     name: "Carlos Nhaca",
-    role: "Director de Produção",
+    role: "Criativo",
     image: TEAM_PHOTO("Captura de ecrã 2026-05-23, às 14.09.11.png"),
     social: {
       facebook: "https://www.facebook.com/profile.php?id=61577619669570",
@@ -116,7 +116,7 @@ const DEFAULT_TEAM_MEMBERS: HomeTeamMember[] = [
   },
   {
     name: "Ana Mabunda",
-    role: "Directora Criativa",
+    role: "Directora de Produção",
     image: TEAM_PHOTO("Captura de ecrã 2026-05-23, às 14.16.15.png"),
     social: {
       facebook: "https://www.facebook.com/profile.php?id=61577619669570",

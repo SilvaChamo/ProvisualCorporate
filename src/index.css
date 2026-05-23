@@ -138,3 +138,12 @@ body {
     background-size: 115%;
   }
 }
+
+.team-card-shadow {
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.11);
+}
+
+.team-carousel-viewport {
+  overflow: hidden;
+  overflow-clip-margin: 10px;
+}
