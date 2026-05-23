@@ -1,3 +1,5 @@
+import { SERVICE_REQUEST_EMAIL, SITE_CONTACT_EMAIL } from "./siteContact";
+
 export interface HomeSlide {
   category: string;
   title: string;
@@ -69,11 +71,14 @@ export interface HomeContent {
   services: HomeService[];
   contact: {
     phones: string[];
+    emails: string[];
+    websites: string[];
     email: string;
     whatsapp: string;
     address: string;
     ctaTitle: string;
     ctaSubtitle: string;
+    photo: string;
   };
   eventIntro: string;
   eventTypes: HomeEventType[];
@@ -185,17 +190,29 @@ const CLIENT_LOGO_FILES = [
   "Artboard-8.svg",
   "Artboard-9.svg",
   "Artboard-10.svg",
-  "Artboard-10-copy.svg",
-  "Artboard-11.svg",
-  "Artboard-15.svg",
-  "Artboard-41.svg",
-  "Artboard-44.svg",
-  "AT.jpg",
+  "AT.png",
+  "Up.png",
 ];
 
+const EXCLUDED_CLIENT_LOGO_FILES = new Set([
+  "artboard-11.svg",
+  "artboard-15.svg",
+  "artboard-41.svg",
+  "artboard-44.svg",
+  "artboard-10-copy.svg",
+]);
+
+function isExcludedClientLogo(image: string) {
+  const base = decodeURIComponent(image.split("/").pop() || "").toLowerCase();
+  return EXCLUDED_CLIENT_LOGO_FILES.has(base);
+}
+
+function normalizeClientLogos(logos: HomeClientLogo[]) {
+  return logos.filter((logo) => !isExcludedClientLogo(logo.image));
+}
 const DEFAULT_CLIENT_LOGOS: HomeClientLogo[] = CLIENT_LOGO_FILES.map((file) => ({
   name: file.replace(/\.[^.]+$/, "").replace(/-/g, " "),
-  image: `${SCRAPE_ASSETS}/${file}`,
+  image: `/INICIO/clientes/${file}`,
 }));
 
 const DEFAULT_NEWS_ITEMS: HomeNewsItem[] = [
@@ -308,11 +325,14 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
   ],
   contact: {
     phones: ["+258 86 30 76 065", "+258 85 51 13 215"],
-    email: "info@provisualcorporate.co.mz",
+    emails: [SITE_CONTACT_EMAIL, SERVICE_REQUEST_EMAIL],
+    websites: ["www.provisualcorporate.co.mz"],
+    email: SITE_CONTACT_EMAIL,
     whatsapp: "258863076065",
     address: "Av. 24 de Julho esquina com Rua Francisco Matange nº 8, Maputo - Moçambique",
     ctaTitle: "Quer trabalhar connosco?",
     ctaSubtitle: "Todos juntos, somos criativos",
+    photo: "/INICIO/Fotografo.png",
   },
   eventIntro:
     "Captamos narrativas visuais de elevado rigor e profundidade, concebidas para imortalizar factos, histórias e personagens com autenticidade e arte.",
@@ -368,15 +388,17 @@ export function mergeHomeContent(partial?: Partial<HomeContent> | null): HomeCon
             DEFAULT_HOME_CONTENT.eventTypes[index % DEFAULT_HOME_CONTENT.eventTypes.length]?.image,
         }))
       : DEFAULT_HOME_CONTENT.eventTypes,
-    clientLogos: partial.clientLogos?.length
-      ? partial.clientLogos.map((item, index) => ({
-          ...DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length],
-          ...item,
-          image:
-            item.image ||
-            DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length]?.image,
-        }))
-      : DEFAULT_HOME_CONTENT.clientLogos,
+    clientLogos: normalizeClientLogos(
+      partial.clientLogos?.length
+        ? partial.clientLogos.map((item, index) => ({
+            ...DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length],
+            ...item,
+            image:
+              item.image ||
+              DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length]?.image,
+          }))
+        : DEFAULT_HOME_CONTENT.clientLogos,
+    ),
     newsItems: partial.newsItems?.length
       ? partial.newsItems.map((item, index) => ({
           ...DEFAULT_HOME_CONTENT.newsItems[index % DEFAULT_HOME_CONTENT.newsItems.length],

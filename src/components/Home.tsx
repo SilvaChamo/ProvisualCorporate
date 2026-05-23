@@ -4,9 +4,6 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Menu,
   X,
-  Mail,
-  Phone,
-  MapPin,
   ChevronRight,
   ChevronLeft,
   Facebook,
@@ -969,7 +966,7 @@ export default function Home() {
 
       <section id="videos" className="scroll-mt-[75px] bg-[#fafafa] py-8 lg:py-10">
         <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="my-4 flex justify-end lg:my-5">
+          <div className="mt-4 mb-[50px] flex justify-end">
             <HomeLeavingLink
               to="/videos"
               className="inline-flex items-center gap-2 rounded-lg bg-[#a21b7e] px-8 py-3 text-sm font-medium uppercase tracking-wider text-white transition-colors hover:bg-[#8e176e]"
@@ -1027,7 +1024,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="arquivo" className="relative scroll-mt-[75px] overflow-hidden bg-[#a21b7e] px-6 py-8 text-white lg:py-10">
+      <section id="arquivo" className="relative mt-[40px] scroll-mt-[75px] overflow-hidden bg-[#a21b7e] px-6 py-8 text-white lg:py-10">
         <div className="arquivo-section-fx pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
           <div className="arquivo-grid-lines" />
         </div>
@@ -1114,7 +1111,7 @@ export default function Home() {
       </section>
 
       <section id="clientes" className="scroll-mt-[75px] bg-white py-16 lg:py-24">
-        <div className="mx-auto max-w-[1200px] px-6 lg:px-10">
+        <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
           <div className="site-section-header site-section-header--center mb-14">
             <div className="site-section-kicker site-section-kicker--center">
               <span className="site-section-kicker-line site-section-kicker-line--dark" />
@@ -1130,183 +1127,179 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-8 sm:gap-x-12 sm:gap-y-10">
-            {content.clientLogos.map((logo) => (
-              <div
-                key={logo.name + logo.image}
-                className="flex h-14 w-[120px] items-center justify-center sm:h-16 sm:w-[140px]"
-              >
-                <img
-                  src={getHomeImageSrc(logo.image, "sm")}
-                  alt={logo.name}
-                  className="max-h-full max-w-full object-contain"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
-            ))}
+          <div className="client-logo-carousel" aria-label="Logotipos de clientes">
+            <div className="client-logo-carousel-track">
+              {[...content.clientLogos, ...content.clientLogos].map((logo, index) => (
+                <div key={`${logo.name}-${index}`} className="client-logo-cell">
+                  <OptimizedDriveImage
+                    src={logo.image}
+                    alt={logo.name}
+                    size="sm"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section id="contactos" className="scroll-mt-24 bg-[#fafafa] px-6 py-20 lg:py-24">
-        <div className="mx-auto max-w-6xl">
-          <div className="site-section-header site-section-header--center mb-12 lg:mb-14">
-            <div className="site-section-kicker site-section-kicker--center">
-              <span className="site-section-kicker-line site-section-kicker-line--dark" />
-              <p className="site-antetitle text-[#a21b7e]">Contactos</p>
-              <span className="site-section-kicker-line site-section-kicker-line--dark" />
-            </div>
-            <h2 className="site-section-title text-gray-900">
-              Quer trabalhar <span className="font-light">connosco?</span>
-            </h2>
-            <p className="site-section-desc text-gray-600">{content.contact.ctaSubtitle}</p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12">
-            <div className="rounded-2xl bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06)]">
-              <h3 className="site-section-title text-gray-900">
-                Entre em <span className="font-light">contacto</span>
-              </h3>
-              <p className="site-section-desc mb-8 text-gray-500">
-                Somos apaixonados em desenvolver soluções para os nossos clientes. Venha contar-nos
-                a sua ideia — o café é por nossa conta.
-              </p>
-
-              <div className="space-y-4">
-                <a
-                  href={`https://wa.me/${content.contact.whatsapp}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-[#a21b7e]/30 hover:shadow-sm transition-all group"
-                >
-                  <div className="w-11 h-11 rounded-full bg-[#25D366] text-white flex items-center justify-center">
-                    <WhatsAppIcon size={22} />
-                  </div>
+      <section id="contactos" className="scroll-mt-24 bg-[#f3f3f3] py-16 lg:py-20">
+        <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
+          <div className="overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
+            <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+              <div className="flex flex-col justify-center bg-[#a21b7e] px-8 py-8 text-center text-white sm:px-10 sm:py-10">
+                <div className="space-y-6">
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                      WhatsApp
-                    </div>
-                    <div className="font-bold text-gray-800 group-hover:text-[#a21b7e]">
-                      +{content.contact.whatsapp}
+                    <h3 className="mb-2 text-base font-bold uppercase tracking-wide">Telefone</h3>
+                    <div className="space-y-1 text-sm sm:text-base">
+                      {content.contact.phones.map((phone) => (
+                        <a
+                          key={phone}
+                          href={`tel:${phone.replace(/\s/g, "")}`}
+                          className="block hover:text-white/85"
+                        >
+                          {phone}
+                        </a>
+                      ))}
                     </div>
                   </div>
-                </a>
 
-                {content.contact.phones.map((phone) => (
-                  <a
-                    key={phone}
-                    href={`tel:${phone.replace(/\s/g, "")}`}
-                    className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-[#a21b7e]/30 hover:shadow-sm transition-all group"
-                  >
-                    <div className="w-11 h-11 rounded-full bg-[#a21b7e]/10 text-[#a21b7e] flex items-center justify-center">
-                      <Phone size={20} />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                        Telefone
-                      </div>
-                      <div className="font-bold text-gray-800 group-hover:text-[#a21b7e]">{phone}</div>
-                    </div>
-                  </a>
-                ))}
-
-                <a
-                  href={`mailto:${content.contact.email}`}
-                  className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-[#a21b7e]/30 hover:shadow-sm transition-all group"
-                >
-                  <div className="w-11 h-11 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-                    <Mail size={20} />
-                  </div>
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                      Email
-                    </div>
-                    <div className="font-bold text-gray-800 group-hover:text-[#a21b7e]">
-                      {content.contact.email}
+                    <h3 className="mb-2 text-base font-bold uppercase tracking-wide">Email</h3>
+                    <div className="space-y-1 text-sm sm:text-base">
+                      {(content.contact.emails?.length
+                        ? content.contact.emails
+                        : [content.contact.email]
+                      ).map((email) => (
+                        <a
+                          key={email}
+                          href={`mailto:${email}`}
+                          className="block break-all hover:text-white/85"
+                        >
+                          {email}
+                        </a>
+                      ))}
                     </div>
                   </div>
-                </a>
 
-                <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100">
-                  <div className="w-11 h-11 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center">
-                    <MapPin size={20} />
-                  </div>
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                      Endereço
+                    <h3 className="mb-2 text-base font-bold uppercase tracking-wide">Website</h3>
+                    <div className="space-y-1 text-sm sm:text-base">
+                      {(content.contact.websites ?? []).map((website) => {
+                        const href = /^https?:\/\//i.test(website)
+                          ? website
+                          : `https://${website.replace(/^\/\//, "")}`;
+
+                        return (
+                          <a
+                            key={website}
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block break-all hover:text-white/85"
+                          >
+                            {website.replace(/^https?:\/\//i, "")}
+                          </a>
+                        );
+                      })}
                     </div>
-                    <div className="font-bold text-gray-800">{content.contact.address}</div>
+                  </div>
+
+                  <div>
+                    <h3 className="mb-2 text-base font-bold uppercase tracking-wide">Localização</h3>
+                    <p className="text-sm leading-relaxed sm:text-base">{content.contact.address}</p>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <form
-              className="bg-white p-8 md:p-10 rounded-2xl shadow-sm border border-gray-100 space-y-5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                const data = new FormData(form);
-                const nome = data.get("nome") as string;
-                const email = data.get("email") as string;
-                const assunto = (data.get("assunto") as string) || "Contacto via site";
-                const mensagem = data.get("mensagem") as string;
-                window.location.href = `mailto:${content.contact.email}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(`Nome: ${nome}\nEmail: ${email}\n\n${mensagem}`)}`;
-              }}
-            >
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">
-                  Nome
-                </label>
-                <input
-                  name="nome"
-                  required
-                  className="w-full h-12 px-4 border border-gray-100 rounded-lg focus:border-[#a21b7e] outline-none text-sm"
-                  placeholder="O seu nome"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">
-                  Email
-                </label>
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  className="w-full h-12 px-4 border border-gray-100 rounded-lg focus:border-[#a21b7e] outline-none text-sm"
-                  placeholder="seu@email.com"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">
-                  Assunto
-                </label>
-                <input
-                  name="assunto"
-                  className="w-full h-12 px-4 border border-gray-100 rounded-lg focus:border-[#a21b7e] outline-none text-sm"
-                  placeholder="Assunto"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">
-                  Mensagem
-                </label>
-                <textarea
-                  name="mensagem"
-                  required
-                  rows={4}
-                  className="w-full px-4 py-3 border border-gray-100 rounded-lg focus:border-[#a21b7e] outline-none text-sm resize-none"
-                  placeholder="Conte-nos a sua ideia..."
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full h-14 bg-[#a21b7e] text-white text-sm font-bold uppercase tracking-widest rounded-lg hover:bg-[#8e176e] transition-colors"
+              <form
+                className="bg-white px-[80px] py-8 sm:py-10"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const form = e.target as HTMLFormElement;
+                  const data = new FormData(form);
+                  const nome = data.get("nome") as string;
+                  const email = data.get("email") as string;
+                  const mensagem = data.get("mensagem") as string;
+                  const terms = data.get("terms");
+                  if (!terms) return;
+                  window.location.href = `mailto:${content.contact.email}?subject=${encodeURIComponent("Contacto via site")}&body=${encodeURIComponent(`Nome: ${nome}\nEmail: ${email}\n\n${mensagem}`)}`;
+                }}
               >
-                Enviar
-              </button>
-            </form>
+                <div className="site-section-header mb-8 max-w-none text-left">
+                  <h2 className="site-section-title mb-4 text-gray-900">
+                    Fale <span className="font-light">connosco</span>
+                  </h2>
+                  <span className="block h-px w-full max-w-xs bg-[#D7D7D7]" aria-hidden="true" />
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="contact-nome" className="contact-field-label">
+                      Nome
+                    </label>
+                    <input
+                      id="contact-nome"
+                      name="nome"
+                      required
+                      className="contact-field-input"
+                      placeholder="Introduza o seu nome"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="contact-email" className="contact-field-label">
+                      Email
+                    </label>
+                    <input
+                      id="contact-email"
+                      name="email"
+                      type="email"
+                      required
+                      className="contact-field-input"
+                      placeholder="Introduza um email válido"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="contact-mensagem" className="contact-field-label">
+                      Mensagem
+                    </label>
+                    <textarea
+                      id="contact-mensagem"
+                      name="mensagem"
+                      required
+                      rows={5}
+                      className="contact-field-textarea min-h-[140px]"
+                      placeholder="Escreva a sua mensagem"
+                    />
+                  </div>
+
+                  <label className="flex items-start gap-2.5 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      name="terms"
+                      required
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-[#a21b7e]"
+                    />
+                    <span>
+                      Aceito os{" "}
+                      <a href="/#sobre" className="text-[#a21b7e] hover:underline">
+                        Termos de Serviço
+                      </a>
+                    </span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    className="bg-[#a21b7e] px-10 py-3 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-[#8e176e]"
+                  >
+                    Enviar
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       </section>

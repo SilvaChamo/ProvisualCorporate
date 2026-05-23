@@ -45,8 +45,7 @@ const EVENT_TYPE_FILES = [
 const CLIENT_LOGO_FILES = [
   "Artboard-1.svg", "Artboard-2.svg", "Artboard-3.svg", "Artboard-4.svg", "Artboard-5.svg",
   "Artboard-6.svg", "Artboard-7.svg", "Artboard-8.svg", "Artboard-9.svg", "Artboard-10.svg",
-  "Artboard-10-copy.svg", "Artboard-11.svg", "Artboard-15.svg", "Artboard-41.svg", "Artboard-44.svg",
-  "AT.jpg",
+  "AT.png", "Up.png",
 ];
 
 const NEWS_ITEMS = [
@@ -222,7 +221,15 @@ async function main() {
   console.log("\n— Clientes (logos) —");
   const clientLogos = [];
   for (const file of CLIENT_LOGO_FILES) {
-    const image = await uploadLocal(drive, supabase, `${SCRAPE_DIR}/${file}`, "home/clientes", file);
+    const localCandidates = [
+      `${SCRAPE_DIR}/${file}`,
+      `INICIO/clientes/${file}`,
+    ];
+    let image = null;
+    for (const localPath of localCandidates) {
+      image = await uploadLocal(drive, supabase, localPath, "home/clientes", file);
+      if (image) break;
+    }
     if (image) {
       clientLogos.push({
         name: file.replace(/\.[^.]+$/, "").replace(/-/g, " "),

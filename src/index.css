@@ -205,6 +205,76 @@ body {
   @apply text-sm leading-relaxed sm:text-base;
 }
 
+.client-logo-carousel {
+  overflow: hidden;
+  width: 100%;
+  mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+}
+
+.client-logo-carousel-track {
+  display: flex;
+  width: max-content;
+  gap: 12px;
+  animation: client-logo-marquee 38s linear infinite;
+}
+
+.client-logo-carousel:hover .client-logo-carousel-track {
+  animation-play-state: paused;
+}
+
+.client-logo-cell {
+  display: flex;
+  flex: 0 0 auto;
+  aspect-ratio: 5 / 3;
+  width: 108px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+}
+
+@media (min-width: 640px) {
+  .client-logo-cell {
+    width: 120px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .client-logo-cell {
+    width: 132px;
+  }
+}
+
+.client-logo-cell img {
+  display: block;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
+@keyframes client-logo-marquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.contact-field-label {
+  @apply mb-1 block text-sm font-normal text-gray-900;
+}
+
+.contact-field-input {
+  @apply w-full border-0 border-b border-gray-300 bg-transparent py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-[#a21b7e];
+}
+
+.contact-field-textarea {
+  @apply min-h-[110px] w-full resize-none border-0 border-b border-gray-300 bg-transparent py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-[#a21b7e];
+}
+
 .arquivo-section-fx {
   background:
     radial-gradient(ellipse 42% 58% at 6% 18%, rgba(61, 0, 29, 0.62), transparent 72%),

@@ -1,4 +1,4 @@
-import { SITE_ADDRESS, SITE_MAP_EMBED_URL } from "../../lib/siteContact";
+import { SITE_MAP_EMBED_URL } from "../../lib/siteContact";
 
 export default function FooterMapBlock() {
   return (
@@ -13,7 +13,6 @@ export default function FooterMapBlock() {
           referrerPolicy="no-referrer-when-downgrade"
         />
       </div>
-      <p className="text-xs text-gray-500 leading-relaxed mt-3">{SITE_ADDRESS}</p>
     </div>
   );
 }
