@@ -14,6 +14,7 @@ import {
   resolveSiteSubfolderId,
   driveMediaUrl,
   resolveHomeContentImages,
+  persistResolvedHomeContentIfNeeded,
 } from "../lib/siteDriveHelpers.js";
 import {
   getCachedGoogleAuth,
@@ -190,10 +191,17 @@ app.get("/api/site/home", async (_req, res) => {
     if (error && error.code !== "PGRST116") throw error;
 
     let content = data?.value ?? null;
+    const rawContent = content;
     try {
       const { auth } = await getGoogleAuth();
       const drive = google.drive({ version: "v3", auth });
       content = await resolveHomeContentImages(drive, supabase, content);
+      await persistResolvedHomeContentIfNeeded(
+        supabase,
+        HOME_CONTENT_KEY,
+        rawContent,
+        content,
+      );
     } catch (driveErr) {
       console.warn("Home Drive image resolve skipped:", driveErr);
     }

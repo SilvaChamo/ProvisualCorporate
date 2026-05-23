@@ -2,7 +2,7 @@ export const SITE_NAV_LINKS = [
   { href: "/#sobre", label: "Sobre nós" },
   { href: "/#servicos", label: "Serviços" },
   { href: "/#eventos", label: "Eventos" },
-  { href: "/videos", label: "Vídeos" },
+  { href: "/#videos", label: "Vídeos" },
   { href: "/#clientes", label: "Clientes" },
   { href: "/#noticias", label: "Notícias" },
   { href: "/#contactos", label: "Contacte-nos" },

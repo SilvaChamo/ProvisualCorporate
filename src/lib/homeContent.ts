@@ -23,6 +23,25 @@ export interface HomeTeamMember {
   };
 }
 
+export interface HomeEventType {
+  title: string;
+  description: string;
+  image: string;
+}
+
+export interface HomeClientLogo {
+  name: string;
+  image: string;
+}
+
+export interface HomeNewsItem {
+  title: string;
+  image: string;
+  href?: string;
+}
+
+const SCRAPE_ASSETS = "INICIO/Home - ProvisualCorporate_files";
+
 export interface HomeContent {
   hero: {
     eyebrow: string;
@@ -56,35 +75,19 @@ export interface HomeContent {
     ctaTitle: string;
     ctaSubtitle: string;
   };
+  eventIntro: string;
+  eventTypes: HomeEventType[];
+  clientLogos: HomeClientLogo[];
+  newsItems: HomeNewsItem[];
 }
+
+const TEAM_PHOTO = (file: string) => `/INICIO/Equipa/${encodeURIComponent(file)}`;
 
 const DEFAULT_TEAM_MEMBERS: HomeTeamMember[] = [
   {
-    name: "Ana Mabunda",
-    role: "Directora Criativa",
-    image:
-      "/INICIO/designer-gr%C3%A1fico-africano-criativo-no-flipchart-com-gr%C3%A1ficos-e-notas-adesivas-187855551.webp",
-    social: {
-      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
-      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
-      instagram: "https://www.instagram.com/",
-    },
-  },
-  {
     name: "Carlos Nhaca",
     role: "Director de Produção",
-    image:
-      "/INICIO/designer-gr%C3%A1fico-africano-web-usando-software-de-edi%C3%A7%C3%A3o-design-212684276.webp",
-    social: {
-      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
-      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
-      instagram: "https://www.instagram.com/",
-    },
-  },
-  {
-    name: "Sofia Matola",
-    role: "Gestora de Projectos",
-    image: "/INICIO/COmunidade.jpg",
+    image: TEAM_PHOTO("Captura de ecrã 2026-05-23, às 14.09.11.png"),
     social: {
       facebook: "https://www.facebook.com/profile.php?id=61577619669570",
       linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
@@ -94,12 +97,120 @@ const DEFAULT_TEAM_MEMBERS: HomeTeamMember[] = [
   {
     name: "Miguel Tembe",
     role: "Especialista Audiovisual",
-    image: "/INICIO/Coberturas.jpg",
+    image: TEAM_PHOTO("Captura de ecrã 2026-05-23, às 14.10.07.png"),
     social: {
       facebook: "https://www.facebook.com/profile.php?id=61577619669570",
       linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
       instagram: "https://www.instagram.com/",
     },
+  },
+  {
+    name: "João Machava",
+    role: "Gestor de Projectos",
+    image: TEAM_PHOTO("Captura de ecrã 2026-05-23, às 14.10.43.png"),
+    social: {
+      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
+      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
+      instagram: "https://www.instagram.com/",
+    },
+  },
+  {
+    name: "Ana Mabunda",
+    role: "Directora Criativa",
+    image: TEAM_PHOTO("Captura de ecrã 2026-05-23, às 14.16.15.png"),
+    social: {
+      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
+      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
+      instagram: "https://www.instagram.com/",
+    },
+  },
+];
+
+export const TEAM_EQUIPA_FILES = DEFAULT_TEAM_MEMBERS.map((member) =>
+  decodeURIComponent(member.image.split("/").pop() || ""),
+);
+
+function resolveTeamMemberImage(
+  partialImage: string | undefined,
+  defaultImage: string | undefined,
+): string {
+  if (!defaultImage?.includes("/INICIO/Equipa/")) {
+    return partialImage || defaultImage || "";
+  }
+
+  const driveImage =
+    partialImage?.startsWith("/api/drive/") || /^https?:\/\//i.test(partialImage || "")
+      ? partialImage
+      : null;
+
+  if (import.meta.env.DEV) return defaultImage;
+  return driveImage || defaultImage;
+}
+
+const DEFAULT_EVENT_TYPES: HomeEventType[] = [
+  {
+    title: "WORKSHOPS",
+    description:
+      "Cobertura de foto, vídeo, som e apoio técnico. Produção de conteúdos para comunicação e registo das actividades formativas.",
+    image: "/INICIO/MMEC40-scaled.jpg",
+  },
+  {
+    title: "FORMAÇÕES",
+    description:
+      "Cobertura técnica e audiovisual de formações, com captação de imagem e som, e conteúdos para relatórios ou divulgação.",
+    image: "/INICIO/PAINEIS5-scaled.jpg",
+  },
+  {
+    title: "EVENTOS INSTITUCIONAIS",
+    description:
+      "Registamos eventos com fotografia, vídeo, streaming e produção de conteúdos para promoção e arquivo.",
+    image: "/INICIO/Coberturas.jpg",
+  },
+  {
+    title: "TEAM BUILDINGS",
+    description:
+      "Cobertura de actividades de equipa, com fotos e vídeos dinâmicos que reforçam a cultura organizacional.",
+    image: "/INICIO/COmunidade.jpg",
+  },
+];
+
+const CLIENT_LOGO_FILES = [
+  "Artboard-1.svg",
+  "Artboard-2.svg",
+  "Artboard-3.svg",
+  "Artboard-4.svg",
+  "Artboard-5.svg",
+  "Artboard-6.svg",
+  "Artboard-7.svg",
+  "Artboard-8.svg",
+  "Artboard-9.svg",
+  "Artboard-10.svg",
+  "Artboard-10-copy.svg",
+  "Artboard-11.svg",
+  "Artboard-15.svg",
+  "Artboard-41.svg",
+  "Artboard-44.svg",
+  "AT.jpg",
+];
+
+const DEFAULT_CLIENT_LOGOS: HomeClientLogo[] = CLIENT_LOGO_FILES.map((file) => ({
+  name: file.replace(/\.[^.]+$/, "").replace(/-/g, " "),
+  image: `${SCRAPE_ASSETS}/${file}`,
+}));
+
+const DEFAULT_NEWS_ITEMS: HomeNewsItem[] = [
+  {
+    title:
+      "Aníbal Mbalango desafia os Directores-Gerais a trabalharem em prol do interesse da organização",
+    image: `${SCRAPE_ASSETS}/A70A8812-300x200.jpg`,
+  },
+  {
+    title: "Ministério das Finanças e AT com nova liderança para reforçar a gestão pública",
+    image: `${SCRAPE_ASSETS}/A70A8732-1-300x200.jpg`,
+  },
+  {
+    title: "Formações corporativas ganham impacto com produção audiovisual da ProVisual",
+    image: `${SCRAPE_ASSETS}/FIRST-PANEL-3-300x190.jpg`,
   },
 ];
 
@@ -203,6 +314,11 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
     ctaTitle: "Quer trabalhar connosco?",
     ctaSubtitle: "Todos juntos, somos criativos",
   },
+  eventIntro:
+    "Captamos narrativas visuais de elevado rigor e profundidade, concebidas para imortalizar factos, histórias e personagens com autenticidade e arte.",
+  eventTypes: DEFAULT_EVENT_TYPES,
+  clientLogos: DEFAULT_CLIENT_LOGOS,
+  newsItems: DEFAULT_NEWS_ITEMS,
 };
 
 export function mergeHomeContent(partial?: Partial<HomeContent> | null): HomeContent {
@@ -222,22 +338,53 @@ export function mergeHomeContent(partial?: Partial<HomeContent> | null): HomeCon
     processBackground: partial.processBackground || DEFAULT_HOME_CONTENT.processBackground,
     teamBanner: partial.teamBanner || DEFAULT_HOME_CONTENT.teamBanner,
     teamMembers: partial.teamMembers?.length
-      ? partial.teamMembers.map((member, index) => ({
-          ...DEFAULT_HOME_CONTENT.teamMembers[index % DEFAULT_HOME_CONTENT.teamMembers.length],
-          ...member,
-          image:
-            member.image ||
-            DEFAULT_HOME_CONTENT.teamMembers[index % DEFAULT_HOME_CONTENT.teamMembers.length]?.image,
-          social: {
-            ...DEFAULT_HOME_CONTENT.teamMembers[index % DEFAULT_HOME_CONTENT.teamMembers.length]
-              ?.social,
-            ...member.social,
-          },
-        }))
+      ? partial.teamMembers.map((member, index) => {
+          const fallback =
+            DEFAULT_HOME_CONTENT.teamMembers[index % DEFAULT_HOME_CONTENT.teamMembers.length];
+          return {
+            ...fallback,
+            ...member,
+            name: fallback?.name || member.name || "",
+            role: fallback?.role || member.role || "",
+            image: resolveTeamMemberImage(member.image, fallback?.image),
+            social: {
+              ...fallback?.social,
+              ...member.social,
+            },
+          };
+        })
       : DEFAULT_HOME_CONTENT.teamMembers,
     about: { ...DEFAULT_HOME_CONTENT.about, ...partial.about },
     servicesIntro: partial.servicesIntro ?? DEFAULT_HOME_CONTENT.servicesIntro,
     services: partial.services?.length ? partial.services : DEFAULT_HOME_CONTENT.services,
     contact: { ...DEFAULT_HOME_CONTENT.contact, ...partial.contact },
+    eventIntro: partial.eventIntro ?? DEFAULT_HOME_CONTENT.eventIntro,
+    eventTypes: partial.eventTypes?.length
+      ? partial.eventTypes.map((item, index) => ({
+          ...DEFAULT_HOME_CONTENT.eventTypes[index % DEFAULT_HOME_CONTENT.eventTypes.length],
+          ...item,
+          image:
+            item.image ||
+            DEFAULT_HOME_CONTENT.eventTypes[index % DEFAULT_HOME_CONTENT.eventTypes.length]?.image,
+        }))
+      : DEFAULT_HOME_CONTENT.eventTypes,
+    clientLogos: partial.clientLogos?.length
+      ? partial.clientLogos.map((item, index) => ({
+          ...DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length],
+          ...item,
+          image:
+            item.image ||
+            DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length]?.image,
+        }))
+      : DEFAULT_HOME_CONTENT.clientLogos,
+    newsItems: partial.newsItems?.length
+      ? partial.newsItems.map((item, index) => ({
+          ...DEFAULT_HOME_CONTENT.newsItems[index % DEFAULT_HOME_CONTENT.newsItems.length],
+          ...item,
+          image:
+            item.image ||
+            DEFAULT_HOME_CONTENT.newsItems[index % DEFAULT_HOME_CONTENT.newsItems.length]?.image,
+        }))
+      : DEFAULT_HOME_CONTENT.newsItems,
   };
 }

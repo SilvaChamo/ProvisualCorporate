@@ -19,6 +19,50 @@ export interface SiteDriveAlbum {
   photoCount: number;
 }
 
+const HOME_CACHE_KEY = "provisual_home_content_v2";
+const HOME_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+interface HomeCacheEntry {
+  content: HomeContent;
+  savedAt: number;
+}
+
+function readHomeCache(): HomeContent | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(HOME_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as HomeCacheEntry;
+    if (!parsed?.content || !parsed.savedAt) return null;
+    if (Date.now() - parsed.savedAt > HOME_CACHE_TTL_MS) {
+      localStorage.removeItem(HOME_CACHE_KEY);
+      return null;
+    }
+    return parsed.content;
+  } catch {
+    return null;
+  }
+}
+
+function writeHomeCache(content: HomeContent) {
+  if (typeof window === "undefined") return;
+  try {
+    const entry: HomeCacheEntry = { content, savedAt: Date.now() };
+    localStorage.setItem(HOME_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // quota or private mode — ignore
+  }
+}
+
+async function fetchHomeFromApi(): Promise<HomeContent> {
+  const res = await fetch("/api/site/home");
+  if (!res.ok) throw new Error("API error");
+  const data = await res.json();
+  const merged = mergeHomeContent(data.content);
+  writeHomeCache(merged);
+  return merged;
+}
+
 function mergeAlbumMetadata(driveAlbum: SiteDriveAlbum): GalleryAlbum {
   const meta = GALLERY_ALBUMS.find((a) => a.slug === driveAlbum.slug);
   const cover =
@@ -35,11 +79,18 @@ function mergeAlbumMetadata(driveAlbum: SiteDriveAlbum): GalleryAlbum {
 }
 
 export async function fetchSiteHomeContent(): Promise<HomeContent> {
+  const cached = readHomeCache();
+  if (cached) {
+    fetchHomeFromApi()
+      .then((fresh) => {
+        writeHomeCache(fresh);
+      })
+      .catch(() => {});
+    return mergeHomeContent(cached);
+  }
+
   try {
-    const res = await fetch("/api/site/home");
-    if (!res.ok) throw new Error("API error");
-    const data = await res.json();
-    return mergeHomeContent(data.content);
+    return await fetchHomeFromApi();
   } catch (e) {
     console.warn("Home Drive indisponível, usando dados locais:", e);
     return mergeHomeContent(null);
@@ -129,10 +180,10 @@ export async function fetchSiteServiceImages(): Promise<Record<string, string>> 
 
 export function applyDriveServiceImages<T extends { slug: string; image: string }>(
   items: T[],
-  driveImages: Record<string, string>,
+  images: Record<string, string>,
 ): T[] {
   return items.map((item) => ({
     ...item,
-    image: driveImages[item.slug] || item.image,
+    image: images[item.slug] || item.image,
   }));
 }

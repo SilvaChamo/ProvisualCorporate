@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -27,6 +27,7 @@ import QuickLinkIcon from "./site/QuickLinkIcon";
 import SiteFooter from "./site/SiteFooter";
 import TypewriterTitle from "./site/TypewriterTitle";
 import { QUICK_LINK_ROUTES } from "../lib/siteNav";
+import { SERVICE_ITEMS, VIDEO_ITEMS } from "../lib/sitePages";
 import {
   DEFAULT_HOME_CONTENT,
   type HomeContent,
@@ -75,6 +76,22 @@ function SocialIcon({ icon, size = 16 }: { icon: typeof SOCIAL_LINKS[number]["ic
   return <Icon size={size} />;
 }
 
+function getHomeImageSrc(url: string, size: "sm" | "md" | "lg" = "md") {
+  if (!url) return url;
+  if (/\.svg(\?|$)/i.test(url)) {
+    return driveDisplayUrl(url, "full");
+  }
+  return driveDisplayUrl(url, size);
+}
+
+function youtubeThumbnail(id: string) {
+  return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+}
+
+function youtubeEmbedUrl(id: string) {
+  return `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&controls=1&playsinline=1`;
+}
+
 const QUICK_LINKS = QUICK_LINK_ROUTES;
 
 const ABOUT_ITEMS = [
@@ -94,6 +111,8 @@ const ABOUT_ITEMS = [
     text: "Criatividade; Compromisso com a qualidade; Respeito à diversidade cultural; Ética e profissionalismo",
   },
 ];
+
+const FEATURED_SERVICES = SERVICE_ITEMS.slice(0, 4);
 
 const PRODUCTION_PROCESS = [
   {
@@ -126,17 +145,10 @@ const PRODUCTION_PROCESS = [
   },
 ];
 
-
 function getQuickLinksVisible(width: number) {
   if (width < 768) return 1;
   if (width < 1024) return 2;
   return 3;
-}
-
-function getTeamVisible(width: number) {
-  if (width < 768) return 1;
-  if (width < 1024) return 2;
-  return 2;
 }
 
 export default function Home() {
@@ -147,16 +159,15 @@ export default function Home() {
   const [slideIndex, setSlideIndex] = useState(0);
   const [quickLinkSlide, setQuickLinkSlide] = useState(0);
   const [quickLinkResetting, setQuickLinkResetting] = useState(false);
-  const [teamSlide, setTeamSlide] = useState(2);
-  const [teamResetting, setTeamResetting] = useState(false);
-  const [activeTeamCard, setActiveTeamCard] = useState(2);
+  const [activeServiceCard, setActiveServiceCard] = useState(0);
   const [activeProcessCard, setActiveProcessCard] = useState(0);
+  const [featuredVideoId, setFeaturedVideoId] = useState(VIDEO_ITEMS[0]?.youtubeId ?? "");
   const [quickLinksVisible, setQuickLinksVisible] = useState(() =>
     typeof window !== "undefined" ? getQuickLinksVisible(window.innerWidth) : 3,
   );
-  const [teamVisible, setTeamVisible] = useState(() =>
-    typeof window !== "undefined" ? getTeamVisible(window.innerWidth) : 2,
-  );
+
+  const teamLeftRef = useRef<HTMLDivElement>(null);
+  const [teamGridHeight, setTeamGridHeight] = useState<number | null>(null);
 
   const quickLinkExtended = useMemo(
     () => [...QUICK_LINKS, ...QUICK_LINKS.slice(0, quickLinksVisible)],
@@ -166,24 +177,10 @@ export default function Home() {
 
   const teamMembers = content.teamMembers;
 
-  const teamExtended = useMemo(
-    () => [
-      ...teamMembers.slice(-teamVisible),
-      ...teamMembers,
-      ...teamMembers.slice(0, teamVisible),
-    ],
-    [teamMembers, teamVisible],
-  );
-  const teamStart = teamVisible;
-  const teamEnd = teamStart + teamMembers.length;
-  const teamResetBack = teamEnd - teamVisible;
-
   useEffect(() => {
     const onResize = () => {
       const nextQuick = getQuickLinksVisible(window.innerWidth);
-      const nextTeam = getTeamVisible(window.innerWidth);
       setQuickLinksVisible((prev) => (prev === nextQuick ? prev : nextQuick));
-      setTeamVisible((prev) => (prev === nextTeam ? prev : nextTeam));
     };
     window.addEventListener("resize", onResize, { passive: true });
     return () => window.removeEventListener("resize", onResize);
@@ -195,13 +192,30 @@ export default function Home() {
   }, [quickLinksVisible]);
 
   useEffect(() => {
-    setTeamSlide(teamStart);
-    setTeamResetting(false);
-  }, [teamVisible, teamStart]);
-
-  useEffect(() => {
     fetchSiteHomeContent().then(setContent).catch(() => setContent(DEFAULT_HOME_CONTENT));
   }, []);
+
+  useEffect(() => {
+    const el = teamLeftRef.current;
+    if (!el) return;
+
+    const update = () => {
+      if (window.innerWidth < 1024) {
+        setTeamGridHeight(null);
+        return;
+      }
+      setTeamGridHeight(el.offsetHeight);
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update, { passive: true });
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [content]);
 
   useEffect(() => {
     const urls = [
@@ -249,33 +263,6 @@ export default function Home() {
     }, 520);
     return () => clearTimeout(t);
   }, [quickLinkSlide, quickLinkMaxSlide]);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setTeamSlide((i) => i + 1);
-    }, 6000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    if (teamSlide !== teamEnd) return;
-    const t = setTimeout(() => {
-      setTeamResetting(true);
-      setTeamSlide(teamStart);
-      requestAnimationFrame(() => setTeamResetting(false));
-    }, 520);
-    return () => clearTimeout(t);
-  }, [teamSlide, teamEnd, teamStart]);
-
-  useEffect(() => {
-    if (teamSlide !== teamStart - teamVisible) return;
-    const t = setTimeout(() => {
-      setTeamResetting(true);
-      setTeamSlide(teamResetBack);
-      requestAnimationFrame(() => setTeamResetting(false));
-    }, 520);
-    return () => clearTimeout(t);
-  }, [teamSlide, teamStart, teamVisible, teamResetBack]);
 
   const scrollTo = (href: string) => {
     setMenuOpen(false);
@@ -597,10 +584,9 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Processo criativo — Nossos serviços */}
       <section
-        id="servicos"
-        className="relative py-24 lg:py-28 scroll-mt-[75px] overflow-hidden"
+        id="processo-criativo"
+        className="relative scroll-mt-[75px] overflow-hidden py-24 lg:py-28"
       >
         <div
           className="process-section-kenburns absolute inset-0"
@@ -610,8 +596,8 @@ export default function Home() {
         <div className="absolute inset-0 bg-[#3d001d]/55" aria-hidden="true" />
         <div className="absolute inset-0 bg-black/25" aria-hidden="true" />
 
-        <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-10">
-          <div className="max-w-3xl mx-auto text-center mb-14 lg:mb-16">
+        <div className="relative z-10 mx-auto max-w-[1400px] px-6 lg:px-10">
+          <div className="mx-auto mb-14 max-w-3xl text-center lg:mb-16">
             <div className="mb-4 flex items-center justify-center gap-4">
               <span className="h-px w-10 bg-white/60" />
               <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#e888c8]">
@@ -619,10 +605,10 @@ export default function Home() {
               </p>
               <span className="h-px w-10 bg-white/60" />
             </div>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight mb-4">
-              Nosso <span className="text-white/85 font-light">Processo Criativo</span>
+            <h2 className="mb-4 text-3xl font-bold leading-tight text-white sm:text-4xl lg:text-5xl">
+              Nosso <span className="font-light text-white/85">Processo Criativo</span>
             </h2>
-            <p className="text-white/85 text-sm sm:text-base leading-relaxed">
+            <p className="text-sm leading-relaxed text-white/85 sm:text-base">
               Do briefing à entrega de resultados, acrescentamos valor às suas estratégias com rigor,
               criatividade e acompanhamento em cada etapa.
             </p>
@@ -630,7 +616,7 @@ export default function Home() {
 
           <div className="relative">
             <div
-              className="hidden lg:block absolute top-[72px] left-[6%] right-[6%] h-px border-t border-dashed border-white/35"
+              className="absolute left-[6%] right-[6%] top-[72px] hidden h-px border-t border-dashed border-white/35 lg:block"
               aria-hidden="true"
             />
 
@@ -701,7 +687,7 @@ export default function Home() {
 
                     {index < PRODUCTION_PROCESS.length - 1 && (
                       <div
-                        className="lg:hidden absolute -bottom-3 left-1/2 h-6 w-px -translate-x-1/2 bg-white/40"
+                        className="absolute -bottom-3 left-1/2 h-6 w-px -translate-x-1/2 bg-white/40 lg:hidden"
                         aria-hidden="true"
                       />
                     )}
@@ -713,18 +699,20 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="equipa" className="py-16 scroll-mt-[75px] lg:py-24">
+      <section id="equipa" className="scroll-mt-[75px] py-16 lg:py-24">
         <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
-            <div className="relative z-10 lg:col-start-1 lg:row-start-1 lg:-mr-12 xl:-mr-16">
-              <div className="flex h-full w-full flex-col items-start justify-center rounded-2xl bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.08)] sm:p-10">
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            <div ref={teamLeftRef}>
+              <div className="flex w-full flex-col items-start rounded-2xl bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.08)] sm:p-10">
                 <div className="mb-4 flex items-center gap-2">
                   <span className="text-sm text-gray-500">Nossa equipa</span>
                   <span className="h-px w-8 bg-[#D7D7D7]" />
                 </div>
 
                 <h2 className="mb-4 text-4xl font-bold leading-tight text-[#333] sm:text-5xl lg:text-[3.25rem]">
-                  Criatividade & <span className="font-light">Excelência</span>
+                  Criatividade <span className="text-[#22c55e]">&</span>
+                  <br />
+                  <span className="font-light">Excelência</span>
                 </h2>
 
                 <h3 className="text-lg font-bold text-[#333]">
@@ -750,105 +738,79 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="relative z-20 flex h-full min-h-[360px] items-center sm:min-h-[420px] lg:col-start-2 lg:row-start-1 lg:min-h-0 lg:pl-2">
-              <div className="flex w-full items-center gap-1.5 sm:gap-3">
-                <button
-                  type="button"
-                  onClick={() => setTeamSlide((i) => i - 1)}
-                  aria-label="Profissional anterior"
-                  className="relative z-30 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3d001d] text-[#c958a8] transition-colors hover:bg-[#8e176e] hover:text-white"
-                >
-                  <ChevronLeft size={20} strokeWidth={2.25} />
-                </button>
-
-                <div className="relative z-20 min-w-0 flex-1 self-stretch overflow-hidden">
-                  <motion.div
-                    className="flex h-full"
-                    style={{
-                      width: `${(teamExtended.length / teamVisible) * 100}%`,
-                    }}
-                    animate={{
-                      x: `-${teamSlide * (100 / teamExtended.length)}%`,
-                    }}
-                    transition={
-                      teamResetting
-                        ? { duration: 0 }
-                        : { duration: 0.5, ease: "easeInOut" }
-                    }
+            <div className="w-full min-w-0">
+              <div
+                className={cn(
+                  "grid w-full min-h-0 grid-cols-2 grid-rows-2 gap-4 sm:gap-5 lg:gap-6",
+                  teamGridHeight == null && "h-[240px] sm:h-[280px]",
+                )}
+                style={teamGridHeight != null ? { height: teamGridHeight } : undefined}
+              >
+                {teamMembers.slice(0, 4).map((member) => (
+                  <article
+                    key={member.name}
+                    className="group relative h-full min-h-0 overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]"
                   >
-                    {teamExtended.map((member, index) => (
-                      <div
-                        key={`${member.name}-${index}`}
-                        className="box-border shrink-0 px-1.5 sm:px-2"
-                        style={{ width: `${100 / teamExtended.length}%` }}
-                      >
-                        <article className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
-                          <div className="relative h-[68%] min-h-[180px] shrink-0 overflow-hidden rounded-t-lg sm:min-h-[210px]">
-                            <OptimizedDriveImage
-                              src={member.image}
-                              alt={member.name}
-                              size="sm"
-                              className="h-full w-full object-cover"
-                            />
+                    <div className="relative h-full min-h-0 overflow-hidden">
+                      <OptimizedDriveImage
+                        src={member.image}
+                        alt={member.name}
+                        size="md"
+                        className="h-full w-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 z-10 translate-y-3 opacity-0 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                        <div
+                          className="pointer-events-none absolute inset-x-0 bottom-0 h-[140%] bg-gradient-to-t from-[#3d001d]/90 via-[#3d001d]/65 via-35% to-transparent"
+                          aria-hidden="true"
+                        />
+                        <div className="relative flex min-h-[80px] flex-col items-center justify-center px-3 py-3 text-center sm:min-h-[92px] sm:px-4 sm:py-3.5">
+                          <h4 className="flex items-center justify-center gap-2 text-sm font-bold text-white sm:gap-2.5 sm:text-base">
+                            <span className="h-px w-5 bg-white/70 sm:w-6" aria-hidden="true" />
+                            {member.name}
+                            <span className="h-px w-5 bg-white/70 sm:w-6" aria-hidden="true" />
+                          </h4>
+                          <p className="mt-1 text-xs text-white/85 sm:text-sm">{member.role}</p>
+                          <div className="mt-2 flex justify-center gap-2.5 sm:gap-3">
+                            <a
+                              href={member.social.facebook}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`Facebook de ${member.name}`}
+                              className="text-white/90 transition-colors hover:text-white"
+                            >
+                              <Facebook size={15} strokeWidth={2} />
+                            </a>
+                            <a
+                              href={member.social.linkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`LinkedIn de ${member.name}`}
+                              className="text-white/90 transition-colors hover:text-white"
+                            >
+                              <Linkedin size={15} strokeWidth={2} />
+                            </a>
+                            <a
+                              href={member.social.instagram}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`Instagram de ${member.name}`}
+                              className="text-white/90 transition-colors hover:text-white"
+                            >
+                              <Instagram size={15} strokeWidth={2} />
+                            </a>
                           </div>
-                          <div className="flex flex-1 flex-col items-center justify-center px-4 py-4 text-center">
-                            <h4 className="flex items-center justify-center gap-3 text-base font-bold text-[#333] sm:gap-4 sm:text-lg">
-                              <span className="h-px w-10 bg-[#a21b7e] sm:w-12" aria-hidden="true" />
-                              {member.name}
-                              <span className="h-px w-10 bg-[#a21b7e] sm:w-12" aria-hidden="true" />
-                            </h4>
-                            <p className="mt-1 text-sm text-[#a21b7e]">{member.role}</p>
-                            <div className="mt-2 flex justify-center gap-2.5">
-                              <a
-                                href={member.social.facebook}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label={`Facebook de ${member.name}`}
-                                className="text-[#a21b7e] transition-colors hover:text-[#8e176e]"
-                              >
-                                <Facebook size={13} strokeWidth={2} />
-                              </a>
-                              <a
-                                href={member.social.linkedin}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label={`LinkedIn de ${member.name}`}
-                                className="text-[#a21b7e] transition-colors hover:text-[#8e176e]"
-                              >
-                                <Linkedin size={13} strokeWidth={2} />
-                              </a>
-                              <a
-                                href={member.social.instagram}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label={`Instagram de ${member.name}`}
-                                className="text-[#a21b7e] transition-colors hover:text-[#8e176e]"
-                              >
-                                <Instagram size={13} strokeWidth={2} />
-                              </a>
-                            </div>
-                          </div>
-                        </article>
+                        </div>
                       </div>
-                    ))}
-                  </motion.div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setTeamSlide((i) => i + 1)}
-                  aria-label="Profissional seguinte"
-                  className="relative z-30 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3d001d] text-[#c958a8] transition-colors hover:bg-[#8e176e] hover:text-white"
-                >
-                  <ChevronRight size={20} strokeWidth={2.25} />
-                </button>
+                    </div>
+                  </article>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="equipa-especialistas" className="relative scroll-mt-[75px] bg-white pb-14 lg:pb-16">
+      <section id="servicos" className="relative scroll-mt-[75px] bg-white pb-14 lg:pb-16">
         <div className="relative h-[280px] overflow-hidden sm:h-[320px] lg:h-[350px]">
           <OptimizedDriveImage
             src={content.teamBanner}
@@ -861,25 +823,28 @@ export default function Home() {
 
           <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center text-white">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] sm:text-sm">
-              Nossa equipa
+              Serviços
             </p>
             <h2 className="max-w-3xl text-3xl font-bold leading-tight sm:text-4xl lg:text-[2.75rem]">
-              A Nossa Equipa de Especialistas
+              Soluções integradas para a sua marca
             </h2>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/90 sm:text-base">
+              {content.servicesIntro}
+            </p>
           </div>
         </div>
 
         <div className="relative mx-auto max-w-[1400px] px-6 lg:px-10">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:-mt-20 md:gap-5 lg:-mt-28 lg:grid-cols-4 lg:gap-4 xl:-mt-32">
-            {teamMembers.map((member, index) => {
-              const isActive = activeTeamCard === index;
+            {FEATURED_SERVICES.map((service, index) => {
+              const isActive = activeServiceCard === index;
 
               return (
                 <article
-                  key={member.name}
-                  onMouseEnter={() => setActiveTeamCard(index)}
+                  key={service.slug}
+                  onMouseEnter={() => setActiveServiceCard(index)}
                   className={cn(
-                    "group relative flex flex-col bg-white text-center shadow-[0_10px_35px_rgba(0,0,0,0.12)] transition-all duration-300",
+                    "group relative flex min-h-[280px] flex-col bg-white text-center shadow-[0_10px_35px_rgba(0,0,0,0.12)] transition-all duration-300",
                     isActive ? "-translate-y-1" : "",
                   )}
                 >
@@ -893,77 +858,35 @@ export default function Home() {
                     <div className="mx-auto h-32 w-[130%] -translate-y-[58%] rounded-[50%] bg-[#ffedd5]" />
                   </div>
 
-                  <div className="relative px-4 pb-4 pt-9">
-                    <div className="relative mx-auto mb-5 h-[118px] w-[118px]">
-                      <OptimizedDriveImage
-                        src={member.image}
-                        alt={member.name}
-                        size="sm"
-                        className={cn(
-                          "h-full w-full rounded-full object-cover transition-all duration-300",
-                          isActive
-                            ? "ring-4 ring-[#ff6a00]"
-                            : "ring-0 group-hover:ring-4 group-hover:ring-[#ff6a00]",
-                        )}
-                      />
-                    </div>
-
-                    <h3 className="text-lg font-bold text-[#1a1a1a]">{member.name}</h3>
+                  <div className="relative flex flex-1 flex-col px-5 pb-4 pt-10">
+                    <h3 className="text-base font-bold leading-snug text-[#1a1a1a] sm:text-lg">
+                      {service.title}
+                    </h3>
+                    <p className="mt-1 text-xs font-medium uppercase tracking-wide text-[#ff6a00]">
+                      {service.subtitle}
+                    </p>
                     <p
                       className={cn(
-                        "mt-1 text-sm font-medium text-[#ff6a00] transition-all duration-300",
+                        "mt-3 flex-1 text-sm leading-relaxed text-gray-600 transition-all duration-300",
                         isActive ? "pb-2" : "pb-6 group-hover:pb-2",
                       )}
                     >
-                      {member.role}
+                      {service.description}
                     </p>
                   </div>
 
-                  <div
+                  <Link
+                    to={`/servicos/${service.slug}`}
                     className={cn(
-                      "mt-auto flex items-center justify-center gap-3 overflow-hidden bg-[#ff6a00] px-3 transition-all duration-300",
+                      "mt-auto flex items-center justify-center gap-2 overflow-hidden bg-[#ff6a00] px-3 text-sm font-medium text-white transition-all duration-300",
                       isActive
                         ? "max-h-14 py-3 opacity-100"
                         : "max-h-0 py-0 opacity-0 group-hover:max-h-14 group-hover:py-3 group-hover:opacity-100",
                     )}
                   >
-                    <a
-                      href={member.social.facebook}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Facebook de ${member.name}`}
-                      className="text-white transition-opacity hover:opacity-80"
-                    >
-                      <Facebook size={15} strokeWidth={2} />
-                    </a>
-                    <a
-                      href={member.social.instagram}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Instagram de ${member.name}`}
-                      className="text-white transition-opacity hover:opacity-80"
-                    >
-                      <Instagram size={15} strokeWidth={2} />
-                    </a>
-                    <a
-                      href="https://youtu.be/DVgtNr_bq1g"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Youtube ProVisual`}
-                      className="text-white transition-opacity hover:opacity-80"
-                    >
-                      <Youtube size={15} strokeWidth={2} />
-                    </a>
-                    <a
-                      href={member.social.linkedin}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`LinkedIn de ${member.name}`}
-                      className="text-white transition-opacity hover:opacity-80"
-                    >
-                      <Linkedin size={15} strokeWidth={2} />
-                    </a>
-                  </div>
+                    Leia mais
+                    <ChevronRight size={16} />
+                  </Link>
                 </article>
               );
             })}
@@ -971,56 +894,225 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="eventos" className="py-20 px-6 scroll-mt-[75px]">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-2xl font-bold mb-3">Eventos</h2>
-          <p className="text-gray-500">
-            Cobertura audiovisual de conferências, seminários e activações de marca com a ProVisual.
-          </p>
+      <section id="noticias" className="scroll-mt-[75px] bg-[#fafafa] py-16 lg:py-24">
+        <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
+          <div className="mx-auto mb-12 max-w-3xl text-center">
+            <div className="mb-4 flex items-center justify-center gap-4">
+              <span className="h-px w-10 bg-[#D7D7D7]" />
+              <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#a21b7e]">Notícias</p>
+              <span className="h-px w-10 bg-[#D7D7D7]" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+              Actualizações <span className="font-light">recentes</span>
+            </h2>
+            <p className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base">
+              Projectos, novidades e histórias da ProVisual Corporate.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {content.newsItems.map((item) => (
+              <article
+                key={item.title}
+                className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-shadow hover:shadow-[0_12px_32px_rgba(162,27,126,0.1)]"
+              >
+                <div className="relative aspect-[16/10] overflow-hidden">
+                  <OptimizedDriveImage
+                    src={item.image}
+                    alt=""
+                    size="sm"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="p-5">
+                  <h3 className="text-base font-semibold leading-snug text-gray-900">{item.title}</h3>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section id="videos" className="py-20 px-6 scroll-mt-20">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-2xl font-bold mb-3">Videos</h2>
-          <p className="text-gray-500">
-            Captamos vídeos com identidade, missão e impacto da sua organização.
-          </p>
+      <section id="eventos" className="py-16 scroll-mt-[75px] lg:py-24">
+        <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
+          <div className="mx-auto mb-12 max-w-3xl text-center">
+            <div className="mb-4 flex items-center justify-center gap-4">
+              <span className="h-px w-10 bg-[#D7D7D7]" />
+              <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#a21b7e]">Eventos</p>
+              <span className="h-px w-10 bg-[#D7D7D7]" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+              Cobertura <span className="font-light">profissional</span>
+            </h2>
+            <p className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base">{content.eventIntro}</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {content.eventTypes.map((item) => (
+              <article
+                key={item.title}
+                className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-shadow hover:shadow-[0_12px_32px_rgba(162,27,126,0.12)]"
+              >
+                <div className="relative aspect-[4/3] overflow-hidden">
+                  <OptimizedDriveImage
+                    src={item.image}
+                    alt={item.title}
+                    size="sm"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="p-5">
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-[#a21b7e]">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">{item.description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-10 text-center">
+            <Link
+              to="/galeria"
+              className="inline-flex items-center gap-2 rounded-full border border-[#a21b7e] px-8 py-3 text-sm font-medium text-[#a21b7e] transition-colors hover:bg-[#a21b7e]/5"
+            >
+              Ver galeria de eventos
+              <ChevronRight size={16} />
+            </Link>
+          </div>
         </div>
       </section>
 
-      <section id="clientes" className="py-20 px-6 scroll-mt-[75px]">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-2xl font-bold mb-3">
-            Nossos <span className="font-light">Clientes</span>
-          </h2>
-          <p className="text-gray-500">
-            Empresas de sucesso têm o cliente como bem maior. Prezamos pela confiança e pelos resultados.
-          </p>
+      <section id="videos" className="scroll-mt-20 bg-[#fafafa] py-16 lg:py-24">
+        <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
+          <div className="mx-auto mb-12 max-w-3xl text-center">
+            <div className="mb-4 flex items-center justify-center gap-4">
+              <span className="h-px w-10 bg-[#D7D7D7]" />
+              <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#a21b7e]">Vídeos</p>
+              <span className="h-px w-10 bg-[#D7D7D7]" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+              Produções <span className="font-light">audiovisuais</span>
+            </h2>
+            <p className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base">
+              Captamos vídeos com identidade, missão e impacto da sua organização.
+            </p>
+          </div>
+
+          <div className="mx-auto grid max-w-5xl grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-stretch">
+            <div className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-lg">
+              <iframe
+                key={featuredVideoId}
+                title="Reprodutor de vídeo YouTube"
+                src={youtubeEmbedUrl(featuredVideoId).replace("autoplay=1", "autoplay=0")}
+                className="block h-full w-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+
+            <div className="grid grid-rows-2 gap-3 lg:min-h-0">
+              {VIDEO_ITEMS.map((video) => {
+                const isActive = featuredVideoId === video.youtubeId;
+                return (
+                  <button
+                    key={video.slug}
+                    type="button"
+                    onClick={() => setFeaturedVideoId(video.youtubeId)}
+                    className={cn(
+                      "group relative min-h-[120px] w-full overflow-hidden rounded-xl text-left shadow-md transition-all",
+                      isActive ? "ring-2 ring-[#a21b7e] ring-offset-2" : "hover:ring-2 hover:ring-[#a21b7e]/40",
+                    )}
+                    aria-label={`Reproduzir ${video.title}`}
+                    aria-current={isActive ? "true" : undefined}
+                  >
+                    <img
+                      src={youtubeThumbnail(video.youtubeId)}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <div className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/45" />
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                      <p className="line-clamp-2 text-xs font-medium text-white sm:text-sm">{video.title}</p>
+                    </div>
+                    {!isActive && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white text-sm text-white">
+                          ▶
+                        </span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-10 text-center">
+            <Link
+              to="/videos"
+              className="inline-flex items-center gap-2 rounded-full bg-[#a21b7e] px-8 py-3 text-sm font-medium text-white transition-colors hover:bg-[#8e176e]"
+            >
+              Ver mais vídeos
+              <ChevronRight size={16} />
+            </Link>
+          </div>
         </div>
       </section>
 
-      <section id="noticias" className="py-20 px-6 scroll-mt-24">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-2xl font-bold mb-3">Notícias</h2>
-          <p className="text-gray-500">
-            Actualizações, projectos e novidades da ProVisual Corporate.
-          </p>
+      <section id="clientes" className="scroll-mt-[75px] bg-white py-16 lg:py-24">
+        <div className="mx-auto max-w-[1200px] px-6 lg:px-10">
+          <div className="mx-auto mb-14 max-w-3xl text-center">
+            <h2 className="font-serif text-3xl text-gray-600 sm:text-4xl lg:text-[2.5rem]">
+              Nossos <span className="font-light">Clientes</span>
+            </h2>
+            <p className="mt-4 text-sm leading-relaxed text-gray-500 sm:text-base">
+              Empresas de sucesso têm o cliente como bem maior. Prezamos pela confiança e pelos
+              resultados.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-8 sm:gap-x-12 sm:gap-y-10">
+            {content.clientLogos.map((logo) => (
+              <div
+                key={logo.name + logo.image}
+                className="flex h-14 w-[120px] items-center justify-center sm:h-16 sm:w-[140px]"
+              >
+                <img
+                  src={getHomeImageSrc(logo.image, "sm")}
+                  alt={logo.name}
+                  className="max-h-full max-w-full object-contain"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section id="arquivo" className="py-24 px-6 bg-[#a21b7e] text-white relative overflow-hidden">
-        <div className="max-w-5xl mx-auto relative z-10 text-center">
-          <Sparkles className="mx-auto mb-6 opacity-80" size={40} />
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+      <section id="arquivo" className="relative scroll-mt-20 overflow-hidden bg-[#a21b7e] px-6 py-20 text-white lg:py-24">
+        <div
+          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-[#3d001d]/40 blur-2xl"
+          aria-hidden="true"
+        />
+        <div className="relative z-10 mx-auto max-w-4xl text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15">
+            <Sparkles size={32} className="opacity-90" />
+          </div>
+          <h2 className="mb-4 text-3xl font-bold md:text-4xl">
             Arquivo <span className="font-light">ProVisual Corporate</span>
           </h2>
-          <p className="text-white/90 text-lg leading-relaxed mb-10 max-w-2xl mx-auto">
+          <p className="mx-auto mb-10 max-w-2xl text-base leading-relaxed text-white/90 lg:text-lg">
             Portal corporativo para gerir activos visuais com Google Drive e IA integrada.
           </p>
           <Link
             to="/arquivo"
-            className="inline-flex items-center gap-2 bg-white text-[#a21b7e] px-10 py-4 rounded-full text-sm font-bold uppercase tracking-widest hover:bg-white/90 transition-all shadow-xl"
+            className="inline-flex items-center gap-2 rounded-full bg-white px-10 py-4 text-sm font-bold uppercase tracking-widest text-[#a21b7e] shadow-xl transition-all hover:bg-white/90"
           >
             Entrar no Console
             <ChevronRight size={18} />
@@ -1028,23 +1120,30 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="contactos" className="py-24 px-6 scroll-mt-20">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-bold text-gray-900 mb-3">
+      <section id="contactos" className="scroll-mt-24 bg-[#fafafa] px-6 py-20 lg:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-12 text-center lg:mb-14">
+            <div className="mb-4 flex items-center justify-center gap-4">
+              <span className="h-px w-10 bg-[#D7D7D7]" />
+              <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#a21b7e]">
+                Contactos
+              </p>
+              <span className="h-px w-10 bg-[#D7D7D7]" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 md:text-4xl">
               Quer trabalhar <span className="font-light">connosco?</span>
             </h2>
-            <p className="text-[#a21b7e] font-bold uppercase tracking-widest text-sm">
+            <p className="mt-3 text-sm font-bold uppercase tracking-widest text-[#a21b7e]">
               {content.contact.ctaSubtitle}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:items-start lg:gap-12">
-            <div>
-              <h3 className="text-2xl font-bold mb-4">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12">
+            <div className="rounded-2xl bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06)]">
+              <h3 className="mb-2 text-2xl font-bold text-gray-900">
                 Entre em <span className="font-light">contacto</span>
               </h3>
-              <p className="text-gray-500 mb-8 leading-relaxed">
+              <p className="mb-8 leading-relaxed text-gray-500">
                 Somos apaixonados em desenvolver soluções para os nossos clientes. Venha contar-nos
                 a sua ideia — o café é por nossa conta.
               </p>

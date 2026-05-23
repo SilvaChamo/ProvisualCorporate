@@ -10,6 +10,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "migrate:site-images": "node scripts/migrate-inicio-to-drive.mjs",
+    "sync:equipa": "node scripts/sync-equipa-to-drive.mjs",
     "flatten:site-drive": "node scripts/flatten-site-drive.mjs"
   },
   "dependencies": {

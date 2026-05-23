@@ -33,10 +33,42 @@ const SERVICE_IMAGES = [
   { slug: "outros-servicos", file: "COmunidade.jpg" },
 ];
 
+const SCRAPE_DIR = "INICIO/Home - ProvisualCorporate_files";
+
+const EVENT_TYPE_FILES = [
+  { title: "WORKSHOPS", file: "MMEC40-scaled.jpg", description: "Cobertura de foto, vídeo, som e apoio técnico. Produção de conteúdos para comunicação e registo das actividades formativas." },
+  { title: "FORMAÇÕES", file: "PAINEIS5-scaled.jpg", description: "Cobertura técnica e audiovisual de formações, com captação de imagem e som, e conteúdos para relatórios ou divulgação." },
+  { title: "EVENTOS INSTITUCIONAIS", file: "Coberturas.jpg", description: "Registamos eventos com fotografia, vídeo, streaming e produção de conteúdos para promoção e arquivo." },
+  { title: "TEAM BUILDINGS", file: "COmunidade.jpg", description: "Cobertura de actividades de equipa, com fotos e vídeos dinâmicos que reforçam a cultura organizacional." },
+];
+
+const CLIENT_LOGO_FILES = [
+  "Artboard-1.svg", "Artboard-2.svg", "Artboard-3.svg", "Artboard-4.svg", "Artboard-5.svg",
+  "Artboard-6.svg", "Artboard-7.svg", "Artboard-8.svg", "Artboard-9.svg", "Artboard-10.svg",
+  "Artboard-10-copy.svg", "Artboard-11.svg", "Artboard-15.svg", "Artboard-41.svg", "Artboard-44.svg",
+  "AT.jpg",
+];
+
+const NEWS_ITEMS = [
+  {
+    title: "Aníbal Mbalango desafia os Directores-Gerais a trabalharem em prol do interesse da organização",
+    file: "A70A8812-300x200.jpg",
+  },
+  {
+    title: "Ministério das Finanças e AT com nova liderança para reforçar a gestão pública",
+    file: "A70A8732-1-300x200.jpg",
+  },
+  {
+    title: "Formações corporativas ganham impacto com produção audiovisual da ProVisual",
+    file: "FIRST-PANEL-3-300x190.jpg",
+  },
+];
+
 function guessMime(filename) {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".webp")) return "image/webp";
   if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
   if (lower.endsWith(".jpeg") || lower.endsWith(".jpg")) return "image/jpeg";
   return "application/octet-stream";
 }
@@ -165,15 +197,48 @@ async function main() {
   }
 
   const teamFiles = [
-    "designer-gráfico-africano-criativo-no-flipchart-com-gráficos-e-notas-adesivas-187855551.webp",
-    "designer-gráfico-africano-web-usando-software-de-edição-design-212684276.webp",
-    "COmunidade.jpg",
-    "Coberturas.jpg",
+    "Equipa/Captura de ecrã 2026-05-23, às 14.09.11.png",
+    "Equipa/Captura de ecrã 2026-05-23, às 14.10.07.png",
+    "Equipa/Captura de ecrã 2026-05-23, às 14.10.43.png",
+    "Equipa/Captura de ecrã 2026-05-23, às 14.16.15.png",
   ];
   const teamUrls = [];
   for (const file of teamFiles) {
-    const url = await uploadLocal(drive, supabase, `INICIO/${file}`, "home/equipa", file);
+    const url = await uploadLocal(drive, supabase, `INICIO/${file}`, "home/equipa", file.split("/").pop());
     if (url) teamUrls.push(url);
+  }
+
+  console.log("\n— Eventos (homepage) —");
+  const eventTypes = [];
+  for (const evt of EVENT_TYPE_FILES) {
+    const image = await uploadLocal(drive, supabase, `INICIO/${evt.file}`, "home/eventos", evt.file);
+    eventTypes.push({
+      title: evt.title,
+      description: evt.description,
+      image,
+    });
+  }
+
+  console.log("\n— Clientes (logos) —");
+  const clientLogos = [];
+  for (const file of CLIENT_LOGO_FILES) {
+    const image = await uploadLocal(drive, supabase, `${SCRAPE_DIR}/${file}`, "home/clientes", file);
+    if (image) {
+      clientLogos.push({
+        name: file.replace(/\.[^.]+$/, "").replace(/-/g, " "),
+        image,
+      });
+    }
+  }
+
+  console.log("\n— Notícias —");
+  const newsItems = [];
+  for (const item of NEWS_ITEMS) {
+    const image = await uploadLocal(drive, supabase, `${SCRAPE_DIR}/${item.file}`, "home/noticias", item.file);
+    newsItems.push({
+      title: item.title,
+      image,
+    });
   }
 
   const { data: existing } = await supabase
@@ -213,29 +278,9 @@ async function main() {
 
   const defaultTeam = [
     {
-      name: "Ana Mabunda",
-      role: "Directora Criativa",
-      image: teamUrls[0],
-      social: {
-        facebook: "https://www.facebook.com/profile.php?id=61577619669570",
-        linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
-        instagram: "https://www.instagram.com/",
-      },
-    },
-    {
       name: "Carlos Nhaca",
       role: "Director de Produção",
-      image: teamUrls[1],
-      social: {
-        facebook: "https://www.facebook.com/profile.php?id=61577619669570",
-        linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
-        instagram: "https://www.instagram.com/",
-      },
-    },
-    {
-      name: "Sofia Matola",
-      role: "Gestora de Projectos",
-      image: teamUrls[2],
+      image: teamUrls[0],
       social: {
         facebook: "https://www.facebook.com/profile.php?id=61577619669570",
         linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
@@ -245,6 +290,26 @@ async function main() {
     {
       name: "Miguel Tembe",
       role: "Especialista Audiovisual",
+      image: teamUrls[1],
+      social: {
+        facebook: "https://www.facebook.com/profile.php?id=61577619669570",
+        linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
+        instagram: "https://www.instagram.com/",
+      },
+    },
+    {
+      name: "João Machava",
+      role: "Gestor de Projectos",
+      image: teamUrls[2],
+      social: {
+        facebook: "https://www.facebook.com/profile.php?id=61577619669570",
+        linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
+        instagram: "https://www.instagram.com/",
+      },
+    },
+    {
+      name: "Ana Mabunda",
+      role: "Directora Criativa",
       image: teamUrls[3],
       social: {
         facebook: "https://www.facebook.com/profile.php?id=61577619669570",
@@ -266,9 +331,20 @@ async function main() {
     aboutImage: aboutImage || base.aboutImage,
     processBackground: processBackground || base.processBackground,
     teamBanner: teamBanner || base.teamBanner,
-    teamMembers: base.teamMembers?.length
-      ? base.teamMembers.map((m, i) => ({ ...m, image: teamUrls[i] || m.image }))
-      : defaultTeam,
+    teamMembers: defaultTeam.map((member, i) => ({
+      ...member,
+      image: teamUrls[i] || member.image,
+    })),
+    eventIntro:
+      base.eventIntro ||
+      "Captamos narrativas visuais de elevado rigor e profundidade, concebidas para imortalizar factos, histórias e personagens com autenticidade e arte.",
+    eventTypes: base.eventTypes?.length
+      ? base.eventTypes.map((item, i) => ({ ...item, image: eventTypes[i]?.image || item.image }))
+      : eventTypes,
+    clientLogos: clientLogos.length ? clientLogos : base.clientLogos,
+    newsItems: base.newsItems?.length
+      ? base.newsItems.map((item, i) => ({ ...item, image: newsItems[i]?.image || item.image }))
+      : newsItems,
   };
 
   await supabase.from("settings").upsert({ key: HOME_CONTENT_KEY, value: homeContent });
