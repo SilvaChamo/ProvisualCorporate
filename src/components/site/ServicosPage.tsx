@@ -42,11 +42,16 @@ function ServiceCard({ service }: { service: ServiceItem }) {
 export default function ServicosPage() {
   return (
     <SiteShell title="Serviços" breadcrumbs={[...PAGE_BREADCRUMBS.servicos]}>
-      <div className="max-w-3xl mx-auto text-center mb-14">
-        <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-4">
-          Soluções criativas para o seu posicionamento
+      <div className="site-section-header site-section-header--center">
+        <div className="site-section-kicker site-section-kicker--center">
+          <span className="site-section-kicker-line site-section-kicker-line--dark" />
+          <p className="site-antetitle text-[#a21b7e]">Serviços</p>
+          <span className="site-section-kicker-line site-section-kicker-line--dark" />
+        </div>
+        <h2 className="site-section-title text-gray-900">
+          Soluções criativas <span className="font-light">para o seu posicionamento</span>
         </h2>
-        <p className="text-gray-600 text-base md:text-lg leading-relaxed">{SERVICOS_INTRO}</p>
+        <p className="site-section-desc text-gray-600">{SERVICOS_INTRO}</p>
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">

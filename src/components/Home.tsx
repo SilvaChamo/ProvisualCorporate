@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect, useMemo, useLayoutEffect } from "react";
+import { Link, useNavigationType } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Menu,
@@ -13,6 +13,7 @@ import {
   Linkedin,
   Youtube,
   Sparkles,
+  HardDrive,
   Target,
   Eye,
   Heart,
@@ -36,15 +37,21 @@ import { fetchSiteHomeContent } from "../lib/siteGalleryApi";
 import { driveDisplayUrl, preloadDriveImages } from "../lib/driveImageUrl";
 import SiteOffCanvasMenu from "./site/SiteOffCanvasMenu";
 import OptimizedDriveImage from "./site/OptimizedDriveImage";
+import HomeLeavingLink from "./HomeLeavingLink";
+import SiteYoutubePlayer from "./site/SiteYoutubePlayer";
 import { cn } from "../lib/utils";
+import {
+  clearHomeScrollRestore,
+  restoreHomeScrollIfPending,
+} from "../lib/homeScrollRestore";
+import { youtubeThumbnail } from "../lib/youtubeEmbed";
 
 const NAV_LINKS = [
   { href: "#sobre", label: "Sobre nós" },
   { href: "#servicos", label: "Serviços" },
-  { href: "#eventos", label: "Eventos" },
   { href: "#videos", label: "Vídeos" },
+  { href: "#eventos", label: "Eventos" },
   { href: "#clientes", label: "Clientes" },
-  { href: "#noticias", label: "Notícias" },
   { href: "#contactos", label: "Contacte-nos" },
 ];
 
@@ -84,14 +91,6 @@ function getHomeImageSrc(url: string, size: "sm" | "md" | "lg" = "md") {
   return driveDisplayUrl(url, size);
 }
 
-function youtubeThumbnail(id: string) {
-  return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-}
-
-function youtubeEmbedUrl(id: string) {
-  return `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&controls=1&playsinline=1`;
-}
-
 const QUICK_LINKS = QUICK_LINK_ROUTES;
 
 const ABOUT_ITEMS = [
@@ -113,6 +112,13 @@ const ABOUT_ITEMS = [
 ];
 
 const FEATURED_SERVICES = SERVICE_ITEMS.slice(0, 4);
+
+const SERVICE_CARD_TAG: Record<string, string> = {
+  "publicidade-marketing": "Marketing",
+  "branding-design": "Branding",
+  "fotografia-videografia": "Fotografia",
+  "servicos-informaticos": "Serviços digitais",
+};
 
 const PRODUCTION_PROCESS = [
   {
@@ -158,6 +164,7 @@ function getTeamVisible(width: number) {
 }
 
 export default function Home() {
+  const navigationType = useNavigationType();
   const [content, setContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -221,6 +228,14 @@ export default function Home() {
   useEffect(() => {
     fetchSiteHomeContent().then(setContent).catch(() => setContent(DEFAULT_HOME_CONTENT));
   }, []);
+
+  useLayoutEffect(() => {
+    if (navigationType === "POP") {
+      restoreHomeScrollIfPending();
+      return;
+    }
+    clearHomeScrollRestore();
+  }, [navigationType]);
 
   useEffect(() => {
     const urls = [
@@ -438,7 +453,7 @@ export default function Home() {
             <div className="flex flex-col items-center">
               <div className="flex items-center justify-center gap-4 mb-5">
                 <span className="h-px w-10 bg-white/60" />
-                <p className="text-xs md:text-sm font-normal uppercase tracking-[0.28em] text-white/90">
+                <p className="site-antetitle font-normal text-white/90">
                   {activeSlide?.category}
                 </p>
                 <span className="h-px w-10 bg-white/60" />
@@ -518,9 +533,9 @@ export default function Home() {
                       className="shrink-0 box-border px-1.5 md:px-2.5"
                       style={{ width: `${slotWidth}%` }}
                     >
-                      <Link to={item.to} className="block h-full group" aria-label={`Abrir ${item.label}`}>
+                      <HomeLeavingLink to={item.to} className="block h-full group" aria-label={`Abrir ${item.label}`}>
                         {card}
-                      </Link>
+                      </HomeLeavingLink>
                     </div>
                   );
                 })}
@@ -563,15 +578,15 @@ export default function Home() {
               </div>
 
               <div className="flex h-full flex-col justify-center tracking-[0.01em] lg:min-h-[500px]">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="h-px w-8 bg-[#D7D7D7]" />
-                  <span className="whitespace-nowrap text-lg text-gray-500">Sobre nós</span>
+                <div className="site-section-kicker">
+                  <span className="site-section-kicker-line site-section-kicker-line--dark" />
+                  <p className="site-antetitle whitespace-nowrap text-[#a21b7e]">Sobre nós</p>
                 </div>
 
-                <h2 className="mb-1 text-3xl font-bold leading-tight text-[#333] sm:text-4xl lg:text-[2.65rem]">
+                <h2 className="site-section-title text-[#333]">
                   Quem <span className="font-light">somos?</span>
                 </h2>
-                <p className="mb-4 text-xl font-normal text-[#a21b7e] sm:text-2xl">
+                <p className="site-section-desc mb-4 text-gray-600">
                   Entre qualidade e <span className="font-light">eficiência</span>
                 </p>
 
@@ -629,18 +644,16 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/25" aria-hidden="true" />
 
         <div className="relative z-10 mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="mx-auto mb-14 max-w-3xl text-center lg:mb-16">
-            <div className="mb-4 flex items-center justify-center gap-4">
-              <span className="h-px w-10 bg-white/60" />
-              <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#e888c8]">
-                Como trabalhamos
-              </p>
-              <span className="h-px w-10 bg-white/60" />
+          <div className="site-section-header site-section-header--center">
+            <div className="site-section-kicker site-section-kicker--center">
+              <span className="site-section-kicker-line site-section-kicker-line--light" />
+              <p className="site-antetitle text-[#e888c8]">Como trabalhamos</p>
+              <span className="site-section-kicker-line site-section-kicker-line--light" />
             </div>
-            <h2 className="mb-4 text-3xl font-bold leading-tight text-white sm:text-4xl lg:text-5xl">
+            <h2 className="site-section-title text-white">
               Nosso <span className="font-light text-white/85">Processo Criativo</span>
             </h2>
-            <p className="text-sm leading-relaxed text-white/85 sm:text-base">
+            <p className="site-section-desc text-white/85">
               Do briefing à entrega de resultados, acrescentamos valor às suas estratégias com rigor,
               criatividade e acompanhamento em cada etapa.
             </p>
@@ -736,21 +749,17 @@ export default function Home() {
           <div className="grid gap-10 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
             <div className="relative z-10 flex flex-col justify-center lg:-mr-[68px] lg:py-[45px] xl:-mr-[84px]">
               <div className="flex w-full flex-col items-start justify-center rounded-2xl bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.08)] sm:p-8">
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="text-sm text-gray-500">Nossa equipa</span>
-                  <span className="h-px w-8 bg-[#D7D7D7]" />
+                <div className="site-section-kicker">
+                  <span className="site-section-kicker-line site-section-kicker-line--dark" />
+                  <p className="site-antetitle text-[#a21b7e]">Nossa equipa</p>
                 </div>
 
-                <h2 className="mb-3 text-4xl font-bold leading-tight text-[#333] sm:text-5xl lg:text-[3.25rem]">
+                <h2 className="site-section-title text-[#333]">
                   Criatividade & <span className="font-light">Excelência</span>
                 </h2>
 
-                <h3 className="text-lg font-bold text-[#333]">
-                  Profissionais <span className="font-light">dedicados</span>
-                </h3>
-
-                <p className="mt-2 text-sm leading-relaxed text-gray-600 sm:text-base">
-                  Profissionais multidisciplinares unidos pela criatividade, precisão técnica e
+                <p className="site-section-desc text-gray-600">
+                  Profissionais dedicados e multidisciplinares unidos pela criatividade, precisão técnica e
                   compromisso com resultados que fortalecem a presença das marcas em Moçambique.
                 </p>
 
@@ -876,74 +885,77 @@ export default function Home() {
             size="lg"
             className="absolute inset-0 h-full w-full object-cover"
           />
-          <div className="absolute inset-0 bg-[#ff6a00]/88" aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#3d001d]/82" aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#a21b7e]/35" aria-hidden="true" />
 
-          <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center text-white">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.32em] sm:text-sm">
-              Serviços
-            </p>
-            <h2 className="max-w-3xl text-3xl font-bold leading-tight sm:text-4xl lg:text-[2.75rem]">
-              Soluções integradas para a sua marca
+          <div className="relative z-10 flex h-full flex-col items-center justify-start px-6 pb-8 pt-[40px] text-center text-white sm:pb-10 lg:pb-12">
+            <div className="site-section-kicker site-section-kicker--center">
+              <span className="site-section-kicker-line site-section-kicker-line--light" aria-hidden="true" />
+              <p className="site-antetitle text-[#e888c8]">Serviços</p>
+              <span className="site-section-kicker-line site-section-kicker-line--light" aria-hidden="true" />
+            </div>
+            <h2 className="site-section-title max-w-3xl text-white">
+              Soluções integradas <span className="font-light text-white/85">para si</span>
             </h2>
-            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/90 sm:text-base">
+            <p className="site-section-desc mb-16 max-w-2xl text-white/85 sm:mb-20 lg:mb-24">
               {content.servicesIntro}
             </p>
           </div>
         </div>
 
         <div className="relative mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:-mt-20 md:gap-5 lg:-mt-28 lg:grid-cols-4 lg:gap-4 xl:-mt-32">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:-mt-14 md:gap-5 lg:-mt-20 lg:grid-cols-4 lg:gap-4 xl:-mt-24">
             {FEATURED_SERVICES.map((service, index) => {
               const isActive = activeServiceCard === index;
+              const showCta = isActive;
 
               return (
                 <article
                   key={service.slug}
                   onMouseEnter={() => setActiveServiceCard(index)}
                   className={cn(
-                    "group relative flex min-h-[280px] flex-col bg-white text-center shadow-[0_10px_35px_rgba(0,0,0,0.12)] transition-all duration-300",
+                    "group relative flex flex-col overflow-hidden rounded-xl bg-white text-center shadow-[0_8px_24px_rgba(0,0,0,0.08)] transition-transform duration-300",
                     isActive ? "-translate-y-1" : "",
                   )}
                 >
                   <div
                     className={cn(
                       "pointer-events-none absolute inset-x-0 top-0 h-24 overflow-hidden transition-opacity duration-300",
-                      isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                      isActive ? "opacity-100" : "opacity-0",
                     )}
                     aria-hidden="true"
                   >
-                    <div className="mx-auto h-32 w-[130%] -translate-y-[58%] rounded-[50%] bg-[#ffedd5]" />
+                    <div className="mx-auto h-32 w-[130%] -translate-y-[58%] rounded-[50%] bg-[#f0e8ec]" />
                   </div>
 
-                  <div className="relative flex flex-1 flex-col px-5 pb-4 pt-10">
-                    <h3 className="text-base font-bold leading-snug text-[#1a1a1a] sm:text-lg">
+                  <div className="relative flex flex-col px-5 pt-6">
+                    <div className="relative z-10 flex items-center justify-center gap-2">
+                      <span className="h-px w-6 bg-gray-300" aria-hidden="true" />
+                      <p className="text-[15px] font-medium normal-case text-gray-500 sm:text-base">
+                        {SERVICE_CARD_TAG[service.slug] ?? service.title.split(" ")[0]}
+                      </p>
+                      <span className="h-px w-6 bg-gray-300" aria-hidden="true" />
+                    </div>
+                    <h3 className="relative z-10 mt-2 text-[20px] font-extrabold leading-snug text-[#a21b7e]">
                       {service.title}
                     </h3>
-                    <p className="mt-1 text-xs font-medium uppercase tracking-wide text-[#ff6a00]">
-                      {service.subtitle}
-                    </p>
-                    <p
-                      className={cn(
-                        "mt-3 flex-1 text-sm leading-relaxed text-gray-600 transition-all duration-300",
-                        isActive ? "pb-2" : "pb-6 group-hover:pb-2",
-                      )}
-                    >
+                    <p className="relative z-10 mt-3 min-h-[6.125rem] text-[15px] leading-relaxed text-gray-600 line-clamp-4">
                       {service.description}
                     </p>
                   </div>
 
-                  <Link
+                  <HomeLeavingLink
                     to={`/servicos/${service.slug}`}
                     className={cn(
-                      "mt-auto flex items-center justify-center gap-2 overflow-hidden bg-[#ff6a00] px-3 text-sm font-medium text-white transition-all duration-300",
-                      isActive
-                        ? "max-h-14 py-3 opacity-100"
-                        : "max-h-0 py-0 opacity-0 group-hover:max-h-14 group-hover:py-3 group-hover:opacity-100",
+                      "mt-[25px] flex h-12 shrink-0 items-center justify-center gap-2 bg-[#a21b7e] px-3 text-sm font-medium text-white transition-opacity duration-300 hover:bg-[#8e176e]",
+                      showCta
+                        ? "opacity-100"
+                        : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100",
                     )}
                   >
                     Leia mais
                     <ChevronRight size={16} />
-                  </Link>
+                  </HomeLeavingLink>
                 </article>
               );
             })}
@@ -951,120 +963,24 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="noticias" className="scroll-mt-[75px] bg-[#fafafa] py-16 lg:py-24">
+      <section id="videos" className="scroll-mt-[75px] bg-[#fafafa] py-8 lg:py-10">
         <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="mx-auto mb-12 max-w-3xl text-center">
-            <div className="mb-4 flex items-center justify-center gap-4">
-              <span className="h-px w-10 bg-[#D7D7D7]" />
-              <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#a21b7e]">Notícias</p>
-              <span className="h-px w-10 bg-[#D7D7D7]" />
-            </div>
-            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
-              Actualizações <span className="font-light">recentes</span>
-            </h2>
-            <p className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base">
-              Projectos, novidades e histórias da ProVisual Corporate.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {content.newsItems.map((item) => (
-              <article
-                key={item.title}
-                className="overflow-hidden rounded-2xl bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-shadow hover:shadow-[0_12px_32px_rgba(162,27,126,0.1)]"
-              >
-                <div className="relative aspect-[16/10] overflow-hidden">
-                  <OptimizedDriveImage
-                    src={item.image}
-                    alt=""
-                    size="sm"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <div className="p-5">
-                  <h3 className="text-base font-semibold leading-snug text-gray-900">{item.title}</h3>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="eventos" className="py-16 scroll-mt-[75px] lg:py-24">
-        <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="mx-auto mb-12 max-w-3xl text-center">
-            <div className="mb-4 flex items-center justify-center gap-4">
-              <span className="h-px w-10 bg-[#D7D7D7]" />
-              <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#a21b7e]">Eventos</p>
-              <span className="h-px w-10 bg-[#D7D7D7]" />
-            </div>
-            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
-              Cobertura <span className="font-light">profissional</span>
-            </h2>
-            <p className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base">{content.eventIntro}</p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {content.eventTypes.map((item) => (
-              <article
-                key={item.title}
-                className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-shadow hover:shadow-[0_12px_32px_rgba(162,27,126,0.12)]"
-              >
-                <div className="relative aspect-[4/3] overflow-hidden">
-                  <OptimizedDriveImage
-                    src={item.image}
-                    alt={item.title}
-                    size="sm"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <div className="p-5">
-                  <h3 className="text-sm font-bold uppercase tracking-wide text-[#a21b7e]">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-gray-600">{item.description}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          <div className="mt-10 text-center">
-            <Link
-              to="/galeria"
-              className="inline-flex items-center gap-2 rounded-full border border-[#a21b7e] px-8 py-3 text-sm font-medium text-[#a21b7e] transition-colors hover:bg-[#a21b7e]/5"
+          <div className="my-4 flex justify-end lg:my-5">
+            <HomeLeavingLink
+              to="/videos"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#a21b7e] px-8 py-3 text-sm font-medium uppercase tracking-wider text-white transition-colors hover:bg-[#8e176e]"
             >
-              Ver galeria de eventos
+              Ver mais vídeos
               <ChevronRight size={16} />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section id="videos" className="scroll-mt-20 bg-[#fafafa] py-16 lg:py-24">
-        <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="mx-auto mb-12 max-w-3xl text-center">
-            <div className="mb-4 flex items-center justify-center gap-4">
-              <span className="h-px w-10 bg-[#D7D7D7]" />
-              <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#a21b7e]">Vídeos</p>
-              <span className="h-px w-10 bg-[#D7D7D7]" />
-            </div>
-            <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
-              Produções <span className="font-light">audiovisuais</span>
-            </h2>
-            <p className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base">
-              Captamos vídeos com identidade, missão e impacto da sua organização.
-            </p>
+            </HomeLeavingLink>
           </div>
 
-          <div className="mx-auto grid max-w-5xl grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-stretch">
-            <div className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-lg">
-              <iframe
-                key={featuredVideoId}
-                title="Reprodutor de vídeo YouTube"
-                src={youtubeEmbedUrl(featuredVideoId).replace("autoplay=1", "autoplay=0")}
-                className="block h-full w-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            </div>
+          <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-stretch">
+            <SiteYoutubePlayer
+              videoId={featuredVideoId}
+              saveScrollOnLeave
+              className="rounded-xl shadow-lg"
+            />
 
             <div className="grid grid-rows-2 gap-3 lg:min-h-0">
               {VIDEO_ITEMS.map((video) => {
@@ -1076,7 +992,7 @@ export default function Home() {
                     onClick={() => setFeaturedVideoId(video.youtubeId)}
                     className={cn(
                       "group relative min-h-[120px] w-full overflow-hidden rounded-xl text-left shadow-md transition-all",
-                      isActive ? "ring-2 ring-[#a21b7e] ring-offset-2" : "hover:ring-2 hover:ring-[#a21b7e]/40",
+                      isActive ? "ring-2 ring-[#a21b7e]" : "hover:ring-2 hover:ring-[#a21b7e]/40",
                     )}
                     aria-label={`Reproduzir ${video.title}`}
                     aria-current={isActive ? "true" : undefined}
@@ -1104,26 +1020,107 @@ export default function Home() {
               })}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="arquivo" className="relative scroll-mt-[75px] overflow-hidden bg-[#a21b7e] px-6 py-8 text-white lg:py-10">
+        <div className="arquivo-section-fx pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+          <div className="arquivo-grid-lines" />
+        </div>
+
+        <div className="relative z-10 mx-auto max-w-[1400px] text-center">
+          <div className="relative mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20">
+            <HardDrive size={24} className="opacity-95" strokeWidth={1.75} />
+            <Sparkles
+              size={12}
+              className="absolute -right-1 -top-1 text-amber-200 arquivo-sparkle-pulse"
+              strokeWidth={2}
+            />
+          </div>
+          <div className="site-section-header site-section-header--compact">
+            <div className="site-section-kicker site-section-kicker--center">
+              <span className="site-section-kicker-line site-section-kicker-line--light" />
+              <p className="site-antetitle text-[#e888c8]">Arquivo</p>
+              <span className="site-section-kicker-line site-section-kicker-line--light" />
+            </div>
+            <h2 className="site-section-title text-white">
+              Arquivo <span className="font-light text-white/85">ProVisual Corporate</span>
+            </h2>
+            <p className="site-section-desc mx-auto max-w-3xl text-white/85 line-clamp-2">
+            Guarde, consulte e partilhe fotos e vídeos com a sua equipa num arquivo exclusivo pensado
+            para si — o diferencial ProVisual, com arquivo institucional privado e IA integrada.
+            </p>
+          </div>
+          <HomeLeavingLink
+            to="/arquivo"
+            className="inline-flex items-center gap-2 rounded-lg bg-white px-8 py-3 text-sm font-medium uppercase tracking-wider text-[#a21b7e] shadow-lg transition-colors hover:bg-white/90"
+          >
+            Entrar no arquivo
+            <ChevronRight size={16} />
+          </HomeLeavingLink>
+        </div>
+      </section>
+
+      <section id="eventos" className="py-16 scroll-mt-[75px] lg:py-24">
+        <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
+          <div className="site-section-header site-section-header--center">
+            <div className="site-section-kicker site-section-kicker--center">
+              <span className="site-section-kicker-line site-section-kicker-line--dark" />
+              <p className="site-antetitle text-[#a21b7e]">Eventos</p>
+              <span className="site-section-kicker-line site-section-kicker-line--dark" />
+            </div>
+            <h2 className="site-section-title text-gray-900">
+              Cobertura <span className="font-light">profissional</span>
+            </h2>
+            <p className="site-section-desc text-gray-600">{content.eventIntro}</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {content.eventTypes.map((item) => (
+              <article
+                key={item.title}
+                className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-shadow hover:shadow-[0_12px_32px_rgba(162,27,126,0.12)]"
+              >
+                <div className="relative aspect-[4/3] overflow-hidden">
+                  <OptimizedDriveImage
+                    src={item.image}
+                    alt={item.title}
+                    size="sm"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="p-5">
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-[#a21b7e]">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">{item.description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
 
           <div className="mt-10 text-center">
-            <Link
-              to="/videos"
-              className="inline-flex items-center gap-2 rounded-full bg-[#a21b7e] px-8 py-3 text-sm font-medium text-white transition-colors hover:bg-[#8e176e]"
+            <HomeLeavingLink
+              to="/galeria"
+              className="inline-flex items-center gap-2 rounded-full border border-[#a21b7e] px-8 py-3 text-sm font-medium text-[#a21b7e] transition-colors hover:bg-[#a21b7e]/5"
             >
-              Ver mais vídeos
+              Ver galeria de eventos
               <ChevronRight size={16} />
-            </Link>
+            </HomeLeavingLink>
           </div>
         </div>
       </section>
 
       <section id="clientes" className="scroll-mt-[75px] bg-white py-16 lg:py-24">
         <div className="mx-auto max-w-[1200px] px-6 lg:px-10">
-          <div className="mx-auto mb-14 max-w-3xl text-center">
-            <h2 className="font-serif text-3xl text-gray-600 sm:text-4xl lg:text-[2.5rem]">
+          <div className="site-section-header site-section-header--center mb-14">
+            <div className="site-section-kicker site-section-kicker--center">
+              <span className="site-section-kicker-line site-section-kicker-line--dark" />
+              <p className="site-antetitle text-[#a21b7e]">Clientes</p>
+              <span className="site-section-kicker-line site-section-kicker-line--dark" />
+            </div>
+            <h2 className="site-section-title text-gray-900">
               Nossos <span className="font-light">Clientes</span>
             </h2>
-            <p className="mt-4 text-sm leading-relaxed text-gray-500 sm:text-base">
+            <p className="site-section-desc text-gray-600">
               Empresas de sucesso têm o cliente como bem maior. Prezamos pela confiança e pelos
               resultados.
             </p>
@@ -1148,59 +1145,26 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="arquivo" className="relative scroll-mt-20 overflow-hidden bg-[#a21b7e] px-6 py-20 text-white lg:py-24">
-        <div
-          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl"
-          aria-hidden="true"
-        />
-        <div
-          className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-[#3d001d]/40 blur-2xl"
-          aria-hidden="true"
-        />
-        <div className="relative z-10 mx-auto max-w-4xl text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15">
-            <Sparkles size={32} className="opacity-90" />
-          </div>
-          <h2 className="mb-4 text-3xl font-bold md:text-4xl">
-            Arquivo <span className="font-light">ProVisual Corporate</span>
-          </h2>
-          <p className="mx-auto mb-10 max-w-2xl text-base leading-relaxed text-white/90 lg:text-lg">
-            Portal corporativo para gerir activos visuais com Google Drive e IA integrada.
-          </p>
-          <Link
-            to="/arquivo"
-            className="inline-flex items-center gap-2 rounded-full bg-white px-10 py-4 text-sm font-bold uppercase tracking-widest text-[#a21b7e] shadow-xl transition-all hover:bg-white/90"
-          >
-            Entrar no Console
-            <ChevronRight size={18} />
-          </Link>
-        </div>
-      </section>
-
       <section id="contactos" className="scroll-mt-24 bg-[#fafafa] px-6 py-20 lg:py-24">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-12 text-center lg:mb-14">
-            <div className="mb-4 flex items-center justify-center gap-4">
-              <span className="h-px w-10 bg-[#D7D7D7]" />
-              <p className="text-sm font-normal uppercase tracking-[0.28em] text-[#a21b7e]">
-                Contactos
-              </p>
-              <span className="h-px w-10 bg-[#D7D7D7]" />
+          <div className="site-section-header site-section-header--center mb-12 lg:mb-14">
+            <div className="site-section-kicker site-section-kicker--center">
+              <span className="site-section-kicker-line site-section-kicker-line--dark" />
+              <p className="site-antetitle text-[#a21b7e]">Contactos</p>
+              <span className="site-section-kicker-line site-section-kicker-line--dark" />
             </div>
-            <h2 className="text-3xl font-bold text-gray-900 md:text-4xl">
+            <h2 className="site-section-title text-gray-900">
               Quer trabalhar <span className="font-light">connosco?</span>
             </h2>
-            <p className="mt-3 text-sm font-bold uppercase tracking-widest text-[#a21b7e]">
-              {content.contact.ctaSubtitle}
-            </p>
+            <p className="site-section-desc text-gray-600">{content.contact.ctaSubtitle}</p>
           </div>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12">
             <div className="rounded-2xl bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06)]">
-              <h3 className="mb-2 text-2xl font-bold text-gray-900">
+              <h3 className="site-section-title text-gray-900">
                 Entre em <span className="font-light">contacto</span>
               </h3>
-              <p className="mb-8 leading-relaxed text-gray-500">
+              <p className="site-section-desc mb-8 text-gray-500">
                 Somos apaixonados em desenvolver soluções para os nossos clientes. Venha contar-nos
                 a sua ideia — o café é por nossa conta.
               </p>

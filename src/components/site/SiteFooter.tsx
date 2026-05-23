@@ -1,11 +1,13 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ChevronUp } from "lucide-react";
 import logoColorido from "../../Logo/logo_horizontal.png";
 import { FOOTER_LINK_COLUMNS } from "../../lib/siteNav";
 import FooterMapBlock from "./FooterMapBlock";
+import HomeLeavingLink from "../HomeLeavingLink";
 
 export default function SiteFooter() {
   const scrollTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+  const isHome = useLocation().pathname === "/";
 
   return (
     <>
@@ -30,9 +32,15 @@ export default function SiteFooter() {
                 {column.links.map((link) => (
                   <li key={link.label}>
                     {link.href.startsWith("/") && !link.href.includes("#") ? (
-                      <Link to={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
-                        {link.label}
-                      </Link>
+                      isHome ? (
+                        <HomeLeavingLink to={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
+                          {link.label}
+                        </HomeLeavingLink>
+                      ) : (
+                        <Link to={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
+                          {link.label}
+                        </Link>
+                      )
                     ) : (
                       <a href={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
                         {link.label}

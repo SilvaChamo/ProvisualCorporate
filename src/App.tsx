@@ -8,6 +8,7 @@ import GaleriaAlbumPage from "./components/site/GaleriaAlbumPage";
 import VideosPage from "./components/site/VideosPage";
 import ServicosPage from "./components/site/ServicosPage";
 import ServicoDetailPage from "./components/site/ServicoDetailPage";
+import ScrollToTop from "./components/ScrollToTop";
 import { useState, useEffect } from "react";
 import { supabase } from "./lib/supabase";
 
@@ -62,6 +63,7 @@ export default function App() {
 
   return (
     <Router>
+      <ScrollToTop />
       <div className="min-h-screen bg-slate-50">
         <Routes>
           <Route

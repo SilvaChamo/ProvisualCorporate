@@ -147,3 +147,107 @@ body {
   overflow: hidden;
   overflow-clip-margin: 10px;
 }
+
+.site-antetitle {
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.site-section-header {
+  @apply mx-auto max-w-3xl;
+}
+
+.site-section-header--center {
+  @apply mb-12 text-center lg:mb-14;
+}
+
+.site-section-header--compact {
+  @apply mb-0 text-center;
+}
+
+.site-section-header--compact .site-section-kicker {
+  @apply mb-2;
+}
+
+.site-section-header--compact .site-section-title {
+  @apply mb-2;
+}
+
+.site-section-header--compact .site-section-desc {
+  @apply mb-3 leading-snug;
+}
+
+.site-section-kicker {
+  @apply mb-4 flex items-center gap-4;
+}
+
+.site-section-kicker--center {
+  @apply justify-center;
+}
+
+.site-section-kicker-line {
+  @apply h-px w-10 shrink-0;
+}
+
+.site-section-kicker-line--light {
+  @apply bg-white/60;
+}
+
+.site-section-kicker-line--dark {
+  @apply bg-[#D7D7D7];
+}
+
+.site-section-title {
+  @apply mb-4 text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl;
+}
+
+.site-section-desc {
+  @apply text-sm leading-relaxed sm:text-base;
+}
+
+.arquivo-section-fx {
+  background:
+    radial-gradient(ellipse 42% 58% at 6% 18%, rgba(61, 0, 29, 0.62), transparent 72%),
+    radial-gradient(ellipse 38% 52% at 92% 22%, rgba(45, 0, 22, 0.55), transparent 70%),
+    radial-gradient(ellipse 44% 56% at 22% 88%, rgba(55, 0, 26, 0.48), transparent 74%),
+    radial-gradient(ellipse 40% 50% at 78% 82%, rgba(61, 0, 29, 0.52), transparent 72%),
+    radial-gradient(ellipse 55% 48% at 48% 42%, rgba(35, 0, 17, 0.38), transparent 78%),
+    radial-gradient(ellipse 30% 40% at 62% 12%, rgba(61, 0, 29, 0.35), transparent 68%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.06), transparent 58%);
+}
+
+.arquivo-grid-lines {
+  position: absolute;
+  inset: -20%;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at center, black 20%, transparent 72%);
+  animation: arquivo-grid-shift 22s linear infinite;
+}
+
+.arquivo-sparkle-pulse {
+  animation: arquivo-sparkle 2.4s ease-in-out infinite;
+}
+
+@keyframes arquivo-grid-shift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(56px, 56px, 0);
+  }
+}
+
+@keyframes arquivo-sparkle {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}

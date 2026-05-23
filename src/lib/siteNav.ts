@@ -1,10 +1,9 @@
 export const SITE_NAV_LINKS = [
   { href: "/#sobre", label: "Sobre nós" },
   { href: "/#servicos", label: "Serviços" },
-  { href: "/#eventos", label: "Eventos" },
   { href: "/#videos", label: "Vídeos" },
+  { href: "/#eventos", label: "Eventos" },
   { href: "/#clientes", label: "Clientes" },
-  { href: "/#noticias", label: "Notícias" },
   { href: "/#contactos", label: "Contacte-nos" },
 ];
 
@@ -31,7 +30,6 @@ export const FOOTER_LINK_COLUMNS = [
     links: [
       { label: "Eventos", href: "/#eventos" },
       { label: "Clientes", href: "/#clientes" },
-      { label: "Notícias", href: "/#noticias" },
       { label: "Contacte-nos", href: "/#contactos" },
       { label: "Gestão", href: "/login" },
     ],

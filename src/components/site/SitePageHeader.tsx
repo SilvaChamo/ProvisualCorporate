@@ -10,8 +10,8 @@ interface SitePageHeaderProps {
 export default function SitePageHeader({ title, breadcrumbs }: SitePageHeaderProps) {
   return (
     <div className="bg-[#3d001d] text-white">
-      <div className="px-6 py-4 text-center">
-        <h1 className="text-xl md:text-2xl font-bold uppercase tracking-wide">{title}</h1>
+      <div className="px-6 py-8 text-center sm:py-10">
+        <h1 className="site-section-title mb-0 text-white">{title}</h1>
       </div>
 
       {breadcrumbs && breadcrumbs.length > 0 && (

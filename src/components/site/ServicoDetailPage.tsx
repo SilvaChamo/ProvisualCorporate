@@ -57,7 +57,7 @@ export default function ServicoDetailPage() {
         </div>
 
         <div className="flex flex-col justify-center text-left py-2 lg:py-3">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">{baseService.title}</h2>
+          <h2 className="site-section-title text-gray-900">{baseService.title}</h2>
           <p className="text-[#a21b7e] italic text-base md:text-lg mb-4">{baseService.subtitle}</p>
           <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-5">{baseService.description}</p>
 

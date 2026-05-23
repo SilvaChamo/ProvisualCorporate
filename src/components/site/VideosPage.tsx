@@ -1,16 +1,10 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import SiteShell from "./SiteShell";
+import SiteYoutubePlayer from "./SiteYoutubePlayer";
 import { VIDEO_ITEMS } from "../../lib/sitePages";
 import { PAGE_BREADCRUMBS } from "../../lib/siteNav";
-
-function youtubeEmbedUrl(id: string) {
-  return `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&controls=1&playsinline=1&cc_load_policy=1&iv_load_policy=3`;
-}
-
-function youtubeThumbnail(id: string) {
-  return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-}
+import { youtubeThumbnail } from "../../lib/youtubeEmbed";
 
 export default function VideosPage() {
   const [activeYoutubeId, setActiveYoutubeId] = useState<string | null>(null);
@@ -30,22 +24,22 @@ export default function VideosPage() {
 
   return (
     <SiteShell title="Vídeos" breadcrumbs={[...PAGE_BREADCRUMBS.videos]}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {VIDEO_ITEMS.map((video) => (
           <button
             key={video.slug}
             type="button"
             onClick={() => setActiveYoutubeId(video.youtubeId)}
-            className="relative aspect-video rounded-xl overflow-hidden shadow-lg group text-left w-full"
+            className="group relative aspect-video w-full overflow-hidden rounded-xl text-left shadow-lg"
             aria-label={`Reproduzir vídeo ${video.slug}`}
           >
             <img
               src={youtubeThumbnail(video.youtubeId)}
               alt=""
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 h-full w-full object-cover"
             />
-            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/35 transition-colors flex items-center justify-center">
-              <span className="w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] rounded-full border-2 border-white text-white bg-transparent flex items-center justify-center text-2xl group-hover:bg-[#a21b7e] group-hover:border-[#a21b7e] transition-colors duration-200">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-colors group-hover:bg-black/35">
+              <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-white bg-transparent text-2xl text-white transition-colors duration-200 group-hover:border-[#a21b7e] group-hover:bg-[#a21b7e] sm:h-[4.5rem] sm:w-[4.5rem]">
                 ▶
               </span>
             </div>
@@ -55,30 +49,26 @@ export default function VideosPage() {
 
       {activeYoutubeId && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-8 bg-black/70"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 sm:p-8"
           role="dialog"
           aria-modal="true"
           onClick={() => setActiveYoutubeId(null)}
         >
           <div
-            className="relative w-full max-w-[1280px] bg-black rounded-xl shadow-2xl overflow-hidden"
+            className="relative w-full max-w-[1280px] overflow-hidden rounded-xl bg-black shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-full aspect-video bg-black">
-              <iframe
-                key={activeYoutubeId}
-                title="Reprodutor de vídeo YouTube"
-                src={youtubeEmbedUrl(activeYoutubeId)}
-                className="block w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            </div>
-            <div className="flex items-center justify-end px-4 py-3 bg-[#111] border-t border-white/10">
+            <SiteYoutubePlayer
+              key={activeYoutubeId}
+              videoId={activeYoutubeId}
+              autoplay
+              onMoreVideosClick={() => setActiveYoutubeId(null)}
+            />
+            <div className="flex items-center justify-end border-t border-white/10 bg-[#111] px-4 py-3">
               <button
                 type="button"
                 onClick={() => setActiveYoutubeId(null)}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-white/10 text-white text-sm hover:bg-white/20 transition-colors"
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-white/10 px-4 text-sm text-white transition-colors hover:bg-white/20"
                 aria-label="Fechar vídeo"
               >
                 <X size={18} />

@@ -77,7 +77,7 @@ export const SERVICE_ITEMS: ServiceItem[] = [
     title: "Publicidade e Marketing Digital",
     subtitle: "Advertising & Marketing",
     description:
-      "Num mundo onde todos os dias surgem novas marcas, produtos e serviços, é imprescindível uma estratégia inteligente de construção de marca e conexão emocional com o público-alvo.",
+      "Num mundo onde todos os dias surgem novas marcas, produtos e serviços, é imprescindível uma estratégia de construção de marca emocional com o público-alvo.",
     items: [
       "Consultoria e planeamento estratégico de marketing",
       "Estratégia de comunicação",
@@ -126,7 +126,7 @@ export const SERVICE_ITEMS: ServiceItem[] = [
     title: "Branding e Design Gráfico",
     subtitle: "Branding & Graphic Design",
     description:
-      "Materializamos o propósito da sua empresa em identidades visuais sólidas, traduzindo valores em formas, cores e sistemas gráficos coerentes.",
+      "Materializamos o propósito da sua empresa em identidades visuais sólidas, traduzindo valores em formas, cores e sistemas gráficos coerentes e agradáveis.",
     items: [
       "Criação de identidade visual",
       "Criação de embalagens",
@@ -181,7 +181,7 @@ export const SERVICE_ITEMS: ServiceItem[] = [
     title: "Fotografia e Videografia",
     subtitle: "Photography & Videography",
     description:
-      "A fotografia e o vídeo profissionais ajudam empresas a destacarem-se da concorrência, reforçando credibilidade e presença visual.",
+      "A fotografia e o vídeo profissionais ajudam empresas a destacarem-se da concorrência, reforçando a credibilidade e confiança na presença visual das empresas.",
     items: [
       "Filmagem e fotografia de conferências",
       "Filmagem e fotografia de seminários/palestras",
