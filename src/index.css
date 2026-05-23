@@ -206,36 +206,17 @@ body {
 }
 
 .client-logo-carousel {
-  container-type: inline-size;
   overflow: hidden;
   width: 100%;
 }
 
-.client-logo-carousel-track {
-  display: flex;
-  width: max-content;
-  gap: 12px;
-  animation: client-logo-marquee 38s linear infinite;
-}
-
-.client-logo-carousel:hover .client-logo-carousel-track {
-  animation-play-state: paused;
-}
-
 .client-logo-cell {
   position: relative;
-  flex: 0 0 64px;
   aspect-ratio: 5 / 3;
   overflow: hidden;
   background: transparent;
   padding: 0;
   line-height: 0;
-}
-
-@media (min-width: 768px) {
-  .client-logo-cell {
-    flex-basis: 80px;
-  }
 }
 
 .client-logo-cell img {
@@ -247,16 +228,6 @@ body {
   margin: 0;
   padding: 0;
   object-fit: fill;
-}
-
-@keyframes client-logo-marquee {
-  from {
-    transform: translateX(0);
-  }
-
-  to {
-    transform: translateX(-50%);
-  }
 }
 
 .contact-field-label {

@@ -118,6 +118,10 @@ const SERVICE_CARD_TAG: Record<string, string> = {
   "servicos-informaticos": "Serviços digitais",
 };
 
+const SERVICE_CARD_TITLE: Record<string, string> = {
+  "publicidade-marketing": "Marketing digital",
+};
+
 const PRODUCTION_PROCESS = [
   {
     step: "01",
@@ -161,6 +165,11 @@ function getTeamVisible(width: number) {
   return 2;
 }
 
+function getLogoVisible(width: number) {
+  if (width < 768) return 2;
+  return 5;
+}
+
 export default function Home() {
   const navigationType = useNavigationType();
   const [content, setContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
@@ -172,6 +181,8 @@ export default function Home() {
   const [quickLinkResetting, setQuickLinkResetting] = useState(false);
   const [teamSlide, setTeamSlide] = useState(2);
   const [teamResetting, setTeamResetting] = useState(false);
+  const [logoSlide, setLogoSlide] = useState(2);
+  const [logoResetting, setLogoResetting] = useState(false);
   const [activeServiceCard, setActiveServiceCard] = useState(0);
   const [activeProcessCard, setActiveProcessCard] = useState(0);
   const [featuredVideoId, setFeaturedVideoId] = useState(VIDEO_ITEMS[0]?.youtubeId ?? "");
@@ -180,6 +191,9 @@ export default function Home() {
   );
   const [teamVisible, setTeamVisible] = useState(() =>
     typeof window !== "undefined" ? getTeamVisible(window.innerWidth) : 2,
+  );
+  const [logoVisible, setLogoVisible] = useState(() =>
+    typeof window !== "undefined" ? getLogoVisible(window.innerWidth) : 5,
   );
 
   const quickLinkExtended = useMemo(
@@ -202,12 +216,28 @@ export default function Home() {
   const teamEnd = teamStart + teamMembers.length;
   const teamResetBack = teamEnd - teamVisible;
 
+  const clientLogos = content.clientLogos;
+
+  const logoExtended = useMemo(
+    () => [
+      ...clientLogos.slice(-logoVisible),
+      ...clientLogos,
+      ...clientLogos.slice(0, logoVisible),
+    ],
+    [clientLogos, logoVisible],
+  );
+  const logoStart = logoVisible;
+  const logoEnd = logoStart + clientLogos.length;
+  const logoResetBack = logoEnd - logoVisible;
+
   useEffect(() => {
     const onResize = () => {
       const nextQuick = getQuickLinksVisible(window.innerWidth);
       const nextTeam = getTeamVisible(window.innerWidth);
+      const nextLogo = getLogoVisible(window.innerWidth);
       setQuickLinksVisible((prev) => (prev === nextQuick ? prev : nextQuick));
       setTeamVisible((prev) => (prev === nextTeam ? prev : nextTeam));
+      setLogoVisible((prev) => (prev === nextLogo ? prev : nextLogo));
     };
     window.addEventListener("resize", onResize, { passive: true });
     return () => window.removeEventListener("resize", onResize);
@@ -222,6 +252,11 @@ export default function Home() {
     setTeamSlide(teamStart);
     setTeamResetting(false);
   }, [teamVisible, teamStart]);
+
+  useEffect(() => {
+    setLogoSlide(logoStart);
+    setLogoResetting(false);
+  }, [logoVisible, logoStart, clientLogos.length]);
 
   useEffect(() => {
     fetchSiteHomeContent().then(setContent).catch(() => setContent(DEFAULT_HOME_CONTENT));
@@ -309,6 +344,33 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [teamSlide, teamStart, teamVisible, teamResetBack]);
 
+  useEffect(() => {
+    const t = setInterval(() => {
+      setLogoSlide((i) => i + 1);
+    }, 4000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (logoSlide !== logoEnd) return;
+    const t = setTimeout(() => {
+      setLogoResetting(true);
+      setLogoSlide(logoStart);
+      requestAnimationFrame(() => setLogoResetting(false));
+    }, 520);
+    return () => clearTimeout(t);
+  }, [logoSlide, logoEnd, logoStart]);
+
+  useEffect(() => {
+    if (logoSlide !== logoStart - logoVisible) return;
+    const t = setTimeout(() => {
+      setLogoResetting(true);
+      setLogoSlide(logoResetBack);
+      requestAnimationFrame(() => setLogoResetting(false));
+    }, 520);
+    return () => clearTimeout(t);
+  }, [logoSlide, logoStart, logoVisible, logoResetBack]);
+
   const scrollTo = (href: string) => {
     setMenuOpen(false);
     document.getElementById(href.replace("#", ""))?.scrollIntoView({ behavior: "smooth" });
@@ -330,7 +392,7 @@ export default function Home() {
     <div className="site-bg min-h-screen text-gray-900 overflow-x-hidden font-sans">
       <header
         className={cn(
-          "fixed top-0 left-0 right-0 z-50 h-20 transition-all duration-500 ease-in-out",
+          "fixed top-0 left-0 right-0 z-50 h-[70px] transition-all duration-500 ease-in-out",
           scrolled
             ? "bg-white shadow-sm border-b border-gray-100"
             : "bg-black/25 border-b border-[#a21b7e]/30",
@@ -879,7 +941,7 @@ export default function Home() {
       </section>
 
       <section id="servicos" className="relative scroll-mt-[75px] bg-white pb-14 lg:pb-16">
-        <div className="relative h-[280px] overflow-hidden sm:h-[320px] lg:h-[350px]">
+        <div className="relative h-[310px] overflow-hidden sm:h-[350px] lg:h-[380px]">
           <OptimizedDriveImage
             src={content.teamBanner}
             alt=""
@@ -899,7 +961,7 @@ export default function Home() {
             <h2 className="site-section-title max-w-3xl text-white">
               Soluções integradas <span className="font-light text-white/85">para si</span>
             </h2>
-            <p className="site-section-desc mb-16 max-w-2xl text-white/85 sm:mb-20 lg:mb-24">
+            <p className="site-section-desc mb-[50px] max-w-2xl text-white/85">
               {content.servicesIntro}
             </p>
           </div>
@@ -930,7 +992,7 @@ export default function Home() {
                     <div className="mx-auto h-32 w-[130%] -translate-y-[58%] rounded-[50%] bg-[#f0e8ec]" />
                   </div>
 
-                  <div className="relative flex flex-col px-5 pt-6">
+                  <div className="relative flex flex-col px-5 pt-6 pb-[73px]">
                     <div className="relative z-10 flex items-center justify-center gap-2">
                       <span className="h-px w-6 bg-gray-300" aria-hidden="true" />
                       <p className="text-[15px] font-medium normal-case text-gray-500 sm:text-base">
@@ -939,9 +1001,9 @@ export default function Home() {
                       <span className="h-px w-6 bg-gray-300" aria-hidden="true" />
                     </div>
                     <h3 className="relative z-10 mt-2 text-[20px] font-extrabold leading-snug text-[#a21b7e]">
-                      {service.title}
+                      {SERVICE_CARD_TITLE[service.slug] ?? service.title}
                     </h3>
-                    <p className="relative z-10 mt-3 min-h-[6.125rem] text-[15px] leading-relaxed text-gray-600 line-clamp-4">
+                    <p className="relative z-10 mt-3 min-h-[4.5rem] text-[15px] leading-relaxed text-gray-600 line-clamp-4">
                       {service.description}
                     </p>
                   </div>
@@ -949,10 +1011,10 @@ export default function Home() {
                   <HomeLeavingLink
                     to={`/servicos/${service.slug}`}
                     className={cn(
-                      "mt-[25px] flex h-12 shrink-0 items-center justify-center gap-2 bg-[#a21b7e] px-3 text-sm font-medium text-white transition-opacity duration-300 hover:bg-[#8e176e]",
+                      "absolute inset-x-0 bottom-0 flex h-12 shrink-0 items-center justify-center gap-2 bg-[#a21b7e] px-3 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[#8e176e]",
                       showCta
-                        ? "opacity-100"
-                        : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100",
+                        ? "translate-y-0 opacity-100"
+                        : "pointer-events-none translate-y-full opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100",
                     )}
                   >
                     Leia mais
@@ -1049,7 +1111,7 @@ export default function Home() {
             <h2 className="site-section-title text-white">
               Arquivo <span className="font-light text-white/85">ProVisual Corporate</span>
             </h2>
-            <p className="site-section-desc mx-auto max-w-3xl text-white/85 line-clamp-2">
+            <p className="site-section-desc mx-auto mb-[30px] max-w-3xl text-white/85 line-clamp-2">
             Guarde, consulte e partilhe fotos e vídeos com a sua equipa num arquivo exclusivo pensado
             para si — o diferencial ProVisual, com arquivo institucional privado e IA integrada.
             </p>
@@ -1121,9 +1183,26 @@ export default function Home() {
           </div>
 
           <div className="client-logo-carousel" aria-label="Logotipos de clientes">
-            <div className="client-logo-carousel-track">
-              {[...content.clientLogos, ...content.clientLogos].map((logo, index) => (
-                <div key={`${logo.name}-${index}`} className="client-logo-cell">
+            <motion.div
+              className="flex items-stretch"
+              style={{
+                width: `${(logoExtended.length / logoVisible) * 100}%`,
+              }}
+              animate={{
+                x: `-${logoSlide * (100 / logoExtended.length)}%`,
+              }}
+              transition={
+                logoResetting
+                  ? { duration: 0 }
+                  : { duration: 0.5, ease: "easeInOut" }
+              }
+            >
+              {logoExtended.map((logo, index) => (
+                <div
+                  key={`${logo.name}-${index}`}
+                  className="client-logo-cell box-border shrink-0 px-1.5"
+                  style={{ width: `${100 / logoExtended.length}%` }}
+                >
                   <OptimizedDriveImage
                     src={logo.image}
                     alt={logo.name}
@@ -1132,7 +1211,7 @@ export default function Home() {
                   />
                 </div>
               ))}
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -1220,8 +1299,8 @@ export default function Home() {
                   window.location.href = `mailto:${content.contact.email}?subject=${encodeURIComponent("Contacto via site")}&body=${encodeURIComponent(`Nome: ${nome}\nEmail: ${email}\n\n${mensagem}`)}`;
                 }}
               >
-                <div className="bg-[#fafafa] px-[80px] pb-2 pt-0">
-                  <h2 className="site-section-title mb-0 text-gray-900">
+                <div className="flex min-h-[120px] items-center bg-[#fafafa] px-[80px] py-5 sm:min-h-[132px] sm:py-6">
+                  <h2 className="site-section-title mb-0 w-full text-gray-900">
                     Fale <span className="font-light">connosco</span>
                   </h2>
                 </div>
@@ -1259,7 +1338,7 @@ export default function Home() {
                       required
                       rows={5}
                       aria-label="Mensagem"
-                      className="contact-field-textarea min-h-[140px]"
+                      className="contact-field-textarea min-h-[180px]"
                       placeholder="escreva sua mensagem"
                     />
                   </div>
