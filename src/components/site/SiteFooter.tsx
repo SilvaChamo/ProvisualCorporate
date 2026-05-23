@@ -11,7 +11,7 @@ export default function SiteFooter() {
 
   return (
     <>
-      <div className="h-[2px] bg-[#a21b7e]" aria-hidden="true" />
+      <div className="h-[3px] bg-[#a21b7e]" aria-hidden="true" />
 
       <section className="bg-[#2a2a2a] text-gray-300">
         <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-14 grid sm:grid-cols-2 lg:grid-cols-5 gap-10">

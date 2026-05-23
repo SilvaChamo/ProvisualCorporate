@@ -45,11 +45,12 @@ import { youtubeThumbnail } from "../lib/youtubeEmbed";
 
 const NAV_LINKS = [
   { href: "#sobre", label: "Sobre nós" },
+  { href: "#processo-criativo", label: "Processo" },
+  { href: "#equipa", label: "Equipa" },
   { href: "#servicos", label: "Serviços" },
-  { href: "#videos", label: "Vídeos" },
-  { href: "#eventos", label: "Eventos" },
-  { href: "#clientes", label: "Clientes" },
-  { href: "#contactos", label: "Contacte-nos" },
+  { href: "#videos", label: "Videos" },
+  { href: "#eventos", label: "Cobertura" },
+  { href: "#contactos", label: "Contactos" },
 ];
 
 const SOCIAL_LINKS = [
@@ -561,7 +562,7 @@ export default function Home() {
       </section>
 
       {/* Container branco — secção Sobre nós completa */}
-      <div className="relative z-20 -mt-[50px] mb-10 max-w-[1400px] mx-auto px-6 lg:px-10">
+      <div className="relative z-20 -mt-[50px] mb-[75px] max-w-[1400px] mx-auto px-6 lg:px-10">
         <div className="overflow-hidden rounded-2xl bg-white shadow-[0_5px_5px_5px_rgba(0,0,0,0.08)]">
           <section id="sobre" className="scroll-mt-[75px] p-6 sm:p-8 lg:p-10">
             <div className="grid gap-8 lg:grid-cols-2 lg:items-stretch">
@@ -778,7 +779,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="relative z-0 box-border flex min-h-[350px] items-center justify-center rounded-2xl border border-[#a21b7e]/18 bg-[#a21b7e]/[0.025] px-3 py-4 pl-6 shadow-[0_8px_24px_5px_rgba(0,0,0,0.12)] sm:min-h-[370px] sm:px-4 sm:pl-8 lg:min-h-0 lg:px-4 lg:pl-14">
+            <div className="relative z-0 box-border flex min-h-[350px] items-center justify-center rounded-2xl border border-[#a21b7e]/18 bg-[#a21b7e]/[0.025] px-3 py-4 pl-6 shadow-[0_8px_24px_4px_rgba(0,0,0,0.12)] sm:min-h-[370px] sm:px-4 sm:pl-8 lg:min-h-0 lg:px-4 lg:pl-14">
               <div className="flex w-full items-center justify-center gap-1.5 sm:gap-3">
                 <button
                   type="button"
@@ -1112,19 +1113,10 @@ export default function Home() {
 
       <section id="clientes" className="scroll-mt-[75px] bg-white py-16 lg:py-24">
         <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="site-section-header site-section-header--center mb-14">
-            <div className="site-section-kicker site-section-kicker--center">
-              <span className="site-section-kicker-line site-section-kicker-line--dark" />
-              <p className="site-antetitle text-[#a21b7e]">Clientes</p>
-              <span className="site-section-kicker-line site-section-kicker-line--dark" />
-            </div>
-            <h2 className="site-section-title text-gray-900">
-              Nossos <span className="font-light">Clientes</span>
-            </h2>
-            <p className="site-section-desc text-gray-600">
-              Empresas de sucesso têm o cliente como bem maior. Prezamos pela confiança e pelos
-              resultados.
-            </p>
+          <div className="mb-14 flex items-center justify-center gap-4">
+            <span className="site-section-kicker-line site-section-kicker-line--dark" aria-hidden="true" />
+            <h2 className="site-section-title mb-0 text-gray-900">Nossos clientes</h2>
+            <span className="site-section-kicker-line site-section-kicker-line--dark" aria-hidden="true" />
           </div>
 
           <div className="client-logo-carousel" aria-label="Logotipos de clientes">
@@ -1214,7 +1206,7 @@ export default function Home() {
               </div>
 
               <form
-                className="bg-white py-8 sm:py-10"
+                className="bg-white py-5 sm:py-6"
                 onSubmit={(e) => {
                   e.preventDefault();
                   const form = e.target as HTMLFormElement;
@@ -1227,12 +1219,12 @@ export default function Home() {
                   window.location.href = `mailto:${content.contact.email}?subject=${encodeURIComponent("Contacto via site")}&body=${encodeURIComponent(`Nome: ${nome}\nEmail: ${email}\n\n${mensagem}`)}`;
                 }}
               >
-                <div className="px-[80px] pb-4">
+                <div className="bg-[#fafafa] px-[80px] pb-2 pt-3">
                   <h2 className="site-section-title mb-0 text-gray-900">
                     Fale <span className="font-light">connosco</span>
                   </h2>
                 </div>
-                <div className="mb-8 h-px w-full bg-[#D7D7D7]" aria-hidden="true" />
+                <div className="mb-6 h-px w-full bg-[#D7D7D7]" aria-hidden="true" />
 
                 <div className="space-y-4 px-[80px]">
                   <div>
@@ -1243,7 +1235,7 @@ export default function Home() {
                       required
                       aria-label="Nome"
                       className="contact-field-input"
-                      placeholder="Introduza o seu nome"
+                      placeholder="Nome"
                     />
                   </div>
 
@@ -1255,7 +1247,7 @@ export default function Home() {
                       required
                       aria-label="Email"
                       className="contact-field-input"
-                      placeholder="Introduza um email válido"
+                      placeholder="E-mail"
                     />
                   </div>
 
@@ -1267,7 +1259,7 @@ export default function Home() {
                       rows={5}
                       aria-label="Mensagem"
                       className="contact-field-textarea min-h-[140px]"
-                      placeholder="Escreva a sua mensagem"
+                      placeholder="escreva sua mensagem"
                     />
                   </div>
 

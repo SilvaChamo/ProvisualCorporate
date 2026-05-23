@@ -1,10 +1,11 @@
 export const SITE_NAV_LINKS = [
   { href: "/#sobre", label: "Sobre nós" },
+  { href: "/#processo-criativo", label: "Processo" },
+  { href: "/#equipa", label: "Equipa" },
   { href: "/#servicos", label: "Serviços" },
-  { href: "/#videos", label: "Vídeos" },
-  { href: "/#eventos", label: "Eventos" },
-  { href: "/#clientes", label: "Clientes" },
-  { href: "/#contactos", label: "Contacte-nos" },
+  { href: "/#videos", label: "Videos" },
+  { href: "/#eventos", label: "Cobertura" },
+  { href: "/#contactos", label: "Contactos" },
 ];
 
 export const QUICK_LINK_ROUTES = [
