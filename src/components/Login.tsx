@@ -318,6 +318,15 @@ export default function Login() {
               </div>
             )}
           </div>
+
+          <Link
+            to="/"
+            className="lg:hidden mt-6 mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[#a21b7e]/30 text-[#a21b7e] hover:bg-[#a21b7e]/5 transition-colors"
+            aria-label="Voltar à página inicial"
+            title="Página inicial"
+          >
+            <Home size={20} />
+          </Link>
         </motion.div>
       </div>
     </div>

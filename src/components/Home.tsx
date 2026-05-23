@@ -339,7 +339,7 @@ export default function Home() {
             <Link
               to="/login"
               className={cn(
-                "inline-flex text-xs sm:text-[15px] font-normal rounded-full px-3 sm:px-6 py-1 sm:py-1.5 transition-all duration-500 whitespace-nowrap",
+                "hidden lg:inline-flex text-[15px] font-normal rounded-full px-6 py-1.5 transition-all duration-500 whitespace-nowrap",
                 scrolled
                   ? "text-[#a21b7e] border border-[#a21b7e] hover:bg-[#a21b7e]/5"
                   : "text-white border border-white/70 hover:bg-white/10",
@@ -365,6 +365,8 @@ export default function Home() {
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
           tone={scrolled ? "home-scrolled" : "home"}
+          loginHref="/login"
+          loginLabel="Entrar"
           links={NAV_LINKS.map((link) => ({
             href: link.href,
             label: link.label,
@@ -398,18 +400,18 @@ export default function Home() {
         <button
           type="button"
           onClick={prevSlide}
-          className="group absolute left-[70px] top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-[#3d001d] flex items-center justify-center hover:bg-[#8e176e] transition-colors"
+          className="group absolute left-3 sm:left-[70px] top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#3d001d] flex items-center justify-center hover:bg-[#8e176e] transition-colors"
           aria-label="Slide anterior"
         >
-          <ChevronLeft size={26} className="text-[#c958a8] group-hover:text-white transition-colors" strokeWidth={2.25} />
+          <ChevronLeft size={24} className="text-[#c958a8] group-hover:text-white transition-colors" strokeWidth={2.25} />
         </button>
         <button
           type="button"
           onClick={nextSlide}
-          className="group absolute right-[70px] top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-[#3d001d] flex items-center justify-center hover:bg-[#8e176e] transition-colors"
+          className="group absolute right-3 sm:right-[70px] top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#3d001d] flex items-center justify-center hover:bg-[#8e176e] transition-colors"
           aria-label="Slide seguinte"
         >
-          <ChevronRight size={26} className="text-[#c958a8] group-hover:text-white transition-colors" strokeWidth={2.25} />
+          <ChevronRight size={24} className="text-[#c958a8] group-hover:text-white transition-colors" strokeWidth={2.25} />
         </button>
 
         <div className="relative z-10 flex h-full flex-col items-center px-4 pb-8 pt-16 sm:px-6 sm:pb-10 sm:pt-20">
@@ -460,7 +462,7 @@ export default function Home() {
           </div>
 
           {/* Carrossel — 1 card mobile, 2 tablet, 3 desktop */}
-          <div className="mt-10 mb-12 w-full max-w-[1200px] shrink-0 sm:mt-16 sm:mb-20 md:w-[85%] lg:w-[60%]">
+          <div className="mt-10 mb-12 w-[76%] max-w-[1200px] shrink-0 sm:mt-16 sm:mb-20 sm:w-full md:w-[85%] lg:w-[60%]">
             <div className="overflow-hidden w-full">
               <motion.div
                 className="flex"
@@ -494,7 +496,7 @@ export default function Home() {
                   return (
                     <div
                       key={cardKey}
-                      className="shrink-0 box-border px-2.5"
+                      className="shrink-0 box-border px-1.5 md:px-2.5"
                       style={{ width: `${slotWidth}%` }}
                     >
                       <Link to={item.to} className="block h-full group" aria-label={`Abrir ${item.label}`}>

@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
 import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import { cn } from "../../lib/utils";
 
 export interface OffCanvasNavLink {
@@ -15,6 +16,8 @@ interface SiteOffCanvasMenuProps {
   links: OffCanvasNavLink[];
   /** home = sobre hero escuro; light = páginas internas */
   tone?: "home" | "home-scrolled" | "light";
+  loginHref?: string;
+  loginLabel?: string;
 }
 
 export default function SiteOffCanvasMenu({
@@ -22,6 +25,8 @@ export default function SiteOffCanvasMenu({
   onClose,
   links,
   tone = "light",
+  loginHref,
+  loginLabel = "Entrar",
 }: SiteOffCanvasMenuProps) {
   useEffect(() => {
     if (!open) return;
@@ -98,6 +103,20 @@ export default function SiteOffCanvasMenu({
                   {link.label}
                 </a>
               ))}
+              {loginHref && (
+                <Link
+                  to={loginHref}
+                  onClick={onClose}
+                  className={cn(
+                    "mt-2 self-start rounded-lg border px-3 py-2 text-[15px] font-semibold transition-colors",
+                    tone === "light" || tone === "home-scrolled"
+                      ? "border-[#a21b7e] text-[#a21b7e] hover:bg-[#a21b7e]/5"
+                      : "border-white/60 text-white hover:bg-white/10",
+                  )}
+                >
+                  {loginLabel}
+                </Link>
+              )}
             </nav>
           </motion.aside>
         </>

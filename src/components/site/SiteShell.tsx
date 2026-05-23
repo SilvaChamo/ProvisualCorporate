@@ -40,7 +40,7 @@ export default function SiteShell({ children, title, breadcrumbs }: SiteShellPro
           <div className="flex items-center justify-end gap-1.5 sm:gap-2">
             <Link
               to="/login"
-              className="inline-flex text-xs sm:text-[15px] font-normal text-[#a21b7e] border border-[#a21b7e] rounded-full px-3 sm:px-6 py-1 sm:py-2 hover:bg-[#a21b7e]/5 transition-colors whitespace-nowrap"
+              className="hidden lg:inline-flex text-[15px] font-normal text-[#a21b7e] border border-[#a21b7e] rounded-full px-6 py-2 hover:bg-[#a21b7e]/5 transition-colors whitespace-nowrap"
             >
               Gestão
             </Link>
@@ -59,6 +59,8 @@ export default function SiteShell({ children, title, breadcrumbs }: SiteShellPro
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
           tone="light"
+          loginHref="/login"
+          loginLabel="Gestão"
           links={SITE_NAV_LINKS.map((link) => ({
             href: link.href,
             label: link.label,
