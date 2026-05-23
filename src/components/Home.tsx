@@ -1127,19 +1127,17 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="client-logo-carousel" aria-label="Logotipos de clientes">
-            <div className="client-logo-carousel-track">
-              {[...content.clientLogos, ...content.clientLogos].map((logo, index) => (
-                <div key={`${logo.name}-${index}`} className="client-logo-cell">
-                  <OptimizedDriveImage
-                    src={logo.image}
-                    alt={logo.name}
-                    size="sm"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              ))}
-            </div>
+          <div className="client-logo-grid">
+            {content.clientLogos.map((logo) => (
+              <div key={logo.name + logo.image} className="client-logo-cell">
+                <OptimizedDriveImage
+                  src={logo.image}
+                  alt={logo.name}
+                  size="sm"
+                  className="h-full w-full object-fill"
+                />
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -1214,7 +1212,7 @@ export default function Home() {
               </div>
 
               <form
-                className="bg-white px-[80px] py-8 sm:py-10"
+                className="bg-white py-8 sm:py-10"
                 onSubmit={(e) => {
                   e.preventDefault();
                   const form = e.target as HTMLFormElement;
@@ -1227,50 +1225,45 @@ export default function Home() {
                   window.location.href = `mailto:${content.contact.email}?subject=${encodeURIComponent("Contacto via site")}&body=${encodeURIComponent(`Nome: ${nome}\nEmail: ${email}\n\n${mensagem}`)}`;
                 }}
               >
-                <div className="site-section-header mb-8 max-w-none text-left">
-                  <h2 className="site-section-title mb-4 text-gray-900">
+                <div className="site-section-header mb-4 max-w-none px-[80px] text-left">
+                  <h2 className="site-section-title mb-0 text-gray-900">
                     Fale <span className="font-light">connosco</span>
                   </h2>
-                  <span className="block h-px w-full max-w-xs bg-[#D7D7D7]" aria-hidden="true" />
                 </div>
+                <span className="mb-8 block h-px w-full bg-[#D7D7D7]" aria-hidden="true" />
 
-                <div className="space-y-4">
+                <div className="space-y-4 px-[80px]">
                   <div>
-                    <label htmlFor="contact-nome" className="contact-field-label">
-                      Nome
-                    </label>
                     <input
                       id="contact-nome"
                       name="nome"
+                      type="text"
                       required
+                      aria-label="Nome"
                       className="contact-field-input"
                       placeholder="Introduza o seu nome"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="contact-email" className="contact-field-label">
-                      Email
-                    </label>
                     <input
                       id="contact-email"
                       name="email"
                       type="email"
                       required
+                      aria-label="Email"
                       className="contact-field-input"
                       placeholder="Introduza um email válido"
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="contact-mensagem" className="contact-field-label">
-                      Mensagem
-                    </label>
                     <textarea
                       id="contact-mensagem"
                       name="mensagem"
                       required
                       rows={5}
+                      aria-label="Mensagem"
                       className="contact-field-textarea min-h-[140px]"
                       placeholder="Escreva a sua mensagem"
                     />
