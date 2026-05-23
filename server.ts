@@ -6,6 +6,16 @@ import fs from "fs";
 import { Readable } from "stream";
 import { google } from "googleapis";
 import { createClient } from "@supabase/supabase-js";
+import {
+  getSiteContentFolderId,
+  listSiteGalleryAlbums,
+  listSiteGalleryAlbumPhotos,
+  listSiteLibraryPhotos,
+  listSiteServiceImages,
+  resolveSiteSubfolderId,
+  driveMediaUrl,
+  resolveHomeContentImages,
+} from "./lib/siteDriveHelpers.js";
 
 async function startServer() {
   // Ajudar o servidor compilado a encontrar os módulos
@@ -44,7 +54,17 @@ async function startServer() {
         .eq("key", HOME_CONTENT_KEY)
         .single();
       if (error && error.code !== "PGRST116") throw error;
-      res.json({ content: data?.value ?? null });
+
+      let content = data?.value ?? null;
+      try {
+        const { auth } = await getGoogleAuth();
+        const drive = google.drive({ version: "v3", auth });
+        content = await resolveHomeContentImages(drive, supabase, content);
+      } catch (driveErr) {
+        console.warn("Home Drive image resolve skipped:", driveErr);
+      }
+
+      res.json({ content });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Erro ao carregar conteúdo da home." });
     }
@@ -68,6 +88,91 @@ async function startServer() {
 
   // Google Drive Integration
   const upload = multer({ storage: multer.memoryStorage() });
+
+  // ── Biblioteca de imagens do site (Google Drive > site) ──
+  app.get("/api/site/gallery", async (_req, res) => {
+    try {
+      const { auth } = await getGoogleAuth();
+      const drive = google.drive({ version: "v3", auth });
+      const data = await listSiteGalleryAlbums(drive, supabase);
+      res.json(data);
+    } catch (err: any) {
+      console.error("Site gallery list error:", err);
+      res.status(500).json({ error: err.message || "Erro ao listar galeria do site." });
+    }
+  });
+
+  app.get("/api/site/gallery/:slug/photos", async (req, res) => {
+    try {
+      const { auth } = await getGoogleAuth();
+      const drive = google.drive({ version: "v3", auth });
+      const data = await listSiteGalleryAlbumPhotos(drive, supabase, req.params.slug);
+      res.json(data);
+    } catch (err: any) {
+      console.error("Site gallery photos error:", err);
+      res.status(500).json({ error: err.message || "Erro ao listar fotos do álbum." });
+    }
+  });
+
+  app.get("/api/site/library", async (_req, res) => {
+    try {
+      const { auth } = await getGoogleAuth();
+      const drive = google.drive({ version: "v3", auth });
+      const siteFolderId = await getSiteContentFolderId(drive, supabase);
+      const photos = await listSiteLibraryPhotos(drive, supabase);
+      res.json({ siteFolderId, photos });
+    } catch (err: any) {
+      console.error("Site library error:", err);
+      res.status(500).json({ error: err.message || "Erro ao listar biblioteca do site." });
+    }
+  });
+
+  app.post("/api/site/media/upload", upload.single("file"), async (req: any, res) => {
+    const file = req.file;
+    const subpath = typeof req.body?.subpath === "string" ? req.body.subpath.trim() : "";
+
+    if (!file) return res.status(400).json({ error: "Ficheiro é obrigatório." });
+
+    try {
+      const { auth } = await getGoogleAuth();
+      const drive = google.drive({ version: "v3", auth });
+      const folderId = await resolveSiteSubfolderId(drive, supabase, subpath);
+
+      const bufferStream = new Readable();
+      bufferStream.push(file.buffer);
+      bufferStream.push(null);
+
+      const response = await drive.files.create({
+        requestBody: { name: file.originalname, parents: [folderId] },
+        media: { mimeType: file.mimetype, body: bufferStream },
+        supportsAllDrives: true,
+        fields: "id, name, mimeType, webViewLink, thumbnailLink, createdTime",
+      });
+
+      res.json({
+        ...response.data,
+        folderId,
+        subpath,
+        url: driveMediaUrl(response.data.id!),
+        thumbnailUrl: `/api/drive/thumbnail?id=${response.data.id}`,
+      });
+    } catch (err: any) {
+      console.error("Site media upload error:", err);
+      res.status(500).json({ error: err.message || "Erro ao carregar imagem para o site." });
+    }
+  });
+
+  app.get("/api/site/services", async (_req, res) => {
+    try {
+      const { auth } = await getGoogleAuth();
+      const drive = google.drive({ version: "v3", auth });
+      const images = await listSiteServiceImages(drive, supabase);
+      res.json({ images });
+    } catch (err: any) {
+      console.error("Site services images error:", err);
+      res.status(500).json({ error: err.message || "Erro ao listar imagens de serviços." });
+    }
+  });
 
   // Utilitário para inicializar o cliente Google Auth (Híbrido)
   async function getGoogleAuth() {
@@ -479,6 +584,40 @@ async function startServer() {
       res.send(buffer);
     } catch (error: any) {
       console.error("Erro ao obter thumbnail do Drive:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Proxy de imagem em resolução completa (galeria / biblioteca do site)
+  app.get("/api/drive/media", async (req, res) => {
+    const { id } = req.query;
+    if (!id) return res.status(400).send("ID do arquivo é obrigatório");
+
+    try {
+      const { auth } = await getGoogleAuth();
+      const drive = google.drive({ version: "v3", auth });
+
+      const fileResponse = await drive.files.get({
+        fileId: id as string,
+        fields: "mimeType, name",
+        supportsAllDrives: true,
+      });
+
+      const mediaResponse = await drive.files.get(
+        { fileId: id as string, alt: "media", supportsAllDrives: true },
+        { responseType: "stream" },
+      );
+
+      res.setHeader("Content-Type", fileResponse.data.mimeType || "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      mediaResponse.data
+        .on("error", (streamErr: Error) => {
+          console.error("Stream media error:", streamErr);
+          if (!res.headersSent) res.status(500).end(streamErr.message);
+        })
+        .pipe(res);
+    } catch (error: any) {
+      console.error("Erro ao obter media do Drive:", error);
       res.status(500).send(error.message);
     }
   });

@@ -29,9 +29,9 @@ import TypewriterTitle from "./site/TypewriterTitle";
 import { QUICK_LINK_ROUTES } from "../lib/siteNav";
 import {
   DEFAULT_HOME_CONTENT,
-  mergeHomeContent,
   type HomeContent,
 } from "../lib/homeContent";
+import { fetchSiteHomeContent } from "../lib/siteGalleryApi";
 import { cn } from "../lib/utils";
 
 const NAV_LINKS = [
@@ -123,50 +123,6 @@ const PRODUCTION_PROCESS = [
   },
 ];
 
-const TEAM_MEMBERS = [
-  {
-    name: "Ana Mabunda",
-    role: "Directora Criativa",
-    image:
-      "/INICIO/designer-gr%C3%A1fico-africano-criativo-no-flipchart-com-gr%C3%A1ficos-e-notas-adesivas-187855551.webp",
-    social: {
-      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
-      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
-      instagram: "https://www.instagram.com/",
-    },
-  },
-  {
-    name: "Carlos Nhaca",
-    role: "Director de Produção",
-    image:
-      "/INICIO/designer-gr%C3%A1fico-africano-web-usando-software-de-edi%C3%A7%C3%A3o-design-212684276.webp",
-    social: {
-      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
-      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
-      instagram: "https://www.instagram.com/",
-    },
-  },
-  {
-    name: "Sofia Matola",
-    role: "Gestora de Projectos",
-    image: "/INICIO/COmunidade.jpg",
-    social: {
-      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
-      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
-      instagram: "https://www.instagram.com/",
-    },
-  },
-  {
-    name: "Miguel Tembe",
-    role: "Especialista Audiovisual",
-    image: "/INICIO/Coberturas.jpg",
-    social: {
-      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
-      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
-      instagram: "https://www.instagram.com/",
-    },
-  },
-];
 
 function getQuickLinksVisible(width: number) {
   if (width < 768) return 1;
@@ -205,16 +161,18 @@ export default function Home() {
   );
   const quickLinkMaxSlide = QUICK_LINKS.length;
 
+  const teamMembers = content.teamMembers;
+
   const teamExtended = useMemo(
     () => [
-      ...TEAM_MEMBERS.slice(-teamVisible),
-      ...TEAM_MEMBERS,
-      ...TEAM_MEMBERS.slice(0, teamVisible),
+      ...teamMembers.slice(-teamVisible),
+      ...teamMembers,
+      ...teamMembers.slice(0, teamVisible),
     ],
-    [teamVisible],
+    [teamMembers, teamVisible],
   );
   const teamStart = teamVisible;
-  const teamEnd = teamStart + TEAM_MEMBERS.length;
+  const teamEnd = teamStart + teamMembers.length;
   const teamResetBack = teamEnd - teamVisible;
 
   useEffect(() => {
@@ -239,10 +197,7 @@ export default function Home() {
   }, [teamVisible, teamStart]);
 
   useEffect(() => {
-    fetch("/api/site/home")
-      .then((r) => r.json())
-      .then((data) => setContent(mergeHomeContent(data.content)))
-      .catch(() => setContent(DEFAULT_HOME_CONTENT));
+    fetchSiteHomeContent().then(setContent).catch(() => setContent(DEFAULT_HOME_CONTENT));
   }, []);
 
   useEffect(() => {
@@ -596,7 +551,7 @@ export default function Home() {
             <div className="grid gap-8 lg:grid-cols-2 lg:items-stretch">
               <div className="relative h-[380px] sm:h-[420px] lg:h-[500px]">
                 <img
-                  src="/INICIO/sobre.webp"
+                  src={content.aboutImage}
                   alt="Equipa ProVisual Corporate"
                   className="h-full w-full rounded-2xl object-cover"
                 />
@@ -663,7 +618,7 @@ export default function Home() {
       >
         <div
           className="process-section-kenburns absolute inset-0"
-          style={{ backgroundImage: "url(/INICIO/producao-grafica.webp)" }}
+          style={{ backgroundImage: `url(${content.processBackground})` }}
           aria-hidden="true"
         />
         <div className="absolute inset-0 bg-[#3d001d]/55" aria-hidden="true" />
@@ -909,7 +864,7 @@ export default function Home() {
       <section id="equipa-especialistas" className="relative scroll-mt-[75px] bg-white pb-14 lg:pb-16">
         <div className="relative h-[280px] overflow-hidden sm:h-[320px] lg:h-[350px]">
           <img
-            src="/INICIO/Coberturas.jpg"
+            src={content.teamBanner}
             alt=""
             aria-hidden="true"
             className="absolute inset-0 h-full w-full object-cover"
@@ -928,7 +883,7 @@ export default function Home() {
 
         <div className="relative mx-auto max-w-[1400px] px-6 lg:px-10">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:-mt-20 md:gap-5 lg:-mt-28 lg:grid-cols-4 lg:gap-4 xl:-mt-32">
-            {TEAM_MEMBERS.map((member, index) => {
+            {teamMembers.map((member, index) => {
               const isActive = activeTeamCard === index;
 
               return (

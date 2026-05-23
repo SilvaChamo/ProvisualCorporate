@@ -54,6 +54,10 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, handleFirestoreError, OperationType } from "../lib/utils";
+import {
+  parseDragPayload,
+  toggleSelectionId,
+} from "../lib/drivePanelSelection";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc, supabase, db } from "../lib/supabase";
 
@@ -424,6 +428,8 @@ export default function ClientDashboard() {
   const [isClientsMenuOpen, setIsClientsMenuOpen] = useState(true);
   const [isClientsListOpen, setIsClientsListOpen] = useState(true);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
+  const [dropTargetFolderId, setDropTargetFolderId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid"); // Grelha por padrão
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
@@ -1032,51 +1038,140 @@ export default function ClientDashboard() {
   };
 
   // Seleção e Ações em Massa
-  const handleToggleBulkSelect = (assetId: string) => {
-    setSelectedAssetIds(prev =>
-      prev.includes(assetId)
-        ? prev.filter(id => id !== assetId)
-        : [...prev, assetId]
-    );
+  const totalSelectedCount = selectedAssetIds.length + selectedFolderIds.length;
+  const hasBulkSelectionActive = totalSelectedCount > 0;
+
+  const clearAllSelection = () => {
+    setSelectedAssetIds([]);
+    setSelectedFolderIds([]);
   };
 
-  const handleBulkMove = async (destinationFolderId: string | null) => {
-    if (selectedAssetIds.length === 0) return;
+  const openFolder = (folderId: string) => {
+    setSelectedFolderId(folderId);
+    setSearchQuery("");
+    handleGoogleSync(folderId, undefined, true);
+  };
+
+  const handleFolderGridClick = (folderId: string) => {
+    if (selectedFolderIds.includes(folderId)) {
+      setSelectedFolderIds([]);
+      openFolder(folderId);
+    } else {
+      setSelectedFolderIds((prev) => toggleSelectionId(prev, folderId));
+    }
+  };
+
+  const handleToggleFolderSelect = (folderId: string) => {
+    setSelectedFolderIds((prev) => toggleSelectionId(prev, folderId));
+  };
+
+  const handleToggleBulkSelect = (assetId: string) => {
+    setSelectedAssetIds((prev) => toggleSelectionId(prev, assetId));
+  };
+
+  const moveItemsToFolder = async (
+    destinationFolderId: string | null,
+    assetIds: string[],
+    folderIds: string[],
+  ) => {
+    if (assetIds.length === 0 && folderIds.length === 0) return;
     setIsProcessingAction(true);
-    sessionStorage.setItem('action_in_progress', 'true');
+    sessionStorage.setItem("action_in_progress", "true");
 
     try {
-      for (const assetId of selectedAssetIds) {
-        const asset = assets.find(a => a.id === assetId);
+      for (const assetId of assetIds) {
+        const asset = assets.find((a) => a.id === assetId);
         if (!asset) continue;
 
-        // 1. Atualizar no Google Drive real se aplicável
         if (asset.driveId) {
-          await fetch('/api/drive/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+          await fetch("/api/drive/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               fileId: asset.driveId,
-              addParents: destinationFolderId || 'root',
-              removeParents: asset.folderId === 'root' || asset.folderId === '' || !asset.folderId ? undefined : asset.folderId
-            })
+              addParents: destinationFolderId || "root",
+              removeParents:
+                asset.folderId === "root" || asset.folderId === "" || !asset.folderId
+                  ? undefined
+                  : asset.folderId,
+            }),
           });
         }
 
-        // 2. Atualizar no Firestore
         await updateDoc(doc(db, "assets", asset.id), {
-          folderId: destinationFolderId
+          folderId: destinationFolderId,
         });
       }
 
-      setSelectedAssetIds([]);
+      for (const folderId of folderIds) {
+        if (destinationFolderId === folderId) continue;
+        const folder = folders.find((f) => f.id === folderId);
+        if (!folder) continue;
+
+        if (folder.id && folder.id.length > 10) {
+          await fetch("/api/drive/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fileId: folder.id,
+              addParents: destinationFolderId || "root",
+              removeParents:
+                folder.parentId && folder.parentId !== "root" ? folder.parentId : undefined,
+            }),
+          });
+        }
+
+        await updateDoc(doc(db, "folders", folder.id), {
+          parentId: destinationFolderId,
+        });
+      }
     } catch (err: any) {
       console.error(err);
-      alert("Erro ao mover itens em massa: " + err.message);
+      alert("Erro ao mover itens: " + err.message);
     } finally {
       setIsProcessingAction(false);
-      sessionStorage.removeItem('action_in_progress');
+      sessionStorage.removeItem("action_in_progress");
     }
+  };
+
+  const handleBulkMove = async (destinationFolderId: string | null) => {
+    const folderIds = selectedFolderIds.filter((id) => id !== destinationFolderId);
+    await moveItemsToFolder(destinationFolderId, selectedAssetIds, folderIds);
+    clearAllSelection();
+  };
+
+  const handleDropOnFolder = async (e: React.DragEvent, targetFolderId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTargetFolderId(null);
+    const payload = parseDragPayload(e.dataTransfer.getData("application/json"));
+    if (!payload) return;
+    const folderIds = payload.folderIds.filter((id) => id !== targetFolderId);
+    await moveItemsToFolder(targetFolderId, payload.assetIds, folderIds);
+    clearAllSelection();
+  };
+
+  const startDragSelection = (
+    e: React.DragEvent,
+    item: { type: "asset" | "folder"; id: string },
+  ) => {
+    const folderIds =
+      item.type === "folder"
+        ? selectedFolderIds.includes(item.id)
+          ? selectedFolderIds
+          : [item.id]
+        : selectedFolderIds;
+    const assetIds =
+      item.type === "asset"
+        ? selectedAssetIds.includes(item.id)
+          ? selectedAssetIds
+          : [item.id]
+        : selectedAssetIds;
+    e.dataTransfer.setData(
+      "application/json",
+      JSON.stringify({ assetIds, folderIds }),
+    );
+    e.dataTransfer.effectAllowed = "move";
   };
 
   const handleBulkDelete = async () => {
@@ -2639,19 +2734,52 @@ export default function ClientDashboard() {
                           {filteredFolders.map(folder => (
                             <div
                               key={folder.id}
-                              onClick={() => {
-                                setSelectedFolderId(folder.id);
-                                setSearchQuery('');
-                                handleGoogleSync(folder.id, undefined, true);
+                              draggable
+                              onDragStart={(e) => {
+                                e.stopPropagation();
+                                startDragSelection(e, { type: "folder", id: folder.id });
                               }}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setDropTargetFolderId(folder.id);
+                              }}
+                              onDragLeave={() => {
+                                setDropTargetFolderId((prev) => (prev === folder.id ? null : prev));
+                              }}
+                              onDrop={(e) => handleDropOnFolder(e, folder.id)}
+                              onClick={() => handleFolderGridClick(folder.id)}
                               onContextMenu={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
                               }}
-                              className="flex items-center justify-between p-4 bg-white border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group shadow-sm relative overflow-visible rounded-lg"
+                              className={cn(
+                                "flex items-center justify-between p-4 bg-white border transition-all cursor-pointer group shadow-sm relative overflow-visible rounded-lg",
+                                selectedFolderIds.includes(folder.id)
+                                  ? "border-[#a21b7e] ring-2 ring-[#a21b7e]/30"
+                                  : "border-gray-100 hover:border-gray-200",
+                                dropTargetFolderId === folder.id && "border-[#a21b7e] bg-[#a21b7e]/5",
+                              )}
                             >
-                              <div className="flex items-center gap-3 truncate">
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleFolderSelect(folder.id);
+                                }}
+                                className={cn(
+                                  "absolute top-2 left-2 z-20 w-5 h-5 rounded-full border bg-white/90 backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer shadow-sm hover:scale-110",
+                                  selectedFolderIds.includes(folder.id)
+                                    ? "border-[#a21b7e] bg-[#a21b7e] text-white"
+                                    : "border-gray-300 text-transparent hover:border-gray-400",
+                                  selectedFolderIds.includes(folder.id) || hasBulkSelectionActive
+                                    ? "opacity-100"
+                                    : "opacity-0 group-hover:opacity-100",
+                                )}
+                              >
+                                <Check size={12} className={cn("stroke-[3]", selectedFolderIds.includes(folder.id) ? "block" : "hidden group-hover:block text-gray-400")} />
+                              </div>
+                              <div className="flex items-center gap-3 truncate flex-1 min-w-0 pl-6">
                                 <FolderIcon size={20} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} className="shrink-0 animate-in fade-in" />
                                 <span className="text-xs font-bold text-gray-700 truncate uppercase">{folder.name}</span>
                               </div>
@@ -2978,18 +3106,9 @@ export default function ClientDashboard() {
                               isFolderAllowedForClient={isFolderAllowedForClient}
                               isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
                               setOrganizarModal={setOrganizarModal}
-                              onSelect={() => {
-                                if (asset.type === 'folder') {
-                                  setSelectedFolderId(asset.driveId || asset.id);
-                                  handleGoogleSync(asset.driveId || asset.id, undefined, true);
-                                } else {
-                                  setPreviewAsset(asset);
-                                }
-                              }}
-                              onPreview={() => {
-                                if (asset.type === 'folder') {
-                                  setSelectedFolderId(asset.driveId || asset.id);
-                                  handleGoogleSync(asset.driveId || asset.id, undefined, true);
+                              onOpen={() => {
+                                if (asset.type === "folder") {
+                                  openFolder(asset.driveId || asset.id);
                                 } else {
                                   setPreviewAsset(asset);
                                 }
@@ -2997,7 +3116,8 @@ export default function ClientDashboard() {
                               isSelected={selectedAsset?.id === asset.id}
                               isBulkSelected={selectedAssetIds.includes(asset.id)}
                               onToggleBulkSelect={() => handleToggleBulkSelect(asset.id)}
-                              hasSelectionActive={selectedAssetIds.length > 0}
+                              hasSelectionActive={hasBulkSelectionActive}
+                              onDragStart={(e) => startDragSelection(e, { type: "asset", id: asset.id })}
                               folders={filteredFolders}
                               onAskGemini={(a) => {
                                 setGeminiAsset(a);
@@ -3033,17 +3153,31 @@ export default function ClientDashboard() {
                     {(activeTab === 'all' || activeTab === 'google_drive') && filteredFolders.map(folder => (
                       <div
                         key={folder.id}
-                        onClick={() => {
-                          setSelectedFolderId(folder.id);
-                          setSearchQuery('');
-                          handleGoogleSync(folder.id, undefined, true);
+                        draggable
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          startDragSelection(e, { type: "folder", id: folder.id });
                         }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDropTargetFolderId(folder.id);
+                        }}
+                        onDragLeave={() => {
+                          setDropTargetFolderId((prev) => (prev === folder.id ? null : prev));
+                        }}
+                        onDrop={(e) => handleDropOnFolder(e, folder.id)}
+                        onClick={() => handleFolderGridClick(folder.id)}
                         onContextMenu={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           setActiveFolderMenuId(activeFolderMenuId === folder.id ? null : folder.id);
                         }}
-                        className="grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible"
+                        className={cn(
+                          "grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible",
+                          selectedFolderIds.includes(folder.id) && "bg-[#a21b7e]/5",
+                          dropTargetFolderId === folder.id && "bg-[#a21b7e]/10 ring-1 ring-inset ring-[#a21b7e]/30",
+                        )}
                       >
                         <div className="col-span-6 flex items-center gap-4">
                           <FolderIcon size={24} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} />
@@ -3371,18 +3505,9 @@ export default function ClientDashboard() {
                         isFolderAllowedForClient={isFolderAllowedForClient}
                         isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
                         setOrganizarModal={setOrganizarModal}
-                        onSelect={() => {
-                          if (asset.type === 'folder') {
-                            setSelectedFolderId(asset.driveId || asset.id);
-                            handleGoogleSync(asset.driveId || asset.id, undefined, true);
-                          } else {
-                            setPreviewAsset(asset); // Abrir visualização no clique simples
-                          }
-                        }}
-                        onPreview={() => {
-                          if (asset.type === 'folder') {
-                            setSelectedFolderId(asset.driveId || asset.id);
-                            handleGoogleSync(asset.driveId || asset.id, undefined, true);
+                        onOpen={() => {
+                          if (asset.type === "folder") {
+                            openFolder(asset.driveId || asset.id);
                           } else {
                             setPreviewAsset(asset);
                           }
@@ -3390,7 +3515,8 @@ export default function ClientDashboard() {
                         isSelected={selectedAsset?.id === asset.id}
                         isBulkSelected={selectedAssetIds.includes(asset.id)}
                         onToggleBulkSelect={() => handleToggleBulkSelect(asset.id)}
-                        hasSelectionActive={selectedAssetIds.length > 0}
+                        hasSelectionActive={hasBulkSelectionActive}
+                        onDragStart={(e) => startDragSelection(e, { type: "asset", id: asset.id })}
                         folders={filteredFolders}
                         onAskGemini={(a) => {
                           setGeminiAsset(a);
@@ -3479,7 +3605,7 @@ export default function ClientDashboard() {
         )}
 
         {/* Barra Flutuante de Ações em Massa */}
-        {selectedAssetIds.length > 0 && (
+        {hasBulkSelectionActive && (
           <motion.div
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -3488,10 +3614,10 @@ export default function ClientDashboard() {
           >
             <div className="flex items-center gap-2 border-r border-gray-200 pr-4">
               <div className="w-6 h-6 rounded-full bg-[#a21b7e] text-white flex items-center justify-center text-xs font-bold shadow-sm animate-pulse">
-                {selectedAssetIds.length}
+                {totalSelectedCount}
               </div>
               <span className="text-sm font-bold text-gray-700">
-                {selectedAssetIds.length === 1 ? 'item selecionado' : 'itens selecionados'}
+                {totalSelectedCount === 1 ? 'item selecionado' : 'itens selecionados'}
               </span>
             </div>
 
@@ -3544,7 +3670,7 @@ export default function ClientDashboard() {
 
               {/* Clear Selection */}
               <button
-                onClick={() => setSelectedAssetIds([])}
+                onClick={clearAllSelection}
                 className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none"
               >
                 Limpar seleção
@@ -4208,9 +4334,8 @@ function FolderCard({ folder, onClick }: FolderCardProps) {
 interface AssetCardProps {
   key?: React.Key;
   asset: Asset;
-  onSelect: () => void;
+  onOpen: () => void;
   isSelected: boolean;
-  onPreview: () => void;
   isNewlyUploaded?: boolean;
   onAskGemini: (asset: Asset) => void;
   folders: any[];
@@ -4218,6 +4343,7 @@ interface AssetCardProps {
   isBulkSelected?: boolean;
   onToggleBulkSelect?: () => void;
   hasSelectionActive?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
   onDistribute?: (item: { id: string, type: string, currentName: string }) => void;
   userProfile?: UserProfile | null;
   isFolderAllowedForClient?: (folderId: string) => boolean;
@@ -4227,9 +4353,8 @@ interface AssetCardProps {
 
 function AssetCard({
   asset,
-  onSelect,
+  onOpen,
   isSelected,
-  onPreview,
   isNewlyUploaded = false,
   onAskGemini,
   folders,
@@ -4237,6 +4362,7 @@ function AssetCard({
   isBulkSelected = false,
   onToggleBulkSelect,
   hasSelectionActive = false,
+  onDragStart,
   userProfile,
   isFolderAllowedForClient,
   setOrganizarModal,
@@ -4263,8 +4389,22 @@ function AssetCard({
 
   return (
     <div
-      onClick={onSelect}
-      onDoubleClick={onPreview}
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        onDragStart?.(e);
+      }}
+      onClick={() => {
+        if (isBulkSelected) {
+          onOpen();
+        } else {
+          onToggleBulkSelect?.();
+        }
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -4411,7 +4551,7 @@ function AssetCard({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onPreview();
+                    onOpen();
                     setShowMenu(false);
                   }}
                   className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
@@ -4722,9 +4862,8 @@ function AssetCard({
 interface AssetRowProps {
   key?: React.Key;
   asset: Asset;
-  onSelect: () => void;
+  onOpen: () => void;
   isSelected: boolean;
-  onPreview: () => void;
   isNewlyUploaded?: boolean;
   onAskGemini: (asset: Asset) => void;
   folders: any[];
@@ -4732,6 +4871,7 @@ interface AssetRowProps {
   isBulkSelected?: boolean;
   onToggleBulkSelect?: () => void;
   hasSelectionActive?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
   onDistribute?: (item: { id: string, type: string, currentName: string }) => void;
   userProfile?: UserProfile | null;
   isFolderAllowedForClient?: (folderId: string) => boolean;
@@ -4741,9 +4881,8 @@ interface AssetRowProps {
 
 function AssetRow({
   asset,
-  onSelect,
+  onOpen,
   isSelected,
-  onPreview,
   isNewlyUploaded = false,
   onAskGemini,
   folders,
@@ -4751,6 +4890,7 @@ function AssetRow({
   isBulkSelected = false,
   onToggleBulkSelect,
   hasSelectionActive = false,
+  onDragStart,
   onDistribute,
   userProfile,
   isFolderAllowedForClient,
@@ -4776,8 +4916,22 @@ function AssetRow({
 
   return (
     <div
-      onClick={onSelect}
-      onDoubleClick={onPreview}
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        onDragStart?.(e);
+      }}
+      onClick={() => {
+        if (isBulkSelected) {
+          onOpen();
+        } else {
+          onToggleBulkSelect?.();
+        }
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -4946,7 +5100,7 @@ function AssetRow({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPreview();
+                      onOpen();
                       setShowMenu(false);
                     }}
                     className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"

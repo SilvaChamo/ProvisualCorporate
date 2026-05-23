@@ -12,6 +12,17 @@ export interface HomeService {
   items: string[];
 }
 
+export interface HomeTeamMember {
+  name: string;
+  role: string;
+  image: string;
+  social: {
+    facebook: string;
+    linkedin: string;
+    instagram: string;
+  };
+}
+
 export interface HomeContent {
   hero: {
     eyebrow: string;
@@ -22,6 +33,10 @@ export interface HomeContent {
     backgroundImage: string;
   };
   slides: HomeSlide[];
+  aboutImage: string;
+  processBackground: string;
+  teamBanner: string;
+  teamMembers: HomeTeamMember[];
   about: {
     missionTitle: string;
     mission: string;
@@ -42,6 +57,51 @@ export interface HomeContent {
     ctaSubtitle: string;
   };
 }
+
+const DEFAULT_TEAM_MEMBERS: HomeTeamMember[] = [
+  {
+    name: "Ana Mabunda",
+    role: "Directora Criativa",
+    image:
+      "/INICIO/designer-gr%C3%A1fico-africano-criativo-no-flipchart-com-gr%C3%A1ficos-e-notas-adesivas-187855551.webp",
+    social: {
+      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
+      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
+      instagram: "https://www.instagram.com/",
+    },
+  },
+  {
+    name: "Carlos Nhaca",
+    role: "Director de Produção",
+    image:
+      "/INICIO/designer-gr%C3%A1fico-africano-web-usando-software-de-edi%C3%A7%C3%A3o-design-212684276.webp",
+    social: {
+      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
+      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
+      instagram: "https://www.instagram.com/",
+    },
+  },
+  {
+    name: "Sofia Matola",
+    role: "Gestora de Projectos",
+    image: "/INICIO/COmunidade.jpg",
+    social: {
+      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
+      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
+      instagram: "https://www.instagram.com/",
+    },
+  },
+  {
+    name: "Miguel Tembe",
+    role: "Especialista Audiovisual",
+    image: "/INICIO/Coberturas.jpg",
+    social: {
+      facebook: "https://www.facebook.com/profile.php?id=61577619669570",
+      linkedin: "https://mz.linkedin.com/in/provisual-corporate-493342353",
+      instagram: "https://www.instagram.com/",
+    },
+  },
+];
 
 export const DEFAULT_HOME_CONTENT: HomeContent = {
   hero: {
@@ -78,6 +138,10 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
       image: "/INICIO/COmunidade.jpg",
     },
   ],
+  aboutImage: "/INICIO/sobre.webp",
+  processBackground: "/INICIO/producao-grafica.webp",
+  teamBanner: "/INICIO/Coberturas.jpg",
+  teamMembers: DEFAULT_TEAM_MEMBERS,
   about: {
     missionTitle: "Missão",
     mission:
@@ -154,6 +218,23 @@ export function mergeHomeContent(partial?: Partial<HomeContent> | null): HomeCon
             DEFAULT_HOME_CONTENT.slides[index % DEFAULT_HOME_CONTENT.slides.length]?.image,
         }))
       : DEFAULT_HOME_CONTENT.slides,
+    aboutImage: partial.aboutImage || DEFAULT_HOME_CONTENT.aboutImage,
+    processBackground: partial.processBackground || DEFAULT_HOME_CONTENT.processBackground,
+    teamBanner: partial.teamBanner || DEFAULT_HOME_CONTENT.teamBanner,
+    teamMembers: partial.teamMembers?.length
+      ? partial.teamMembers.map((member, index) => ({
+          ...DEFAULT_HOME_CONTENT.teamMembers[index % DEFAULT_HOME_CONTENT.teamMembers.length],
+          ...member,
+          image:
+            member.image ||
+            DEFAULT_HOME_CONTENT.teamMembers[index % DEFAULT_HOME_CONTENT.teamMembers.length]?.image,
+          social: {
+            ...DEFAULT_HOME_CONTENT.teamMembers[index % DEFAULT_HOME_CONTENT.teamMembers.length]
+              ?.social,
+            ...member.social,
+          },
+        }))
+      : DEFAULT_HOME_CONTENT.teamMembers,
     about: { ...DEFAULT_HOME_CONTENT.about, ...partial.about },
     servicesIntro: partial.servicesIntro ?? DEFAULT_HOME_CONTENT.servicesIntro,
     services: partial.services?.length ? partial.services : DEFAULT_HOME_CONTENT.services,

@@ -1,17 +1,60 @@
-import React, { useEffect, useState } from "react";
-import { Globe, Save, RefreshCw, ExternalLink } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Globe, Save, RefreshCw, ExternalLink, Upload, Image as ImageIcon } from "lucide-react";
 import { cn } from "../lib/utils";
 import {
   DEFAULT_HOME_CONTENT,
-  mergeHomeContent,
   type HomeContent,
 } from "../lib/homeContent";
+import { fetchSiteHomeContent, fetchSiteLibrary, uploadSiteMedia } from "../lib/siteGalleryApi";
+
+function ImageUrlField({
+  label,
+  value,
+  onChange,
+  subpath,
+  uploading,
+  onUpload,
+}: {
+  label: string;
+  value: string;
+  onChange: (url: string) => void;
+  subpath: string;
+  uploading: boolean;
+  onUpload: (file: File, subpath: string, onUrl: (url: string) => void) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+        {label}
+      </label>
+      <div className="flex gap-2">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 h-11 px-3 border border-gray-100 rounded-lg text-sm focus:border-[#a21b7e] outline-none"
+        />
+        <label className="shrink-0 h-11 px-3 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-[#a21b7e]/40 inline-flex items-center gap-1 cursor-pointer">
+          <Upload size={14} />
+          Drive
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onUpload(file, subpath, onChange);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
 
 async function fetchHomeContent(): Promise<HomeContent> {
-  const res = await fetch("/api/site/home");
-  if (!res.ok) throw new Error("Não foi possível carregar o conteúdo.");
-  const data = await res.json();
-  return mergeHomeContent(data.content);
+  return fetchSiteHomeContent();
 }
 
 export default function HomeSiteEditor() {
@@ -19,6 +62,10 @@ export default function HomeSiteEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [libraryCount, setLibraryCount] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const heroUploadRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
     setLoading(true);
@@ -34,7 +81,26 @@ export default function HomeSiteEditor() {
 
   useEffect(() => {
     load();
+    fetchSiteLibrary()
+      .then((photos) => setLibraryCount(photos.length))
+      .catch(() => setLibraryCount(null));
   }, []);
+
+  const handleSiteUpload = async (file: File, subpath: string, onUrl?: (url: string) => void) => {
+    setUploading(true);
+    setMessage(null);
+    try {
+      const uploaded = await uploadSiteMedia(file, subpath);
+      if (onUrl) onUrl(uploaded.url);
+      const library = await fetchSiteLibrary();
+      setLibraryCount(library.length);
+      setMessage({ type: "ok", text: `Imagem "${uploaded.name}" guardada no Google Drive (pasta site).` });
+    } catch (e: any) {
+      setMessage({ type: "err", text: e.message });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -146,13 +212,163 @@ export default function HomeSiteEditor() {
               <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
                 {label}
               </label>
+              <div className="flex gap-2">
+                <input
+                  value={content.hero[key]}
+                  onChange={(e) => updateHero(key, e.target.value)}
+                  className="flex-1 h-11 px-3 border border-gray-100 rounded-lg text-sm focus:border-[#a21b7e] outline-none"
+                />
+                {key === "backgroundImage" && (
+                  <>
+                    <input
+                      ref={heroUploadRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleSiteUpload(file, "hero", (url) => updateHero("backgroundImage", url));
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      onClick={() => heroUploadRef.current?.click()}
+                      className="shrink-0 h-11 px-3 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-[#a21b7e]/40 inline-flex items-center gap-1"
+                    >
+                      <Upload size={14} />
+                      Drive
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </section>
+
+        <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-4">
+          <h3 className="text-sm font-black text-[#a21b7e] uppercase tracking-widest">Slides do banner</h3>
+          {content.slides.map((slide, index) => (
+            <div key={index} className="p-4 rounded-lg border border-gray-100 space-y-3">
+              <p className="text-xs font-bold text-gray-500">Slide {index + 1}</p>
               <input
-                value={content.hero[key]}
-                onChange={(e) => updateHero(key, e.target.value)}
-                className="w-full h-11 px-3 border border-gray-100 rounded-lg text-sm focus:border-[#a21b7e] outline-none"
+                value={slide.category}
+                onChange={(e) =>
+                  setContent((c) => ({
+                    ...c,
+                    slides: c.slides.map((s, i) => (i === index ? { ...s, category: e.target.value } : s)),
+                  }))
+                }
+                placeholder="Categoria"
+                className="w-full h-10 px-3 border border-gray-100 rounded-lg text-sm"
+              />
+              <ImageUrlField
+                label="Imagem do slide"
+                value={slide.image}
+                onChange={(url) =>
+                  setContent((c) => ({
+                    ...c,
+                    slides: c.slides.map((s, i) => (i === index ? { ...s, image: url } : s)),
+                  }))
+                }
+                subpath="hero"
+                uploading={uploading}
+                onUpload={handleSiteUpload}
               />
             </div>
           ))}
+        </section>
+
+        <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-4">
+          <h3 className="text-sm font-black text-[#a21b7e] uppercase tracking-widest">Imagens da homepage</h3>
+          <ImageUrlField
+            label="Imagem secção Sobre nós"
+            value={content.aboutImage}
+            onChange={(url) => setContent((c) => ({ ...c, aboutImage: url }))}
+            subpath="home"
+            uploading={uploading}
+            onUpload={handleSiteUpload}
+          />
+          <ImageUrlField
+            label="Fundo secção Processo criativo"
+            value={content.processBackground}
+            onChange={(url) => setContent((c) => ({ ...c, processBackground: url }))}
+            subpath="home"
+            uploading={uploading}
+            onUpload={handleSiteUpload}
+          />
+          <ImageUrlField
+            label="Banner equipa de especialistas"
+            value={content.teamBanner}
+            onChange={(url) => setContent((c) => ({ ...c, teamBanner: url }))}
+            subpath="home"
+            uploading={uploading}
+            onUpload={handleSiteUpload}
+          />
+        </section>
+
+        <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-4">
+          <h3 className="text-sm font-black text-[#a21b7e] uppercase tracking-widest">Equipa</h3>
+          {content.teamMembers.map((member, index) => (
+            <div key={member.name} className="p-4 rounded-lg border border-gray-100 space-y-3">
+              <p className="text-xs font-bold text-gray-500">{member.name}</p>
+              <ImageUrlField
+                label="Foto"
+                value={member.image}
+                onChange={(url) =>
+                  setContent((c) => ({
+                    ...c,
+                    teamMembers: c.teamMembers.map((m, i) => (i === index ? { ...m, image: url } : m)),
+                  }))
+                }
+                subpath="home/equipa"
+                uploading={uploading}
+                onUpload={handleSiteUpload}
+              />
+            </div>
+          ))}
+        </section>
+
+        <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-4">
+          <h3 className="text-sm font-black text-[#a21b7e] uppercase tracking-widest flex items-center gap-2">
+            <ImageIcon size={16} />
+            Galeria e biblioteca (Google Drive)
+          </h3>
+          <p className="text-sm text-gray-500 leading-relaxed">
+            Todas as imagens do site vão para a pasta <strong>site</strong> no Google Drive.
+            Hero (banner + slides): <code className="text-xs bg-gray-100 px-1 rounded">site/hero/</code> — todas numa pasta.
+            Galeria: <code className="text-xs bg-gray-100 px-1 rounded">site/galeria/nome-do-album</code>.
+            Serviços: <code className="text-xs bg-gray-100 px-1 rounded">site/servicos/slug-do-servico</code>.
+          </p>
+          {libraryCount !== null && (
+            <p className="text-xs font-bold text-gray-500">
+              {libraryCount} imagem{libraryCount === 1 ? "" : "ns"} na biblioteca do site.
+            </p>
+          )}
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={async (e) => {
+              const files = [...(e.target.files ?? [])];
+              for (const file of files) {
+                await handleSiteUpload(file, "galeria");
+              }
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => uploadInputRef.current?.click()}
+            className="inline-flex items-center gap-2 bg-[#3d001d] hover:bg-[#2a0014] text-white px-4 py-2.5 rounded-md text-sm font-bold"
+          >
+            <Upload size={16} />
+            {uploading ? "A carregar..." : "Carregar fotos para site/galeria"}
+          </button>
         </section>
 
         <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-4">
@@ -249,8 +465,8 @@ export default function HomeSiteEditor() {
         </section>
 
         <p className="text-xs text-gray-400 text-center pb-8">
-          Os slides do hero e a lista completa de serviços usam os valores por defeito até expansão do editor.
-          As alterações acima reflectem-se imediatamente na página em / após guardar.
+          Todas as imagens carregadas via Drive são guardadas em site/ no Google Drive.
+          Guarde as alterações para reflectir na página em /.
         </p>
       </div>
     </div>
