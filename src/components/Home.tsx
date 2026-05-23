@@ -208,7 +208,7 @@ export default function Home() {
       content.hero.backgroundImage,
       ...content.slides.map((s) => s.image),
     ].filter(Boolean);
-    preloadDriveImages(urls, "lg");
+    preloadDriveImages(urls, "md");
   }, [content.hero.backgroundImage, content.slides]);
 
   useEffect(() => {
@@ -287,7 +287,7 @@ export default function Home() {
     activeSlide?.image ||
       DEFAULT_HOME_CONTENT.slides[slideIndex]?.image ||
       content.hero.backgroundImage,
-    "lg",
+    "md",
   );
 
   const prevSlide = () =>

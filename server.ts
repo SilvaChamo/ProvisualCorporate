@@ -16,6 +16,12 @@ import {
   driveMediaUrl,
   resolveHomeContentImages,
 } from "./lib/siteDriveHelpers.js";
+import {
+  getCachedGoogleAuth,
+  getCachedThumbnailMeta,
+  IMAGE_CACHE_CONTROL,
+  HOME_API_CACHE_CONTROL,
+} from "./lib/driveServerCache.js";
 
 async function startServer() {
   // Ajudar o servidor compilado a encontrar os módulos
@@ -64,6 +70,7 @@ async function startServer() {
         console.warn("Home Drive image resolve skipped:", driveErr);
       }
 
+      res.setHeader("Cache-Control", HOME_API_CACHE_CONTROL);
       res.json({ content });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Erro ao carregar conteúdo da home." });
@@ -175,7 +182,7 @@ async function startServer() {
   });
 
   // Utilitário para inicializar o cliente Google Auth (Híbrido)
-  async function getGoogleAuth() {
+  async function createGoogleAuth() {
     
     // 1. Tentar ler as credenciais OAuth 2.0 pessoais do Silva
     let oauthKeys: any = null;
@@ -272,6 +279,10 @@ async function startServer() {
     });
 
     return { auth, type: "service_account" };
+  }
+
+  async function getGoogleAuth() {
+    return getCachedGoogleAuth(createGoogleAuth);
   }
 
   async function listAllDriveFiles(
@@ -549,14 +560,7 @@ async function startServer() {
       const { auth } = await getGoogleAuth();
       const drive = google.drive({ version: 'v3', auth });
 
-      // Buscar o link do thumbnail do arquivo
-      const fileResponse = await drive.files.get({
-        fileId: id as string,
-        fields: 'thumbnailLink, mimeType',
-        supportsAllDrives: true
-      });
-
-      const thumbnailLink = fileResponse.data.thumbnailLink;
+      const { thumbnailLink, mimeType } = await getCachedThumbnailMeta(drive, id as string);
       if (!thumbnailLink) {
         return res.status(404).send("Thumbnail não disponível");
       }
@@ -576,9 +580,14 @@ async function startServer() {
         throw new Error(`Erro ao baixar thumbnail: ${imageResponse.statusText}`);
       }
 
-      const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+      const contentType = imageResponse.headers.get("content-type") || mimeType || "image/jpeg";
       res.setHeader("Content-Type", contentType);
-      res.setHeader("Cache-Control", "public, max-age=86400"); // Cache de 1 dia
+      res.setHeader("Cache-Control", IMAGE_CACHE_CONTROL);
+
+      if (imageResponse.body) {
+        Readable.fromWeb(imageResponse.body as any).pipe(res);
+        return;
+      }
 
       const buffer = Buffer.from(await imageResponse.arrayBuffer());
       res.send(buffer);
@@ -609,7 +618,7 @@ async function startServer() {
       );
 
       res.setHeader("Content-Type", fileResponse.data.mimeType || "image/jpeg");
-      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.setHeader("Cache-Control", IMAGE_CACHE_CONTROL);
       mediaResponse.data
         .on("error", (streamErr: Error) => {
           console.error("Stream media error:", streamErr);

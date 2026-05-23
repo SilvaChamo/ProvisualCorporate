@@ -15,6 +15,12 @@ import {
   driveMediaUrl,
   resolveHomeContentImages,
 } from "../lib/siteDriveHelpers.js";
+import {
+  getCachedGoogleAuth,
+  getCachedThumbnailMeta,
+  IMAGE_CACHE_CONTROL,
+  HOME_API_CACHE_CONTROL,
+} from "../lib/driveServerCache.js";
 
 function loadOAuthKeys() {
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -73,7 +79,7 @@ console.log("Supabase inicializado no backend (Vercel API)!");
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Utilitário para inicializar o cliente Google Auth (Híbrido)
-async function getGoogleAuth() {
+async function createGoogleAuth() {
   
   const localTokensPath = path.join(process.cwd(), "google-tokens.json");
 
@@ -162,6 +168,10 @@ async function getGoogleAuth() {
   throw new Error("Credenciais do Google Drive não configuradas. Por favor conecte o Drive na interface do console.");
 }
 
+async function getGoogleAuth() {
+  return getCachedGoogleAuth(createGoogleAuth);
+}
+
 // ----------------- ROTAS DA API -----------------
 
 app.get("/api/health", (req, res) => {
@@ -188,6 +198,7 @@ app.get("/api/site/home", async (_req, res) => {
       console.warn("Home Drive image resolve skipped:", driveErr);
     }
 
+    res.setHeader("Cache-Control", HOME_API_CACHE_CONTROL);
     res.json({ content });
   } catch (err) {
     res.status(500).json({ error: err.message || "Erro ao carregar conteúdo da home." });
@@ -492,13 +503,7 @@ app.get("/api/drive/thumbnail", async (req, res) => {
     const { auth } = await getGoogleAuth();
     const drive = google.drive({ version: "v3", auth });
 
-    const fileResponse = await drive.files.get({
-      fileId: id,
-      fields: "thumbnailLink, mimeType",
-      supportsAllDrives: true,
-    });
-
-    const thumbnailLink = fileResponse.data.thumbnailLink;
+    const { thumbnailLink, mimeType } = await getCachedThumbnailMeta(drive, String(id));
     if (!thumbnailLink) return res.status(404).send("Thumbnail não disponível");
 
     const requestedSize = Math.min(Math.max(parseInt(String(req.query.sz || "800"), 10) || 800, 200), 1600);
@@ -512,8 +517,14 @@ app.get("/api/drive/thumbnail", async (req, res) => {
       throw new Error(`Erro ao baixar thumbnail: ${imageResponse.statusText}`);
     }
 
-    res.setHeader("Content-Type", imageResponse.headers.get("content-type") || "image/jpeg");
-    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.setHeader("Content-Type", imageResponse.headers.get("content-type") || mimeType || "image/jpeg");
+    res.setHeader("Cache-Control", IMAGE_CACHE_CONTROL);
+
+    if (imageResponse.body) {
+      Readable.fromWeb(imageResponse.body).pipe(res);
+      return;
+    }
+
     const buffer = Buffer.from(await imageResponse.arrayBuffer());
     res.send(buffer);
   } catch (error) {
@@ -542,7 +553,7 @@ app.get("/api/drive/media", async (req, res) => {
     );
 
     res.setHeader("Content-Type", fileResponse.data.mimeType || "image/jpeg");
-    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.setHeader("Cache-Control", IMAGE_CACHE_CONTROL);
     mediaResponse.data
       .on("error", (streamErr) => {
         console.error("Stream media error:", streamErr);
