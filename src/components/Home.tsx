@@ -749,17 +749,21 @@ export default function Home() {
           <div className="grid gap-10 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
             <div className="relative z-10 flex flex-col justify-center lg:-mr-[68px] lg:py-[45px] xl:-mr-[84px]">
               <div className="flex w-full flex-col items-start justify-center rounded-2xl bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.08)] sm:p-8">
-                <div className="site-section-kicker">
-                  <span className="site-section-kicker-line site-section-kicker-line--dark" />
-                  <p className="site-antetitle text-[#a21b7e]">Nossa equipa</p>
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Nossa equipa</span>
+                  <span className="h-px w-8 bg-[#D7D7D7]" />
                 </div>
 
-                <h2 className="site-section-title text-[#333]">
+                <h2 className="mb-3 text-4xl font-bold leading-tight text-[#333] sm:text-5xl lg:text-[3.25rem]">
                   Criatividade & <span className="font-light">Excelência</span>
                 </h2>
 
-                <p className="site-section-desc text-gray-600">
-                  Profissionais dedicados e multidisciplinares unidos pela criatividade, precisão técnica e
+                <h3 className="text-lg font-bold text-[#333]">
+                  Profissionais <span className="font-light">dedicados</span>
+                </h3>
+
+                <p className="mt-2 text-sm leading-relaxed text-gray-600 sm:text-base">
+                  Profissionais multidisciplinares unidos pela criatividade, precisão técnica e
                   compromisso com resultados que fortalecem a presença das marcas em Moçambique.
                 </p>
 
