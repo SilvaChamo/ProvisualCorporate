@@ -25,12 +25,12 @@ import QuickLinkIcon from "./site/QuickLinkIcon";
 import SiteFooter from "./site/SiteFooter";
 import TypewriterTitle from "./site/TypewriterTitle";
 import { QUICK_LINK_ROUTES } from "../lib/siteNav";
-import { SERVICE_ITEMS, VIDEO_ITEMS } from "../lib/sitePages";
+import { SERVICE_ITEMS, VIDEO_ITEMS, type VideoItem } from "../lib/sitePages";
 import {
   DEFAULT_HOME_CONTENT,
   type HomeContent,
 } from "../lib/homeContent";
-import { fetchSiteHomeContent } from "../lib/siteGalleryApi";
+import { fetchSiteHomeContent, fetchSiteVideos } from "../lib/siteGalleryApi";
 import { driveDisplayUrl, preloadDriveImages } from "../lib/driveImageUrl";
 import SiteOffCanvasMenu from "./site/SiteOffCanvasMenu";
 import OptimizedDriveImage from "./site/OptimizedDriveImage";
@@ -186,6 +186,7 @@ export default function Home() {
   const [activeServiceCard, setActiveServiceCard] = useState(0);
   const [activeProcessCard, setActiveProcessCard] = useState(0);
   const [featuredVideoId, setFeaturedVideoId] = useState(VIDEO_ITEMS[0]?.youtubeId ?? "");
+  const [videoItems, setVideoItems] = useState<VideoItem[]>(VIDEO_ITEMS);
   const [quickLinksVisible, setQuickLinksVisible] = useState(() =>
     typeof window !== "undefined" ? getQuickLinksVisible(window.innerWidth) : 3,
   );
@@ -260,6 +261,15 @@ export default function Home() {
 
   useEffect(() => {
     fetchSiteHomeContent().then(setContent).catch(() => setContent(DEFAULT_HOME_CONTENT));
+  }, []);
+
+  useEffect(() => {
+    fetchSiteVideos()
+      .then((videos) => {
+        setVideoItems(videos);
+        if (videos[0]?.youtubeId) setFeaturedVideoId(videos[0].youtubeId);
+      })
+      .catch(() => {});
   }, []);
 
   useLayoutEffect(() => {
@@ -1029,7 +1039,7 @@ export default function Home() {
             />
 
             <div className="grid grid-rows-2 gap-3 lg:min-h-0">
-              {VIDEO_ITEMS.map((video) => {
+              {videoItems.map((video) => {
                 const isActive = featuredVideoId === video.youtubeId;
                 return (
                   <button

@@ -1,4 +1,4 @@
-import { GALLERY_ALBUMS, type GalleryAlbum } from "./sitePages";
+import { GALLERY_ALBUMS, VIDEO_ITEMS, type GalleryAlbum, type VideoItem } from "./sitePages";
 import { getGalleryPhotos } from "./galleryPhotos";
 import { mergeHomeContent, type HomeContent } from "./homeContent";
 
@@ -13,6 +13,9 @@ export interface SiteDrivePhoto {
 export interface SiteDriveAlbum {
   slug: string;
   name: string;
+  title?: string;
+  subtitle?: string;
+  image?: string;
   folderId: string | null;
   coverUrl: string | null;
   coverDriveId: string | null;
@@ -65,16 +68,17 @@ async function fetchHomeFromApi(): Promise<HomeContent> {
 
 function mergeAlbumMetadata(driveAlbum: SiteDriveAlbum): GalleryAlbum {
   const meta = GALLERY_ALBUMS.find((a) => a.slug === driveAlbum.slug);
-  const cover =
-    (driveAlbum.coverDriveId && `/api/drive/media?id=${encodeURIComponent(driveAlbum.coverDriveId)}`) ||
-    driveAlbum.coverUrl ||
-    meta?.image ||
+  const coverFromDrive =
+    driveAlbum.image ||
+    (driveAlbum.coverDriveId &&
+      `/api/drive/thumbnail?id=${encodeURIComponent(driveAlbum.coverDriveId)}&sz=800`) ||
+    (driveAlbum.coverUrl?.includes("/api/drive/") ? driveAlbum.coverUrl : "") ||
     "";
   return {
     slug: driveAlbum.slug,
-    title: meta?.title || driveAlbum.name,
-    subtitle: meta?.subtitle || `${driveAlbum.photoCount} fotos`,
-    image: cover,
+    title: driveAlbum.title || meta?.title || driveAlbum.name,
+    subtitle: driveAlbum.subtitle || meta?.subtitle || `${driveAlbum.photoCount} fotos`,
+    image: coverFromDrive,
   };
 }
 
@@ -103,19 +107,23 @@ export async function fetchSiteGalleryAlbums(): Promise<GalleryAlbum[]> {
     if (!res.ok) throw new Error("API error");
     const data = await res.json();
     const driveAlbums: SiteDriveAlbum[] = data.albums || [];
-    const merged = driveAlbums.map(mergeAlbumMetadata);
-
-    for (const staticAlbum of GALLERY_ALBUMS) {
-      if (!merged.some((a) => a.slug === staticAlbum.slug)) {
-        merged.push(staticAlbum);
-      }
+    if (driveAlbums.length > 0) {
+      return driveAlbums.map(mergeAlbumMetadata);
     }
-
-    if (merged.length > 0) return merged;
   } catch (e) {
-    console.warn("Galeria Drive indisponível, usando dados locais:", e);
+    console.warn("Galeria Drive indisponível:", e);
   }
-  return GALLERY_ALBUMS;
+  return [];
+}
+
+export async function syncSiteGalleryMeta(): Promise<GalleryAlbum[]> {
+  const res = await fetch("/api/site/gallery/sync-meta", { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao sincronizar galeria.");
+  }
+  const data = await res.json();
+  return (data.albums || []).map(mergeAlbumMetadata);
 }
 
 export async function fetchSiteGalleryPhotos(slug: string, fallbackCover: string): Promise<string[]> {
@@ -186,4 +194,161 @@ export function applyDriveServiceImages<T extends { slug: string; image: string 
     ...item,
     image: images[item.slug] || item.image,
   }));
+}
+
+export async function fetchAdminGalleryAlbums(): Promise<SiteDriveAlbum[]> {
+  const res = await fetch("/api/site/gallery?summary=1");
+  if (!res.ok) throw new Error("Erro ao carregar álbuns.");
+  const data = await res.json();
+  return data.albums || [];
+}
+
+export async function createGalleryAlbum(payload: {
+  title: string;
+  subtitle: string;
+  cover: File;
+  photos: File[];
+}): Promise<SiteDriveAlbum> {
+  const form = new FormData();
+  form.append("title", payload.title);
+  form.append("subtitle", payload.subtitle);
+  form.append("cover", payload.cover);
+  payload.photos.forEach((photo) => form.append("photos", photo));
+
+  const res = await fetch("/api/site/gallery/albums", { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao criar álbum.");
+  }
+  const data = await res.json();
+  return data.album;
+}
+
+export async function fetchAdminGalleryPhotos(slug: string): Promise<SiteDrivePhoto[]> {
+  const res = await fetch(`/api/site/gallery/${encodeURIComponent(slug)}/photos`);
+  if (!res.ok) throw new Error("Erro ao carregar fotos do álbum.");
+  const data = await res.json();
+  return data.photos || [];
+}
+
+export async function updateGalleryAlbum(
+  slug: string,
+  payload: {
+    title: string;
+    subtitle: string;
+    cover?: File | null;
+    photos: File[];
+    deletedPhotoIds?: string[];
+  },
+): Promise<SiteDriveAlbum> {
+  const form = new FormData();
+  form.append("title", payload.title);
+  form.append("subtitle", payload.subtitle);
+  if (payload.cover) form.append("cover", payload.cover);
+  payload.photos.forEach((photo) => form.append("photos", photo));
+  if (payload.deletedPhotoIds?.length) {
+    form.append("deletedPhotoIds", JSON.stringify(payload.deletedPhotoIds));
+  }
+
+  const res = await fetch(`/api/site/gallery/albums/${encodeURIComponent(slug)}`, {
+    method: "PUT",
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao atualizar álbum.");
+  }
+  const data = await res.json();
+  return data.album;
+}
+
+export async function deleteGalleryAlbum(slug: string): Promise<void> {
+  const res = await fetch(`/api/site/gallery/albums/${encodeURIComponent(slug)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao eliminar álbum.");
+  }
+}
+
+export async function fetchSiteVideos(): Promise<VideoItem[]> {
+  try {
+    const res = await fetch("/api/site/videos", { cache: "no-store" });
+    if (!res.ok) throw new Error("API error");
+    const data = await res.json();
+    if (Array.isArray(data.videos)) return data.videos;
+  } catch (e) {
+    console.warn("Vídeos do site indisponíveis, usando dados locais:", e);
+  }
+  return VIDEO_ITEMS;
+}
+
+export async function fetchAdminSiteVideos(): Promise<VideoItem[]> {
+  const res = await fetch("/api/site/videos", { cache: "no-store" });
+  if (!res.ok) throw new Error("Erro ao carregar vídeos.");
+  const data = await res.json();
+  return data.videos || [];
+}
+
+export async function addSiteVideo(title: string, url: string): Promise<VideoItem[]> {
+  const res = await fetch("/api/site/videos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao adicionar vídeo.");
+  }
+  const data = await res.json();
+  return data.videos || [];
+}
+
+export async function deleteSiteVideo(slug: string): Promise<VideoItem[]> {
+  const res = await fetch(`/api/site/videos/${encodeURIComponent(slug)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao eliminar vídeo.");
+  }
+  const data = await res.json();
+  return data.videos || [];
+}
+
+export async function updateSiteVideo(slug: string, title: string, url: string): Promise<VideoItem[]> {
+  const res = await fetch("/api/site/videos", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ slug, title, url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao atualizar vídeo.");
+  }
+  const data = await res.json();
+  return data.videos || [];
+}
+
+export async function fetchAdminAccounts(): Promise<any[]> {
+  const res = await fetch("/api/admin/accounts");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao carregar contas.");
+  }
+  const data = await res.json();
+  return (data.accounts || []).map(mapAccountRow);
+}
+
+function mapAccountRow(row: any) {
+  return {
+    id: row.id,
+    email: row.email,
+    password: row.password,
+    role: row.role || "cliente",
+    displayName: row.display_name || row.displayName || "",
+    clientId: row.client_id || row.clientId || row.id,
+  };
 }

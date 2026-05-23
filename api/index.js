@@ -8,7 +8,18 @@ import { createClient } from "@supabase/supabase-js";
 import {
   getSiteContentFolderId,
   listSiteGalleryAlbums,
+  listSiteGalleryAlbumsSummary,
   listSiteGalleryAlbumPhotos,
+  listSiteGalleryAlbumsWithMeta,
+  createSiteGalleryAlbum,
+  updateSiteGalleryAlbum,
+  deleteSiteGalleryAlbum,
+  deleteSiteGalleryPhoto,
+  getSiteVideos,
+  saveSiteVideos,
+  buildVideoItemFromUrl,
+  updateSiteVideoItem,
+  ensureGalleryAlbumsMetaSeeded,
   listSiteLibraryPhotos,
   listSiteServiceImages,
   resolveSiteSubfolderId,
@@ -229,15 +240,95 @@ app.put("/api/site/home", async (req, res) => {
   }
 });
 
-app.get("/api/site/gallery", async (_req, res) => {
+app.get("/api/site/gallery", async (req, res) => {
   try {
     const { auth } = await getGoogleAuth();
     const drive = google.drive({ version: "v3", auth });
-    const data = await listSiteGalleryAlbums(drive, supabase);
+    const summary = req.query.summary === "1" || req.query.summary === "true";
+    const data = summary
+      ? await listSiteGalleryAlbumsSummary(drive, supabase)
+      : await listSiteGalleryAlbumsWithMeta(drive, supabase);
+    res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
     res.json(data);
   } catch (err) {
     console.error("Site gallery list error:", err);
     res.status(500).json({ error: err.message || "Erro ao listar galeria do site." });
+  }
+});
+
+const albumUpload = upload.fields([
+  { name: "cover", maxCount: 1 },
+  { name: "photos", maxCount: 100 },
+]);
+
+app.post("/api/site/gallery/albums", albumUpload, async (req, res) => {
+  try {
+    const { auth } = await getGoogleAuth();
+    const drive = google.drive({ version: "v3", auth });
+    const cover = req.files?.cover?.[0];
+    const photos = req.files?.photos || [];
+    const album = await createSiteGalleryAlbum(drive, supabase, {
+      title: req.body?.title,
+      subtitle: req.body?.subtitle,
+      cover,
+      photos,
+    });
+    res.json({ album });
+  } catch (err) {
+    console.error("Site gallery create album error:", err);
+    res.status(500).json({ error: err.message || "Erro ao criar álbum." });
+  }
+});
+
+app.put("/api/site/gallery/albums/:slug", albumUpload, async (req, res) => {
+  try {
+    const { auth } = await getGoogleAuth();
+    const drive = google.drive({ version: "v3", auth });
+    const cover = req.files?.cover?.[0];
+    const photos = req.files?.photos || [];
+    let deletedPhotoIds = [];
+    if (typeof req.body?.deletedPhotoIds === "string") {
+      try {
+        deletedPhotoIds = JSON.parse(req.body.deletedPhotoIds);
+      } catch (_) {
+        deletedPhotoIds = req.body.deletedPhotoIds.split(",").filter(Boolean);
+      }
+    }
+    const album = await updateSiteGalleryAlbum(drive, supabase, req.params.slug, {
+      title: req.body?.title,
+      subtitle: req.body?.subtitle,
+      cover,
+      photos,
+      deletedPhotoIds,
+    });
+    res.json({ album });
+  } catch (err) {
+    console.error("Site gallery update album error:", err);
+    res.status(500).json({ error: err.message || "Erro ao atualizar álbum." });
+  }
+});
+
+app.delete("/api/site/gallery/albums/:slug/photos/:photoId", async (req, res) => {
+  try {
+    const { auth } = await getGoogleAuth();
+    const drive = google.drive({ version: "v3", auth });
+    await deleteSiteGalleryPhoto(drive, supabase, req.params.slug, req.params.photoId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Site gallery delete photo error:", err);
+    res.status(500).json({ error: err.message || "Erro ao eliminar foto." });
+  }
+});
+
+app.delete("/api/site/gallery/albums/:slug", async (req, res) => {
+  try {
+    const { auth } = await getGoogleAuth();
+    const drive = google.drive({ version: "v3", auth });
+    await deleteSiteGalleryAlbum(drive, supabase, req.params.slug);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Site gallery delete album error:", err);
+    res.status(500).json({ error: err.message || "Erro ao eliminar álbum." });
   }
 });
 
@@ -263,6 +354,106 @@ app.get("/api/site/library", async (_req, res) => {
   } catch (err) {
     console.error("Site library error:", err);
     res.status(500).json({ error: err.message || "Erro ao listar biblioteca do site." });
+  }
+});
+
+app.post("/api/site/gallery/sync-meta", async (_req, res) => {
+  try {
+    const { auth } = await getGoogleAuth();
+    const drive = google.drive({ version: "v3", auth });
+    const driveData = await listSiteGalleryAlbums(drive, supabase);
+    const meta = await ensureGalleryAlbumsMetaSeeded(supabase, driveData.albums);
+    const data = await listSiteGalleryAlbumsWithMeta(drive, supabase);
+    res.json({ success: true, meta, albums: data.albums });
+  } catch (err) {
+    console.error("Site gallery sync meta error:", err);
+    res.status(500).json({ error: err.message || "Erro ao sincronizar metadados da galeria." });
+  }
+});
+
+app.get("/api/admin/accounts", async (_req, res) => {
+  try {
+    const { data, error } = await supabase.from("user_profiles").select("*").order("email");
+    if (error) throw error;
+    res.json({ accounts: data || [] });
+  } catch (err) {
+    console.error("Admin accounts list error:", err);
+    res.status(500).json({ error: err.message || "Erro ao listar contas." });
+  }
+});
+
+app.get("/api/site/videos", async (_req, res) => {
+  try {
+    const videos = await getSiteVideos(supabase);
+    res.json({ videos });
+  } catch (err) {
+    console.error("Site videos list error:", err);
+    res.status(500).json({ error: err.message || "Erro ao listar vídeos do site." });
+  }
+});
+
+app.put("/api/site/videos/:slug", async (req, res) => {
+  try {
+    const { title, url } = req.body || {};
+    const videos = await updateSiteVideoItem(supabase, req.params.slug, { title, url });
+    res.json({ success: true, videos });
+  } catch (err) {
+    console.error("Site videos update error:", err);
+    res.status(500).json({ error: err.message || "Erro ao atualizar vídeo." });
+  }
+});
+
+app.put("/api/site/videos", async (req, res) => {
+  try {
+    const { slug, title, url, videos } = req.body || {};
+
+    if (slug) {
+      const updated = await updateSiteVideoItem(supabase, slug, { title, url });
+      return res.json({ success: true, videos: updated });
+    }
+
+    if (!Array.isArray(videos)) {
+      return res.status(400).json({ error: "Lista de vídeos inválida." });
+    }
+    await saveSiteVideos(supabase, videos);
+    res.json({ success: true, videos });
+  } catch (err) {
+    console.error("Site videos save error:", err);
+    res.status(500).json({ error: err.message || "Erro ao guardar vídeos." });
+  }
+});
+
+app.post("/api/site/videos", async (req, res) => {
+  try {
+    const { title, url } = req.body || {};
+    const item = buildVideoItemFromUrl(title, url);
+    const videos = await getSiteVideos(supabase);
+    if (videos.some((v) => v.youtubeId === item.youtubeId)) {
+      return res.status(400).json({ error: "Este vídeo já está na lista." });
+    }
+    let slug = item.slug;
+    let counter = 1;
+    while (videos.some((v) => v.slug === slug)) {
+      slug = `${item.slug}-${counter++}`;
+    }
+    const next = [...videos, { ...item, slug }];
+    await saveSiteVideos(supabase, next);
+    res.json({ video: { ...item, slug }, videos: next });
+  } catch (err) {
+    console.error("Site videos add error:", err);
+    res.status(500).json({ error: err.message || "Erro ao adicionar vídeo." });
+  }
+});
+
+app.delete("/api/site/videos/:slug", async (req, res) => {
+  try {
+    const videos = await getSiteVideos(supabase);
+    const next = videos.filter((v) => v.slug !== req.params.slug);
+    await saveSiteVideos(supabase, next);
+    res.json({ success: true, videos: next });
+  } catch (err) {
+    console.error("Site videos delete error:", err);
+    res.status(500).json({ error: err.message || "Erro ao eliminar vídeo." });
   }
 });
 
