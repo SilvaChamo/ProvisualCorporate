@@ -5,6 +5,8 @@ import logoColorido from "../../Logo/logo_horizontal.png";
 import { FOOTER_LINK_COLUMNS } from "../../lib/siteNav";
 import FooterMapBlock from "./FooterMapBlock";
 import HomeLeavingLink from "../HomeLeavingLink";
+import SiteSectionLink from "./SiteSectionLink";
+import { isHomeSectionHref } from "../../lib/siteSectionNav";
 import { cn } from "../../lib/utils";
 
 export default function SiteFooter() {
@@ -42,7 +44,7 @@ export default function SiteFooter() {
 
   return (
     <>
-      <div className="h-[3px] bg-[#a21b7e]" aria-hidden="true" />
+      <div className="h-[5px] bg-[#a21b7e]" aria-hidden="true" />
 
       <section className="bg-[#2a2a2a] text-gray-300">
         <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-14 grid sm:grid-cols-2 lg:grid-cols-5 gap-10">
@@ -62,7 +64,11 @@ export default function SiteFooter() {
               <ul className="space-y-2.5">
                 {column.links.map((link) => (
                   <li key={link.label}>
-                    {link.href.startsWith("/") && !link.href.includes("#") ? (
+                    {isHomeSectionHref(link.href) ? (
+                      <SiteSectionLink href={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
+                        {link.label}
+                      </SiteSectionLink>
+                    ) : link.href.startsWith("/") && !link.href.includes("#") ? (
                       isHome ? (
                         <HomeLeavingLink to={link.href} className="text-sm text-gray-400 hover:text-white transition-colors">
                           {link.label}

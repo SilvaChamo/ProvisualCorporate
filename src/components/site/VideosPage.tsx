@@ -44,7 +44,7 @@ export default function VideosPage() {
               key={`${video.slug}-${video.youtubeId}`}
               type="button"
               onClick={() => setActiveYoutubeId(video.youtubeId)}
-              className="group relative aspect-video w-full overflow-hidden rounded-xl text-left shadow-lg"
+              className="group relative aspect-video w-full overflow-hidden text-left shadow-lg"
               aria-label={`Reproduzir vídeo ${video.title}`}
             >
               <img
@@ -73,14 +73,14 @@ export default function VideosPage() {
           onClick={() => setActiveYoutubeId(null)}
         >
           <div
-            className="relative w-full max-w-[1280px] overflow-hidden rounded-xl bg-black shadow-2xl"
+            className="relative w-full max-w-[1280px] overflow-hidden bg-black shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <SiteYoutubePlayer
               key={activeYoutubeId}
               videoId={activeYoutubeId}
               autoplay
-              onMoreVideosClick={() => setActiveYoutubeId(null)}
+              hideMoreVideos
             />
             <div className="flex items-center justify-end border-t border-white/10 bg-[#111] px-4 py-3">
               <button

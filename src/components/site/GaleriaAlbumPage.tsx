@@ -76,7 +76,9 @@ export default function GaleriaAlbumPage() {
       breadcrumbs={[
         { label: "Início", href: "/" },
         { label: "Galeria", href: "/galeria" },
+        { label: album.title },
       ]}
+      bannerImages={photos.length > 0 ? photos.slice(0, 12) : album.image ? [album.image] : undefined}
     >
       {loading ? (
         <div className="flex justify-center py-20 mb-8">

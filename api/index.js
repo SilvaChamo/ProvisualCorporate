@@ -547,7 +547,14 @@ app.post("/api/drive/list", async (req, res) => {
       pageToken = response.data.nextPageToken || undefined;
     } while (pageToken);
 
-    res.json(allFiles);
+    const normalizedFiles = allFiles.map((file) => ({
+      ...file,
+      name: typeof file.name === "string"
+        ? file.name.normalize("NFC").replace(/\uFFFD/g, "").trim() || "Sem nome"
+        : "Sem nome",
+    }));
+
+    res.json(normalizedFiles);
   } catch (error) {
     console.error("List Error:", error);
     res.status(500).json({ error: error.message });

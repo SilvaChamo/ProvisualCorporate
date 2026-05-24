@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn, handleFirestoreError, OperationType } from "../lib/utils";
+import { cn, displayDriveName, handleFirestoreError, OperationType } from "../lib/utils";
 import {
   parseDragPayload,
   toggleSelectionId,
@@ -63,6 +63,7 @@ import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, s
 
 import logoHorizontal from "../Logo/logo_horizontal_clean.png";
 import logoJpg from "../Logo/logo_main_jpg.jpg";
+import LeaveAccountDialog from "./LeaveAccountDialog";
 
 // Helper de requisição segura para evitar Unexpected end of JSON input e expor erros reais
 async function fetchWithErrorMessage(url: string, options: RequestInit): Promise<any> {
@@ -328,7 +329,7 @@ function FilePreviewModal({ asset, onClose }: { asset: Asset; onClose: () => voi
               driveId={asset.driveId}
               fallbackSize="w1200"
               className="w-full h-full object-cover"
-              alt={asset.name}
+              alt={displayDriveName(asset.name)}
             />
           ) : asset.versions?.[0]?.url ? (
             <iframe
@@ -445,6 +446,7 @@ export default function ClientDashboard() {
   // Estado para conexão híbrida pessoal de Google Drive do Silva
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; type: string; email: string; configNeeded: boolean } | null>(null);
   const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
+  const [leaveAccountOpen, setLeaveAccountOpen] = useState(false);
   const [isSyncingBackground, setIsSyncingBackground] = useState(false);
   const pendingSyncRef = useRef<{ targetFolderId?: string; filterType?: string; isBackground: boolean } | null>(null);
   const restoredFolderRef = useRef<string | null>(sessionStorage.getItem('prov_selected_folder_id'));
@@ -855,6 +857,12 @@ export default function ClientDashboard() {
     window.location.href = "/login";
   };
 
+  const handleLeaveToHomepage = async () => {
+    localStorage.removeItem("provisual_local_admin");
+    await supabase.auth.signOut();
+    window.location.href = "/";
+  };
+
   // Trigger File Input
   const triggerUpload = () => {
     fileInputRef.current?.click();
@@ -1249,7 +1257,7 @@ export default function ClientDashboard() {
           const docSnap = await getDoc(docRef);
           const folderData = docSnap.exists() ? docSnap.data() : null;
           await setDoc(docRef, {
-            name: file.name,
+            name: displayDriveName(file.name),
             date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
             ownerId: "google-drive",
             parentId: file.trashed ? 'trash' : resolvedParentId,
@@ -1489,7 +1497,7 @@ export default function ClientDashboard() {
         const data = doc.data();
         let folderDate = new Date();
         if (data.date && typeof data.date.toDate === 'function') folderDate = data.date.toDate();
-        return { id: doc.id, ...data, date: folderDate } as FolderData;
+        return { id: doc.id, ...data, name: displayDriveName(data.name), date: folderDate } as FolderData;
       });
       setFolders(folderList.sort((a, b) => b.date.getTime() - a.date.getTime()));
       setFoldersLoaded(true);
@@ -1510,7 +1518,7 @@ export default function ClientDashboard() {
         let upDate = new Date();
         if (data.captureDate && typeof data.captureDate.toDate === 'function') capDate = data.captureDate.toDate();
         if (data.uploadDate && typeof data.uploadDate.toDate === 'function') upDate = data.uploadDate.toDate();
-        return { id: doc.id, ...data, captureDate: capDate, uploadDate: upDate } as Asset;
+        return { id: doc.id, ...data, name: displayDriveName(data.name), captureDate: capDate, uploadDate: upDate } as Asset;
       });
       setAssets(assetList);
       setAssetsLoaded(true);
@@ -1679,7 +1687,7 @@ export default function ClientDashboard() {
               const docSnap = await getDoc(docRef);
               const folderData = docSnap.exists() ? docSnap.data() : null;
               await setDoc(docRef, {
-                name: file.name,
+                name: displayDriveName(file.name),
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: null,
@@ -1736,7 +1744,7 @@ export default function ClientDashboard() {
               }
 
               await setDoc(docRef, {
-                name: file.name,
+                name: displayDriveName(file.name),
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
@@ -1794,7 +1802,7 @@ export default function ClientDashboard() {
             }
 
             await setDoc(docRef, {
-              name: file.name,
+              name: displayDriveName(file.name),
               date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
               ownerId: "google-drive",
               parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
@@ -2050,12 +2058,16 @@ export default function ClientDashboard() {
       <aside className="w-60 bg-white border-r border-gray-100 flex flex-col shrink-0">
         <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
           <div className="flex items-center gap-2 mb-6 mt-1 px-1">
-            <img src={logoHorizontal} alt="ProVisual" className="h-10 w-auto object-contain" />
+            <button
+              type="button"
+              onClick={() => setLeaveAccountOpen(true)}
+              className="rounded-lg transition-opacity hover:opacity-80"
+              aria-label="Ir para a página inicial"
+            >
+              <img src={logoHorizontal} alt="ProVisual" className="h-10 w-auto object-contain" />
+            </button>
           </div>
 
-          <h3 className="text-[13px] font-black text-[#a21b7e] uppercase tracking-[0.08em] px-3 py-2.5 mb-2 bg-[#a21b7e]/5 rounded-sm">
-            Navegação
-          </h3>
           <nav className="space-y-0.5">
 
             <SidebarItem
@@ -2169,7 +2181,7 @@ export default function ClientDashboard() {
 
             <button
               onClick={handleLogout}
-              className="flex items-center justify-center gap-2 h-9 px-3 bg-red-50 border border-red-100 text-red-600 text-sm font-bold hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer shrink-0"
+              className="flex items-center justify-center gap-2 h-9 px-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-sm font-bold hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer shrink-0"
             >
               <LogOut size={16} />
               Sair
@@ -2762,26 +2774,9 @@ export default function ClientDashboard() {
                                 dropTargetFolderId === folder.id && "border-[#a21b7e] bg-[#a21b7e]/5",
                               )}
                             >
-                              <div
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleFolderSelect(folder.id);
-                                }}
-                                className={cn(
-                                  "absolute top-2 left-2 z-20 w-5 h-5 rounded-full border bg-white/90 backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer shadow-sm hover:scale-110",
-                                  selectedFolderIds.includes(folder.id)
-                                    ? "border-[#a21b7e] bg-[#a21b7e] text-white"
-                                    : "border-gray-300 text-transparent hover:border-gray-400",
-                                  selectedFolderIds.includes(folder.id) || hasBulkSelectionActive
-                                    ? "opacity-100"
-                                    : "opacity-0 group-hover:opacity-100",
-                                )}
-                              >
-                                <Check size={12} className={cn("stroke-[3]", selectedFolderIds.includes(folder.id) ? "block" : "hidden group-hover:block text-gray-400")} />
-                              </div>
-                              <div className="flex items-center gap-3 truncate flex-1 min-w-0 pl-6">
+                              <div className="flex items-center gap-3 truncate flex-1 min-w-0">
                                 <FolderIcon size={20} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} className="shrink-0 animate-in fade-in" />
-                                <span className="text-xs font-bold text-gray-700 truncate uppercase">{folder.name}</span>
+                                <span className="text-xs font-bold text-gray-700 truncate" title={displayDriveName(folder.name)}>{displayDriveName(folder.name)}</span>
                               </div>
 
                               <div className="relative overflow-visible">
@@ -2810,106 +2805,7 @@ export default function ClientDashboard() {
                                         }}
                                       />
 
-                                      {/* SUBMENUS (Posicionados à esquerda do principal) */}
-                                      <AnimatePresence>
-                                        {activeFolderSubmenu === 'partilhar' && (
-                                          <motion.div
-                                            initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                            animate={{ opacity: 1, scale: 1, x: 0 }}
-                                            exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                            transition={{ duration: 0.1 }}
-                                            className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
-
-
-
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                                window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira a pasta *${folder.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
-                                                setActiveFolderMenuId(null);
-                                                setActiveFolderSubmenu('none');
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                            >
-                                              <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
-                                            </button>
-
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                                window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
-                                                setActiveFolderMenuId(null);
-                                                setActiveFolderSubmenu('none');
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                            >
-                                              <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
-                                            </button>
-
-                                            <div className="my-1 border-t border-gray-100" />
-
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                                navigator.clipboard.writeText(shareUrl);
-                                                alert("Link de partilha da pasta copiado para a área de transferência!");
-                                                setActiveFolderMenuId(null);
-                                                setActiveFolderSubmenu('none');
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                            >
-                                              <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
-                                            </button>
-                                          </motion.div>
-                                        )}
-
-                                        {activeFolderSubmenu === 'organizar' && (
-                                          <motion.div
-                                            initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                            animate={{ opacity: 1, scale: 1, x: 0 }}
-                                            exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                            transition={{ duration: 0.1 }}
-                                            className="absolute right-[100%] mr-1.5 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default font-sans"
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setOrganizarModal({ folder, mode: 'move' });
-                                                setActiveFolderSubmenu('none');
-                                                setActiveFolderMenuId(null);
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
-                                            >
-                                              <FolderIcon size={14} className="text-gray-400 shrink-0" />
-                                              Mover para...
-                                            </button>
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setOrganizarModal({ folder, mode: 'copy' });
-                                                setActiveFolderSubmenu('none');
-                                                setActiveFolderMenuId(null);
-                                              }}
-                                              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
-                                            >
-                                              <Copy size={14} className="text-gray-400 shrink-0" />
-                                              Copiar para...
-                                            </button>
-                                          </motion.div>
-                                        )}
-                                      </AnimatePresence>
-
+                                      
                                       <motion.div
                                         initial={{ opacity: 0, scale: 0.95, y: -10 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -2919,6 +2815,7 @@ export default function ClientDashboard() {
                                         onClick={(e) => e.stopPropagation()}
                                       >
                                         <button
+                                          onMouseEnter={() => setActiveFolderSubmenu('none')}
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setSelectedFolderId(folder.id);
@@ -2938,6 +2835,7 @@ export default function ClientDashboard() {
                                         <div className="my-1 border-t border-gray-100" />
 
                                         <button
+                                          onMouseEnter={() => setActiveFolderSubmenu('none')}
                                           onClick={async (e) => {
                                             e.stopPropagation();
                                             const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
@@ -2945,15 +2843,11 @@ export default function ClientDashboard() {
                                               try {
                                                 setIsProcessingAction(true);
                                                 sessionStorage.setItem('action_in_progress', 'true');
-
                                                 if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
                                                   const renameResponse = await fetch('/api/drive/update', {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({
-                                                      fileId: folder.id,
-                                                      newName: newName.normalize('NFC')
-                                                    })
+                                                    body: JSON.stringify({ fileId: folder.id, newName: newName.normalize('NFC') })
                                                   });
                                                   if (!renameResponse.ok) {
                                                     const errData = await renameResponse.json();
@@ -2970,7 +2864,7 @@ export default function ClientDashboard() {
                                             }
                                             setActiveFolderMenuId(null);
                                           }}
-                                          className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                          className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                         >
                                           <div className="flex items-center gap-3">
                                             <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -2978,33 +2872,243 @@ export default function ClientDashboard() {
                                           </div>
                                         </button>
 
+                                        {/* ── ATRIBUIR A CLIENTE — nível 1, flyout nível 2 ── */}
                                         <button
+                                          onMouseEnter={() => setActiveFolderSubmenu('atribuir')}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
+                                          }}
+                                          className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-[#a21b7e]/5 group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <UserPlus size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                            <div>
+                                              <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors block">Atribuir a Cliente</span>
+                                              {(folder as any).clientEmail && (
+                                                <span className="text-[9px] text-[#a21b7e] font-medium truncate block max-w-[120px]">{(folder as any).clientEmail}</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+
+                                          <AnimatePresence>
+                                            {activeFolderSubmenu === 'atribuir' && (
+                                              <motion.div
+                                                initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                                animate={{ opacity: 1, scale: 1, x: 0 }}
+                                                exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                                transition={{ duration: 0.1 }}
+                                                className="absolute left-full ml-2 top-0 w-56 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Selecionar Cliente</div>
+
+                                                {(folder as any).clientEmail && (
+                                                  <>
+                                                    <div className="mx-2 mt-1 px-2 py-1 text-[10px] text-[#a21b7e] font-medium bg-[#a21b7e]/8 rounded flex items-center gap-1.5">
+                                                      <Check size={10} className="shrink-0" />
+                                                      <span className="truncate">Actual: {(folder as any).clientEmail}</span>
+                                                    </div>
+                                                    <button
+                                                      onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        if (!confirm(`Desvincular a pasta "${folder.name}" de ${(folder as any).clientEmail}?`)) return;
+                                                        try {
+                                                          await updateDoc(doc(db, 'folders', folder.id), { clientEmail: null });
+                                                          alert('✅ Partilha removida com sucesso!');
+                                                        } catch (err: any) { alert('Erro: ' + err.message); }
+                                                        setActiveFolderSubmenu('none');
+                                                        setActiveFolderMenuId(null);
+                                                      }}
+                                                      className="w-full flex items-center gap-2 mx-0 px-3 py-1.5 mb-1 text-[10px] font-bold text-red-500 hover:bg-red-50 transition-colors text-left border-b border-gray-100"
+                                                    >
+                                                      <UserMinus size={11} className="shrink-0" />
+                                                      Desvincular partilha
+                                                    </button>
+                                                  </>
+                                                )}
+
+                                                <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                                                  {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
+                                                    accounts.filter(a => a.role !== 'admin').map((client: any) => {
+                                                      const clientName = client.displayName?.split('|')[1]?.trim() || client.displayName?.split('|')[0]?.trim() || client.email;
+                                                      const isActive = (folder as any).clientEmail === client.email?.toLowerCase();
+                                                      return (
+                                                        <button
+                                                          key={client.id}
+                                                          onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            try {
+                                                              await updateDoc(doc(db, 'folders', folder.id), { clientEmail: client.email?.toLowerCase() });
+                                                              alert(`✅ Pasta "${folder.name}" atribuída a ${client.email}!`);
+                                                            } catch (err: any) {
+                                                              alert("Erro ao atribuir: " + err.message);
+                                                            }
+                                                            setActiveFolderSubmenu('none');
+                                                            setActiveFolderMenuId(null);
+                                                          }}
+                                                          className={cn(
+                                                            "w-full text-left px-3 py-2 text-xs transition-colors",
+                                                            isActive ? "bg-[#a21b7e]/10 text-[#a21b7e]" : "text-gray-700 hover:bg-gray-50 hover:text-[#a21b7e]"
+                                                          )}
+                                                        >
+                                                          <div className="flex items-center gap-2">
+                                                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
+                                                              isActive ? "bg-[#a21b7e] text-white" : "bg-gray-100 text-gray-500"
+                                                            )}>
+                                                              {isActive ? <Check size={10} /> : clientName?.charAt(0)?.toUpperCase()}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                              <div className="font-bold truncate">{clientName}</div>
+                                                              <div className="text-[9px] text-gray-400 truncate">{client.email}</div>
+                                                            </div>
+                                                          </div>
+                                                        </button>
+                                                      );
+                                                    })
+                                                  ) : (
+                                                    <div className="px-3 py-3 text-[10px] text-gray-400 italic text-center">
+                                                      Nenhum cliente cadastrado.<br />
+                                                      <span className="text-[#a21b7e] not-italic font-medium">Crie em Gestão de Clientes.</span>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </motion.div>
+                                            )}
+                                          </AnimatePresence>
+                                        </button>
+
+                                        {/* ── PARTILHAR — apenas link ── */}
+                                        <button
+                                          onMouseEnter={() => setActiveFolderSubmenu('partilhar')}
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
                                           }}
-                                          className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                          className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                         >
                                           <div className="flex items-center gap-3">
-                                            <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
+                                            <Share2 size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar link</span>
                                           </div>
                                           <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                                          <AnimatePresence>
+                                            {activeFolderSubmenu === 'partilhar' && (
+                                              <motion.div
+                                                initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                                animate={{ opacity: 1, scale: 1, x: 0 }}
+                                                exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                                transition={{ duration: 0.1 }}
+                                                className="absolute left-full ml-2 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Enviar via</div>
+
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira a pasta *${folder.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
+                                                    setActiveFolderMenuId(null);
+                                                    setActiveFolderSubmenu('none');
+                                                  }}
+                                                  className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-gray-50 group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                                >
+                                                  <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                                  <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
+                                                </button>
+
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                                    window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}*:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
+                                                    setActiveFolderMenuId(null);
+                                                    setActiveFolderSubmenu('none');
+                                                  }}
+                                                  className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-gray-50 group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                                >
+                                                  <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                                  <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
+                                                </button>
+
+                                                <div className="my-1 border-t border-gray-100" />
+
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                                    navigator.clipboard.writeText(shareUrl);
+                                                    alert("Link copiado!");
+                                                    setActiveFolderMenuId(null);
+                                                    setActiveFolderSubmenu('none');
+                                                  }}
+                                                  className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-gray-50 group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                                >
+                                                  <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                                  <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar link</span>
+                                                </button>
+                                              </motion.div>
+                                            )}
+                                          </AnimatePresence>
                                         </button>
+
 
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
                                           }}
-                                          className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                          className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-[#a21b7e]/5 group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                         >
                                           <div className="flex items-center gap-3">
                                             <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
                                           </div>
                                           <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                                          <AnimatePresence>
+                                            {activeFolderSubmenu === 'organizar' && (
+                                              <motion.div
+                                                initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                                animate={{ opacity: 1, scale: 1, x: 0 }}
+                                                exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                                transition={{ duration: 0.1 }}
+                                                className="absolute left-full ml-2 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOrganizarModal({ folder, mode: 'move' });
+                                                    setActiveFolderSubmenu('none');
+                                                    setActiveFolderMenuId(null);
+                                                  }}
+                                                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                                >
+                                                  <FolderIcon size={14} className="text-gray-400 shrink-0" />
+                                                  Mover para...
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOrganizarModal({ folder, mode: 'copy' });
+                                                    setActiveFolderSubmenu('none');
+                                                    setActiveFolderMenuId(null);
+                                                  }}
+                                                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                                >
+                                                  <Copy size={14} className="text-gray-400 shrink-0" />
+                                                  Copiar para...
+                                                </button>
+                                              </motion.div>
+                                            )}
+                                          </AnimatePresence>
                                         </button>
+
 
                                         <div className="px-3.5 py-2">
                                           <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
@@ -3060,8 +3164,9 @@ export default function ClientDashboard() {
                                                     })
                                                   });
                                                   if (!trashResponse.ok) {
-                                                    const errData = await trashResponse.json();
-                                                    console.warn("Erro ao lixo no drive:", errData.error);
+                                                    let errMsg = 'Erro desconhecido';
+                                                    try { const errData = await trashResponse.json(); errMsg = errData.error || errMsg; } catch (_) { try { errMsg = await trashResponse.text(); } catch (__) { } }
+                                                    console.warn("Erro ao lixo no drive:", errMsg);
                                                   }
                                                 }
                                                 await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
@@ -3104,6 +3209,7 @@ export default function ClientDashboard() {
                               onDistribute={(item) => { setItemToDistribute(item); setDistributeModalOpen(true); }}
                               userProfile={userProfile}
                               isFolderAllowedForClient={isFolderAllowedForClient}
+                              accounts={accounts}
                               isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
                               setOrganizarModal={setOrganizarModal}
                               onOpen={() => {
@@ -3175,13 +3281,13 @@ export default function ClientDashboard() {
                         }}
                         className={cn(
                           "grid grid-cols-12 px-8 py-4 border-b border-gray-50 items-center hover:bg-gray-50 cursor-pointer transition-all relative overflow-visible",
-                          selectedFolderIds.includes(folder.id) && "bg-[#a21b7e]/5",
+                          selectedFolderIds.includes(folder.id) && "bg-[#a21b7e]/5 ring-2 ring-inset ring-[#a21b7e]/30",
                           dropTargetFolderId === folder.id && "bg-[#a21b7e]/10 ring-1 ring-inset ring-[#a21b7e]/30",
                         )}
                       >
                         <div className="col-span-6 flex items-center gap-4">
                           <FolderIcon size={24} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} />
-                          <span className="text-sm font-bold text-gray-700">{folder.name}</span>
+                          <span className="text-sm font-bold text-gray-700" title={displayDriveName(folder.name)}>{displayDriveName(folder.name)}</span>
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-gray-300 uppercase">Pasta</div>
                         <div className="col-span-2 text-xs text-gray-400 font-medium">
@@ -3216,104 +3322,7 @@ export default function ClientDashboard() {
                                   />
 
                                   {/* SUBMENUS (Posicionados à esquerda do principal) */}
-                                  <AnimatePresence>
-                                    {activeFolderSubmenu === 'partilhar' && (
-                                      <motion.div
-                                        initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                        animate={{ opacity: 1, scale: 1, x: 0 }}
-                                        exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                        transition={{ duration: 0.1 }}
-                                        className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-
-
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira a pasta *${folder.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
-                                            setActiveFolderMenuId(null);
-                                            setActiveFolderSubmenu('none');
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                        >
-                                          <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
-                                        </button>
-
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                            window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
-                                            setActiveFolderMenuId(null);
-                                            setActiveFolderSubmenu('none');
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                        >
-                                          <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
-                                        </button>
-
-                                        <div className="my-1 border-t border-gray-100" />
-
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
-                                            navigator.clipboard.writeText(shareUrl);
-                                            alert("Link de partilha da pasta copiado para a área de transferência!");
-                                            setActiveFolderMenuId(null);
-                                            setActiveFolderSubmenu('none');
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                                        >
-                                          <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
-                                        </button>
-                                      </motion.div>
-                                    )}
-
-                                    {activeFolderSubmenu === 'organizar' && (
-                                      <motion.div
-                                        initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                                        animate={{ opacity: 1, scale: 1, x: 0 }}
-                                        exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                                        transition={{ duration: 0.1 }}
-                                        className="absolute right-[100%] mr-1.5 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default font-sans"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setOrganizarModal({ folder, mode: 'move' });
-                                            setActiveFolderSubmenu('none');
-                                            setActiveFolderMenuId(null);
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
-                                        >
-                                          <FolderIcon size={14} className="text-gray-400 shrink-0" />
-                                          Mover para...
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setOrganizarModal({ folder, mode: 'copy' });
-                                            setActiveFolderSubmenu('none');
-                                            setActiveFolderMenuId(null);
-                                          }}
-                                          className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
-                                        >
-                                          <Copy size={14} className="text-gray-400 shrink-0" />
-                                          Copiar para...
-                                        </button>
-                                      </motion.div>
-                                    )}
-                                  </AnimatePresence>
 
                                   <motion.div
                                     initial={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -3324,6 +3333,7 @@ export default function ClientDashboard() {
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <button
+                                      onMouseEnter={() => setActiveFolderSubmenu('none')}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedFolderId(folder.id);
@@ -3343,6 +3353,7 @@ export default function ClientDashboard() {
                                     <div className="my-1 border-t border-gray-100" />
 
                                     <button
+                                      onMouseEnter={() => setActiveFolderSubmenu('none')}
                                       onClick={async (e) => {
                                         e.stopPropagation();
                                         const newName = prompt("Digite o novo nome para " + folder.name, folder.name);
@@ -3375,7 +3386,7 @@ export default function ClientDashboard() {
                                         }
                                         setActiveFolderMenuId(null);
                                       }}
-                                      className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                      className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                     >
                                       <div className="flex items-center gap-3">
                                         <FileText size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -3384,17 +3395,178 @@ export default function ClientDashboard() {
                                     </button>
 
                                     <button
+                                      onMouseEnter={() => setActiveFolderSubmenu('atribuir')}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveFolderSubmenu(activeFolderSubmenu === 'atribuir' ? 'none' : 'atribuir');
+                                      }}
+                                      className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-[#a21b7e]/5 group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <UserPlus size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                        <div>
+                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors block">Atribuir a Cliente</span>
+                                          {(folder as any).clientEmail && (
+                                            <span className="text-[9px] text-[#a21b7e] font-medium truncate block max-w-[120px]">{(folder as any).clientEmail}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+
+                                      <AnimatePresence>
+                                        {activeFolderSubmenu === 'atribuir' && (
+                                          <motion.div
+                                            initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            transition={{ duration: 0.1 }}
+                                            className="absolute right-0 translate-x-full ml-1.5 top-0 w-56 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Selecionar Cliente</div>
+                                            {(folder as any).clientEmail && (
+                                              <>
+                                                <div className="mx-2 mt-1 px-2 py-1 text-[10px] text-[#a21b7e] font-medium bg-[#a21b7e]/8 rounded flex items-center gap-1.5">
+                                                  <Check size={10} className="shrink-0" />
+                                                  <span className="truncate">Actual: {(folder as any).clientEmail}</span>
+                                                </div>
+                                                <button
+                                                  onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (!confirm(`Desvincular a pasta "${folder.name}" de ${(folder as any).clientEmail}?`)) return;
+                                                    try {
+                                                      await updateDoc(doc(db, 'folders', folder.id), { clientEmail: null });
+                                                      alert('✅ Partilha removida com sucesso!');
+                                                    } catch (err: any) { alert('Erro: ' + err.message); }
+                                                    setActiveFolderSubmenu('none');
+                                                    setActiveFolderMenuId(null);
+                                                  }}
+                                                  className="w-full flex items-center gap-2 px-3 py-1.5 mb-1 text-[10px] font-bold text-red-500 hover:bg-red-50 transition-colors text-left border-b border-gray-100"
+                                                >
+                                                  <UserMinus size={11} className="shrink-0" />
+                                                  Desvincular partilha
+                                                </button>
+                                              </>
+                                            )}
+                                            <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                                              {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
+                                                accounts.filter(a => a.role !== 'admin').map((client: any) => {
+                                                  const clientName = client.displayName?.split('|')[1]?.trim() || client.displayName?.split('|')[0]?.trim() || client.email;
+                                                  const isActive = (folder as any).clientEmail === client.email?.toLowerCase();
+                                                  return (
+                                                    <button
+                                                      key={client.id}
+                                                      onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        try {
+                                                          await updateDoc(doc(db, 'folders', folder.id), { clientEmail: client.email?.toLowerCase() });
+                                                          alert(`✅ Pasta "${folder.name}" atribuída a ${client.email}!`);
+                                                        } catch (err: any) {
+                                                          alert("Erro ao atribuir: " + err.message);
+                                                        }
+                                                        setActiveFolderSubmenu('none');
+                                                        setActiveFolderMenuId(null);
+                                                      }}
+                                                      className={cn(
+                                                        "w-full text-left px-3 py-2 text-xs transition-colors",
+                                                        isActive ? "bg-[#a21b7e]/10 text-[#a21b7e]" : "text-gray-700 hover:bg-gray-50 hover:text-[#a21b7e]"
+                                                      )}
+                                                    >
+                                                      <div className="flex items-center gap-2">
+                                                        <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
+                                                          isActive ? "bg-[#a21b7e] text-white" : "bg-gray-100 text-gray-500"
+                                                        )}>
+                                                          {isActive ? <Check size={10} /> : clientName?.charAt(0)?.toUpperCase()}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                          <div className="font-bold truncate">{clientName}</div>
+                                                          <div className="text-[9px] text-gray-400 truncate">{client.email}</div>
+                                                        </div>
+                                                      </div>
+                                                    </button>
+                                                  );
+                                                })
+                                              ) : (
+                                                <div className="px-3 py-3 text-[10px] text-gray-400 italic text-center">
+                                                  Nenhum cliente cadastrado.<br />
+                                                  <span className="text-[#a21b7e] not-italic font-medium">Crie em Gestão de Clientes.</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </motion.div>
+                                        )}
+                                      </AnimatePresence>
+                                    </button>
+
+                                    <button
+                                      onMouseEnter={() => setActiveFolderSubmenu('partilhar')}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setActiveFolderSubmenu(activeFolderSubmenu === 'partilhar' ? 'none' : 'partilhar');
                                       }}
-                                      className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                      className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                     >
                                       <div className="flex items-center gap-3">
-                                        <Users size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
+                                        <Share2 size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar link</span>
                                       </div>
                                       <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                                      <AnimatePresence>
+                                        {activeFolderSubmenu === 'partilhar' && (
+                                          <motion.div
+                                            initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            transition={{ duration: 0.1 }}
+                                            className="absolute right-0 translate-x-full ml-1.5 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Enviar via</div>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                                window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira a pasta *${folder.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
+                                                setActiveFolderMenuId(null);
+                                                setActiveFolderSubmenu('none');
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-gray-50 group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
+                                            </button>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                                window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Pasta - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder à pasta *${folder.name}*:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
+                                                setActiveFolderMenuId(null);
+                                                setActiveFolderSubmenu('none');
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-gray-50 group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
+                                            </button>
+                                            <div className="my-1 border-t border-gray-100" />
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const shareUrl = folder.webViewLink || `${window.location.origin}/?folder=${folder.id}`;
+                                                navigator.clipboard.writeText(shareUrl);
+                                                alert("Link copiado!");
+                                                setActiveFolderMenuId(null);
+                                                setActiveFolderSubmenu('none');
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-gray-50 group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                            >
+                                              <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar link</span>
+                                            </button>
+                                          </motion.div>
+                                        )}
+                                      </AnimatePresence>
                                     </button>
 
                                     <button
@@ -3402,14 +3574,54 @@ export default function ClientDashboard() {
                                         e.stopPropagation();
                                         setActiveFolderSubmenu(activeFolderSubmenu === 'organizar' ? 'none' : 'organizar');
                                       }}
-                                      className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                      className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-[#a21b7e]/5 group transition-colors text-left text-[13px] font-bold cursor-pointer"
                                     >
                                       <div className="flex items-center gap-3">
                                         <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
+                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
                                       </div>
                                       <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                                      <AnimatePresence>
+                                        {activeFolderSubmenu === 'organizar' && (
+                                          <motion.div
+                                            initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                            transition={{ duration: 0.1 }}
+                                            className="absolute left-full ml-2 top-0 w-44 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.12)] z-50 py-1.5 text-left cursor-default"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <div className="px-3 py-1 text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">Organizar</div>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOrganizarModal({ folder, mode: 'move' });
+                                                setActiveFolderSubmenu('none');
+                                                setActiveFolderMenuId(null);
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                            >
+                                              <FolderIcon size={14} className="text-gray-400 shrink-0" />
+                                              Mover para...
+                                            </button>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOrganizarModal({ folder, mode: 'copy' });
+                                                setActiveFolderSubmenu('none');
+                                                setActiveFolderMenuId(null);
+                                              }}
+                                              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 hover:text-[#a21b7e] text-gray-700 text-xs font-bold transition-colors text-left"
+                                            >
+                                              <Copy size={14} className="text-gray-400 shrink-0" />
+                                              Copiar para...
+                                            </button>
+                                          </motion.div>
+                                        )}
+                                      </AnimatePresence>
                                     </button>
+
 
                                     <div className="px-3.5 py-2">
                                       <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block mb-1.5">Destaque</span>
@@ -3465,8 +3677,9 @@ export default function ClientDashboard() {
                                                 })
                                               });
                                               if (!trashResponse.ok) {
-                                                const errData = await trashResponse.json();
-                                                console.warn("Erro ao lixo no drive:", errData.error);
+                                                let errMsg = 'Erro desconhecido';
+                                                try { const errData = await trashResponse.json(); errMsg = errData.error || errMsg; } catch (_) { try { errMsg = await trashResponse.text(); } catch (__) { } }
+                                                console.warn("Erro ao lixo no drive:", errMsg);
                                               }
                                             }
                                             await updateDoc(doc(db, "folders", folder.id), { parentId: "trash", trashed: true });
@@ -3503,6 +3716,7 @@ export default function ClientDashboard() {
                         onDistribute={(item) => { setItemToDistribute(item); setDistributeModalOpen(true); }}
                         userProfile={userProfile}
                         isFolderAllowedForClient={isFolderAllowedForClient}
+                        accounts={accounts}
                         isNewlyUploaded={newlyUploadedAssetIds.includes(asset.id)}
                         setOrganizarModal={setOrganizarModal}
                         onOpen={() => {
@@ -4275,6 +4489,12 @@ export default function ClientDashboard() {
           );
         })()}
       </AnimatePresence>
+
+      <LeaveAccountDialog
+        open={leaveAccountOpen}
+        onClose={() => setLeaveAccountOpen(false)}
+        onConfirmLeave={handleLeaveToHomepage}
+      />
     </div>
   );
 }
@@ -4463,82 +4683,7 @@ function AssetCard({
               />
 
               {/* SUBMENUS (Posicionados à esquerda do principal) */}
-              <AnimatePresence>
-                {activeSubmenu === 'partilhar' && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                    animate={{ opacity: 1, scale: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                    transition={{ duration: 0.1 }}
-                    className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const shareUrl = asset.versions[0]?.url || asset.webViewLink || window.location.href;
-                        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira o arquivo *${asset.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
-                        setShowMenu(false);
-                        setActiveSubmenu('none');
-                      }}
-                      className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                    >
-                      <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
-                    </button>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const shareUrl = asset.versions[0]?.url || asset.webViewLink || window.location.href;
-                        window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Ficheiro - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder ao ficheiro *${asset.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
-                        setShowMenu(false);
-                        setActiveSubmenu('none');
-                      }}
-                      className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                    >
-                      <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
-                    </button>
-
-                    <div className="my-1 border-t border-gray-100" />
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const shareUrl = asset.webViewLink || asset.versions[0]?.url || window.location.href;
-                        navigator.clipboard.writeText(shareUrl);
-                        alert("Link de partilha copiado para a área de transferência!");
-                        setShowMenu(false);
-                        setActiveSubmenu('none');
-                      }}
-                      className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                    >
-                      <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
-                    </button>
-
-                    {asset.webViewLink && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(asset.webViewLink, '_blank');
-                          setShowMenu(false);
-                          setActiveSubmenu('none');
-                        }}
-                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                      >
-                        <ExternalLink size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Abrir no Drive</span>
-                      </button>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -4621,7 +4766,7 @@ function AssetCard({
                       setShowMenu(false);
                     }
                   }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <Pencil size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -4676,7 +4821,7 @@ function AssetCard({
                       /* window.location.reload() removed */
                     });
                   }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <Copy size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -4709,13 +4854,143 @@ function AssetCard({
                     e.stopPropagation();
                     setActiveSubmenu(activeSubmenu === 'partilhar' ? 'none' : 'partilhar');
                   }}
-                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <UserPlus size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
                     <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
                   </div>
                   <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                  <AnimatePresence>
+                    {activeSubmenu === 'partilhar' && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                        transition={{ duration: 0.1 }}
+                        className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
+
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveSubmenu(activeSubmenu === 'atribuir' ? 'none' : 'atribuir');
+                            }}
+                            className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3">
+                              <UserPlus size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Atribuir a Cliente</span>
+                            </div>
+                            <ChevronRight size={14} className="text-gray-300 group-hover/sub:text-[#a21b7e] transition-colors" />
+                          </button>
+
+                          <AnimatePresence>
+                            {activeSubmenu === 'atribuir' && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                animate={{ opacity: 1, scale: 1, x: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                transition={{ duration: 0.1 }}
+                                className="absolute left-[100%] ml-1.5 top-0 w-48 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-[60] py-1 text-left max-h-64 overflow-y-auto custom-scrollbar cursor-default"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="px-3 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Selecione o Cliente</div>
+                                {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
+                                  accounts.filter(a => a.role !== 'admin').map((client: any) => (
+                                    <button
+                                      key={client.id}
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          const docRef = doc(db, 'assets', asset.id);
+                                          await updateDoc(docRef, { clientId: client.email });
+                                          alert("Atribuído com sucesso!");
+                                        } catch (err: any) {
+                                          alert("Erro ao atribuir: " + err.message);
+                                        }
+                                        setActiveSubmenu('none');
+                                        setShowMenu(false);
+                                      }}
+                                      className="w-full text-left px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] truncate block transition-colors"
+                                    >
+                                      {client.displayName || client.email}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="px-3 py-2 text-xs text-gray-400 italic">Nenhum cliente disponível</div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const shareUrl = asset.versions[0]?.url || asset.webViewLink || window.location.href;
+                            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira o arquivo *${asset.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
+                            setShowMenu(false);
+                            setActiveSubmenu('none');
+                          }}
+                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                        >
+                          <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const shareUrl = asset.versions[0]?.url || asset.webViewLink || window.location.href;
+                            window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Ficheiro - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder ao ficheiro *${asset.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
+                            setShowMenu(false);
+                            setActiveSubmenu('none');
+                          }}
+                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                        >
+                          <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
+                        </button>
+
+                        <div className="my-1 border-t border-gray-100" />
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const shareUrl = asset.webViewLink || asset.versions[0]?.url || window.location.href;
+                            navigator.clipboard.writeText(shareUrl);
+                            alert("Link de partilha copiado para a área de transferência!");
+                            setShowMenu(false);
+                            setActiveSubmenu('none');
+                          }}
+                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                        >
+                          <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
+                        </button>
+
+                        {asset.webViewLink && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(asset.webViewLink, '_blank');
+                              setShowMenu(false);
+                              setActiveSubmenu('none');
+                            }}
+                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                          >
+                            <ExternalLink size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Abrir no Drive</span>
+                          </button>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </button>
 
                 <button
@@ -4727,7 +5002,7 @@ function AssetCard({
                 >
                   <div className="flex items-center gap-3">
                     <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
+                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
                   </div>
                   <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
 
@@ -4839,7 +5114,7 @@ function AssetCard({
             thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s500') : undefined}
             driveId={asset.driveId}
             fallbackSize="w500"
-            alt={asset.name}
+            alt={displayDriveName(asset.name)}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
@@ -4849,7 +5124,7 @@ function AssetCard({
 
       {/* Hover Overlay - Descrição ao passar o mouse */}
       <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-10">
-        <h4 className="font-bold text-[11px] text-white truncate mb-0.5">{asset.name}</h4>
+        <h4 className="font-bold text-[11px] text-white truncate mb-0.5">{displayDriveName(asset.name)}</h4>
         <div className="flex items-center justify-between">
           <span className="text-[9px] font-bold text-gray-300 uppercase">{format(asset.captureDate, "dd/MM/yy")}</span>
           <span className="text-[9px] font-bold text-[#a21b7e] bg-white px-1.5 py-0.5 rounded-sm uppercase">{asset.versions[0]?.size}</span>
@@ -4972,7 +5247,7 @@ function AssetRow({
         ) : (
           <Icon size={24} className={iconColor} />
         )}
-        <span className="text-[16px] font-bold text-gray-700 truncate">{asset.name}</span>
+        <span className="text-[16px] font-bold text-gray-700 truncate" title={displayDriveName(asset.name)}>{displayDriveName(asset.name)}</span>
         {isNewlyUploaded && (
           <span className="text-emerald-500 flex items-center shrink-0 ml-2 animate-in fade-in duration-300" title="Upload concluído com sucesso!">
             <CheckCircle2 size={16} />
@@ -5012,82 +5287,7 @@ function AssetRow({
                 />
 
                 {/* SUBMENUS (Posicionados à esquerda do principal) */}
-                <AnimatePresence>
-                  {activeSubmenu === 'partilhar' && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, x: 10 }}
-                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, x: 10 }}
-                      transition={{ duration: 0.1 }}
-                      className="absolute right-[100%] mr-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
 
-
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const shareUrl = asset.versions[0]?.url || asset.webViewLink || window.location.href;
-                          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira o arquivo *${asset.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
-                          setShowMenu(false);
-                          setActiveSubmenu('none');
-                        }}
-                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                      >
-                        <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const shareUrl = asset.versions[0]?.url || asset.webViewLink || window.location.href;
-                          window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Ficheiro - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder ao ficheiro *${asset.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
-                          setShowMenu(false);
-                          setActiveSubmenu('none');
-                        }}
-                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                      >
-                        <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
-                      </button>
-
-                      <div className="my-1 border-t border-gray-100" />
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const shareUrl = asset.webViewLink || asset.versions[0]?.url || window.location.href;
-                          navigator.clipboard.writeText(shareUrl);
-                          alert("Link de partilha copiado para a área de transferência!");
-                          setShowMenu(false);
-                          setActiveSubmenu('none');
-                        }}
-                        className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                      >
-                        <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                        <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
-                      </button>
-
-                      {asset.webViewLink && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(asset.webViewLink, '_blank');
-                            setShowMenu(false);
-                            setActiveSubmenu('none');
-                          }}
-                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
-                        >
-                          <ExternalLink size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
-                          <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Abrir no Drive</span>
-                        </button>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
 
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -5103,7 +5303,7 @@ function AssetRow({
                       onOpen();
                       setShowMenu(false);
                     }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <ExternalLink size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -5170,7 +5370,7 @@ function AssetRow({
                         setShowMenu(false);
                       }
                     }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <Pencil size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -5225,7 +5425,7 @@ function AssetRow({
                         /* window.location.reload() removed */
                       });
                     }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <Copy size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
@@ -5258,13 +5458,143 @@ function AssetRow({
                       e.stopPropagation();
                       setActiveSubmenu(activeSubmenu === 'partilhar' ? 'none' : 'partilhar');
                     }}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <UserPlus size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
                       <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Partilhar</span>
                     </div>
                     <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+
+                    <AnimatePresence>
+                      {activeSubmenu === 'partilhar' && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                          animate={{ opacity: 1, scale: 1, x: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                          transition={{ duration: 0.1 }}
+                          className="absolute left-[100%] ml-1.5 top-0 w-52 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-50 py-1.5 text-left text-gray-700 font-sans cursor-default animate-in fade-in"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="px-3.5 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Partilhar via</div>
+
+                          <div className="relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveSubmenu(activeSubmenu === 'atribuir' ? 'none' : 'atribuir');
+                              }}
+                              className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                            >
+                              <div className="flex items-center gap-3">
+                                <UserPlus size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                                <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Atribuir a Cliente</span>
+                              </div>
+                              <ChevronRight size={14} className="text-gray-300 group-hover/sub:text-[#a21b7e] transition-colors" />
+                            </button>
+
+                            <AnimatePresence>
+                              {activeSubmenu === 'atribuir' && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95, x: 10 }}
+                                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95, x: 10 }}
+                                  transition={{ duration: 0.1 }}
+                                  className="absolute left-[100%] ml-1.5 top-0 w-48 bg-white border border-gray-100 rounded-sm shadow-[0_3px_15px_rgba(0,0,0,0.1)] z-[60] py-1 text-left max-h-64 overflow-y-auto custom-scrollbar cursor-default"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="px-3 py-1 text-[9px] font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 mb-1">Selecione o Cliente</div>
+                                  {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
+                                    accounts.filter(a => a.role !== 'admin').map((client: any) => (
+                                      <button
+                                        key={client.id}
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          try {
+                                            const docRef = doc(db, 'assets', asset.id);
+                                            await updateDoc(docRef, { clientId: client.email });
+                                            alert("Atribuído com sucesso!");
+                                          } catch (err: any) {
+                                            alert("Erro ao atribuir: " + err.message);
+                                          }
+                                          setActiveSubmenu('none');
+                                          setShowMenu(false);
+                                        }}
+                                        className="w-full text-left px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] truncate block transition-colors"
+                                      >
+                                        {client.displayName || client.email}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <div className="px-3 py-2 text-xs text-gray-400 italic">Nenhum cliente disponível</div>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const shareUrl = asset.versions[0]?.url || asset.webViewLink || window.location.href;
+                              window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(`Confira o arquivo *${asset.name}* no ProVisual Corporate: ${shareUrl}`)}`, '_blank');
+                              setShowMenu(false);
+                              setActiveSubmenu('none');
+                            }}
+                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                          >
+                            <Share2 size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">WhatsApp</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const shareUrl = asset.versions[0]?.url || asset.webViewLink || window.location.href;
+                              window.location.href = `mailto:?subject=${encodeURIComponent(`Partilha de Ficheiro - ProVisual`)}&body=${encodeURIComponent(`Olá!\n\nSegue o link para aceder ao ficheiro *${asset.name}* no Arquivo ProVisual Corporate:\n\n${shareUrl}\n\nCumprimentos,\nEquipa ProVisual`)}`;
+                              setShowMenu(false);
+                              setActiveSubmenu('none');
+                            }}
+                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                          >
+                            <Mail size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">E-mail</span>
+                          </button>
+
+                          <div className="my-1 border-t border-gray-100" />
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const shareUrl = asset.webViewLink || asset.versions[0]?.url || window.location.href;
+                              navigator.clipboard.writeText(shareUrl);
+                              alert("Link de partilha copiado para a área de transferência!");
+                              setShowMenu(false);
+                              setActiveSubmenu('none');
+                            }}
+                            className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                          >
+                            <Copy size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                            <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Copiar Link</span>
+                          </button>
+
+                          {asset.webViewLink && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(asset.webViewLink, '_blank');
+                                setShowMenu(false);
+                                setActiveSubmenu('none');
+                              }}
+                              className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group/sub transition-colors text-left text-[13px] font-bold cursor-pointer"
+                            >
+                              <ExternalLink size={14} className="text-gray-400 group-hover/sub:text-[#a21b7e] transition-colors shrink-0" />
+                              <span className="text-gray-600 group-hover/sub:text-[#a21b7e] transition-colors">Abrir no Drive</span>
+                            </button>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </button>
 
                   <button
@@ -5276,7 +5606,7 @@ function AssetRow({
                   >
                     <div className="flex items-center gap-3">
                       <FolderIcon size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors hidden">Organizar</span>
+                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Organizar</span>
                     </div>
                     <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
 

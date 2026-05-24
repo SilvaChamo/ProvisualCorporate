@@ -205,6 +205,38 @@ body {
   @apply text-sm leading-relaxed sm:text-base;
 }
 
+.site-interior-banner-title {
+  @apply text-2xl font-bold leading-[1.15] sm:text-3xl lg:text-4xl;
+}
+
+.site-interior-banner-title--rich {
+  @apply text-[1.625rem] leading-[1.1] sm:text-3xl lg:text-[2.125rem];
+}
+
+.site-interior-banner-kicker {
+  @apply text-base leading-none sm:text-lg;
+}
+
+.site-interior-banner-desc {
+  @apply line-clamp-2 text-sm leading-tight sm:text-[0.9375rem];
+}
+
+.site-interior-banner-rich {
+  @apply gap-1;
+}
+
+.site-interior-banner-rich .site-section-kicker {
+  @apply mb-0;
+}
+
+.site-interior-banner-rich .site-interior-banner-title {
+  @apply mt-0.5;
+}
+
+.site-interior-banner-rich .site-interior-banner-desc {
+  @apply mt-0.5;
+}
+
 .client-logo-carousel {
   overflow: hidden;
   width: 100%;

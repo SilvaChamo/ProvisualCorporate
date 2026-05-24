@@ -106,6 +106,7 @@ type SiteYoutubePlayerProps = {
   moreVideosHref?: string;
   moreVideosLabel?: string;
   onMoreVideosClick?: () => void;
+  hideMoreVideos?: boolean;
 };
 
 export default function SiteYoutubePlayer({
@@ -117,6 +118,7 @@ export default function SiteYoutubePlayer({
   moreVideosHref = "/videos",
   moreVideosLabel = "Ver mais vídeos",
   onMoreVideosClick,
+  hideMoreVideos = false,
 }: SiteYoutubePlayerProps) {
   const reactId = useId();
   const containerId = `yt-player-${reactId.replace(/:/g, "")}`;
@@ -229,16 +231,18 @@ export default function SiteYoutubePlayer({
       {ended && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#3d001d]/92 px-6 text-center text-white">
           <p className="text-sm uppercase tracking-wider text-white/75">Vídeo concluído</p>
-          {onMoreVideosClick ? (
-            <button type="button" onClick={onMoreVideosClick} className={moreVideosClassName}>
-              {moreVideosLabel}
-              <ChevronRight size={16} />
-            </button>
-          ) : (
-            <MoreVideosLink to={moreVideosHref} className={moreVideosClassName}>
-              {moreVideosLabel}
-              <ChevronRight size={16} />
-            </MoreVideosLink>
+          {!hideMoreVideos && (
+            onMoreVideosClick ? (
+              <button type="button" onClick={onMoreVideosClick} className={moreVideosClassName}>
+                {moreVideosLabel}
+                <ChevronRight size={16} />
+              </button>
+            ) : (
+              <MoreVideosLink to={moreVideosHref} className={moreVideosClassName}>
+                {moreVideosLabel}
+                <ChevronRight size={16} />
+              </MoreVideosLink>
+            )
           )}
           <button
             type="button"

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import logoHorizontal from "../../Logo/logo_horizontal_clean.png";
@@ -7,14 +7,29 @@ import SitePageHeader from "./SitePageHeader";
 import type { BreadcrumbItem } from "./SiteBreadcrumb.types";
 import SiteFooter from "./SiteFooter";
 import SiteOffCanvasMenu from "./SiteOffCanvasMenu";
+import SiteSectionLink from "./SiteSectionLink";
 
 interface SiteShellProps {
   children: React.ReactNode;
   title?: string;
   breadcrumbs?: BreadcrumbItem[];
+  bannerImage?: string;
+  bannerImages?: string[];
+  bannerKicker?: string;
+  bannerHeading?: ReactNode;
+  bannerDescription?: string;
 }
 
-export default function SiteShell({ children, title, breadcrumbs }: SiteShellProps) {
+export default function SiteShell({
+  children,
+  title,
+  breadcrumbs,
+  bannerImage,
+  bannerImages,
+  bannerKicker,
+  bannerHeading,
+  bannerDescription,
+}: SiteShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -27,13 +42,13 @@ export default function SiteShell({ children, title, breadcrumbs }: SiteShellPro
 
           <nav className="hidden lg:flex items-center justify-center gap-6 xl:gap-8 flex-wrap">
             {SITE_NAV_LINKS.map((link) => (
-              <a
+              <SiteSectionLink
                 key={link.href}
                 href={link.href}
                 className="text-[15px] lg:text-base font-normal text-gray-700 hover:text-[#a21b7e] transition-colors whitespace-nowrap"
               >
                 {link.label}
-              </a>
+              </SiteSectionLink>
             ))}
           </nav>
 
@@ -66,9 +81,19 @@ export default function SiteShell({ children, title, breadcrumbs }: SiteShellPro
             label: link.label,
           }))}
         />
-
-        {title && <SitePageHeader title={title} breadcrumbs={breadcrumbs} />}
       </header>
+
+      {title && (
+        <SitePageHeader
+          title={title}
+          breadcrumbs={breadcrumbs}
+          bannerImage={bannerImage}
+          bannerImages={bannerImages}
+          kicker={bannerKicker}
+          heading={bannerHeading}
+          description={bannerDescription}
+        />
+      )}
 
       <main className="max-w-[1400px] mx-auto px-6 lg:px-10 py-14">{children}</main>
 

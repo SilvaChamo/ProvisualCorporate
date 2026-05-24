@@ -218,7 +218,7 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
           </div>
 
           {previewId ? (
-            <div className="aspect-video w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-100 shadow-sm lg:col-start-2 lg:row-start-1 lg:row-span-2 order-3">
+            <div className="aspect-video w-full overflow-hidden border border-gray-200 bg-gray-100 shadow-sm lg:col-start-2 lg:row-start-1 lg:row-span-2 order-3">
               <img
                 src={youtubeThumbnail(previewId)}
                 alt="Pré-visualização do vídeo"
@@ -226,7 +226,7 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
               />
             </div>
           ) : (
-            <div className="hidden lg:block aspect-video w-full rounded-xl border border-dashed border-gray-200 bg-gray-50 lg:col-start-2 lg:row-start-1 lg:row-span-2" />
+            <div className="hidden lg:block aspect-video w-full border border-dashed border-gray-200 bg-gray-50 lg:col-start-2 lg:row-start-1 lg:row-span-2" />
           )}
         </div>
       </form>
@@ -283,7 +283,7 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
           {paginatedVideos.map((video) => (
             <div
               key={`${video.slug}-${video.youtubeId}`}
-              className="bg-white rounded-lg border border-gray-100 shadow-sm flex items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20"
+              className="bg-white border border-gray-100 shadow-sm flex items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20"
             >
               <div className="relative w-28 shrink-0 self-stretch overflow-hidden bg-gray-100">
                 <img

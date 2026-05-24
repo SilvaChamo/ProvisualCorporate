@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useLayoutEffect } from "react";
-import { Link, useNavigationType } from "react-router-dom";
+import { Link, useLocation, useNavigationType } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Menu,
@@ -33,6 +33,7 @@ import {
 import { fetchSiteHomeContent, fetchSiteVideos } from "../lib/siteGalleryApi";
 import { driveDisplayUrl, preloadDriveImages } from "../lib/driveImageUrl";
 import SiteOffCanvasMenu from "./site/SiteOffCanvasMenu";
+import SiteSectionLink from "./site/SiteSectionLink";
 import OptimizedDriveImage from "./site/OptimizedDriveImage";
 import HomeLeavingLink from "./HomeLeavingLink";
 import SiteYoutubePlayer from "./site/SiteYoutubePlayer";
@@ -41,16 +42,17 @@ import {
   clearHomeScrollRestore,
   restoreHomeScrollIfPending,
 } from "../lib/homeScrollRestore";
+import { scrollToHomeSectionWhenReady, scrollToSection } from "../lib/siteSectionNav";
 import { youtubeThumbnail } from "../lib/youtubeEmbed";
 
 const NAV_LINKS = [
-  { href: "#sobre", label: "Sobre nós" },
-  { href: "#processo-criativo", label: "Processo" },
-  { href: "#equipa", label: "Equipa" },
-  { href: "#servicos", label: "Serviços" },
-  { href: "#videos", label: "Videos" },
-  { href: "#eventos", label: "Cobertura" },
-  { href: "#contactos", label: "Contactos" },
+  { href: "/#sobre", label: "Sobre nós" },
+  { href: "/#processo-criativo", label: "Processo" },
+  { href: "/#equipa", label: "Equipa" },
+  { href: "/#servicos", label: "Serviços" },
+  { href: "/#videos", label: "Videos" },
+  { href: "/#eventos", label: "Cobertura" },
+  { href: "/#contactos", label: "Contactos" },
 ];
 
 const SOCIAL_LINKS = [
@@ -172,6 +174,7 @@ function getLogoVisible(width: number) {
 
 export default function Home() {
   const navigationType = useNavigationType();
+  const location = useLocation();
   const [content, setContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -383,8 +386,16 @@ export default function Home() {
 
   const scrollTo = (href: string) => {
     setMenuOpen(false);
-    document.getElementById(href.replace("#", ""))?.scrollIntoView({ behavior: "smooth" });
+    const sectionId = href.replace("/#", "").replace("#", "");
+    scrollToSection(sectionId, "smooth");
   };
+
+  useEffect(() => {
+    if (location.pathname !== "/") return;
+    const sectionId = location.hash.replace("#", "");
+    if (!sectionId) return;
+    scrollToHomeSectionWhenReady(sectionId, "smooth");
+  }, [location.pathname, location.hash]);
 
   const activeSlide = content.slides[slideIndex] ?? content.slides[0];
   const slideImage = driveDisplayUrl(
@@ -414,17 +425,13 @@ export default function Home() {
 
           <nav className="hidden lg:flex items-center justify-center gap-6 xl:gap-8 flex-wrap">
             {NAV_LINKS.map((link) => (
-              <a
+              <SiteSectionLink
                 key={link.href}
                 href={link.href}
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollTo(link.href);
-                }}
                 className="text-[15px] lg:text-base font-normal text-gray-700 transition-colors duration-500 whitespace-nowrap hover:text-[#a21b7e]"
               >
                 {link.label}
-              </a>
+              </SiteSectionLink>
             ))}
           </nav>
 
@@ -455,7 +462,6 @@ export default function Home() {
           links={NAV_LINKS.map((link) => ({
             href: link.href,
             label: link.label,
-            onNavigate: () => scrollTo(link.href),
           }))}
         />
       </header>
@@ -795,9 +801,9 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="equipa" className="scroll-mt-[75px] py-12 lg:py-20">
+      <section id="equipa" className="scroll-mt-[75px] overflow-x-hidden py-12 lg:py-20">
         <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:items-stretch lg:gap-10">
             <div className="relative z-10 flex flex-col justify-center lg:-mr-[68px] lg:py-[45px] xl:-mr-[84px]">
               <div className="flex w-full flex-col items-start justify-center rounded-2xl bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.08)] sm:p-8">
                 <div className="mb-3 flex items-center gap-2">
@@ -832,8 +838,8 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="relative z-0 box-border flex min-h-[350px] items-center justify-center rounded-2xl border border-[#a21b7e]/18 bg-[#a21b7e]/[0.025] px-3 py-4 pl-6 shadow-[0_8px_24px_4px_rgba(0,0,0,0.12)] sm:min-h-[370px] sm:px-4 sm:pl-8 lg:min-h-0 lg:px-4 lg:pl-14">
-              <div className="flex w-full items-center justify-center gap-1.5 sm:gap-3">
+            <div className="relative z-0 box-border flex min-h-[320px] w-full items-center justify-center rounded-2xl border border-[#a21b7e]/18 bg-[#a21b7e]/[0.025] px-2 py-4 shadow-[0_8px_24px_4px_rgba(0,0,0,0.12)] sm:min-h-[370px] sm:px-4 lg:min-h-0 lg:px-4 lg:pl-14">
+              <div className="flex w-full max-w-full items-center justify-center gap-1 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setTeamSlide((i) => i - 1)}
@@ -843,7 +849,7 @@ export default function Home() {
                   <ChevronLeft size={20} strokeWidth={2.25} />
                 </button>
 
-                <div className="team-carousel-viewport relative z-10 min-w-0 flex-1">
+                <div className="team-carousel-viewport relative z-10 min-w-0 flex-1 overflow-hidden">
                   <motion.div
                     className="flex items-center"
                     style={{
@@ -864,8 +870,8 @@ export default function Home() {
                         className="box-border flex shrink-0 justify-center px-1.5 sm:px-2"
                         style={{ width: `${100 / teamExtended.length}%` }}
                       >
-                        <article className="team-card-shadow mx-auto flex w-full max-w-[240px] flex-col overflow-hidden rounded-lg border border-[#a21b7e]/12 bg-white sm:max-w-[260px]">
-                          <div className="relative h-[255px] shrink-0 overflow-hidden rounded-t-lg sm:h-[282px]">
+                        <article className="team-card-shadow mx-auto flex w-full max-w-[220px] flex-col overflow-hidden border border-[#a21b7e]/12 bg-white sm:max-w-[260px]">
+                          <div className="relative h-[230px] shrink-0 overflow-hidden sm:h-[282px]">
                             <OptimizedDriveImage
                               src={member.image}
                               alt={member.name}
@@ -1035,7 +1041,7 @@ export default function Home() {
               videoId={featuredVideoId}
               playWhenVisible
               saveScrollOnLeave
-              className="rounded-xl shadow-lg"
+              className="shadow-lg"
             />
 
             <div className="grid grid-rows-2 gap-3 lg:min-h-0">
@@ -1047,7 +1053,7 @@ export default function Home() {
                     type="button"
                     onClick={() => setFeaturedVideoId(video.youtubeId)}
                     className={cn(
-                      "group relative min-h-[120px] w-full overflow-hidden rounded-xl text-left shadow-md transition-all",
+                      "group relative min-h-[120px] w-full overflow-hidden text-left shadow-md transition-all",
                       isActive ? "ring-2 ring-[#a21b7e]" : "hover:ring-2 hover:ring-[#a21b7e]/40",
                     )}
                     aria-label={`Reproduzir ${video.title}`}

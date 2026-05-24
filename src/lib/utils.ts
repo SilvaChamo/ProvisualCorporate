@@ -5,6 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Normaliza nomes vindos do Google Drive para exibição legível nos painéis. */
+export function displayDriveName(name: unknown): string {
+  if (typeof name !== "string") return "Sem nome";
+  let cleaned = name.normalize("NFC").replace(/\uFFFD/g, "").trim();
+  if (!cleaned) return "Sem nome";
+  if (/%[0-9A-Fa-f]{2}/.test(cleaned)) {
+    try {
+      cleaned = decodeURIComponent(cleaned);
+    } catch (_) {}
+  }
+  return cleaned.normalize("NFC").trim() || "Sem nome";
+}
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',

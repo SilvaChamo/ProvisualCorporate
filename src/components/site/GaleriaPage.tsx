@@ -7,6 +7,7 @@ import type { GalleryAlbum } from "../../lib/sitePages";
 export default function GaleriaPage() {
   const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
   const [loading, setLoading] = useState(true);
+  const bannerImages = albums.map((album) => album.image).filter(Boolean);
 
   useEffect(() => {
     let active = true;
@@ -26,6 +27,7 @@ export default function GaleriaPage() {
     <SiteShell
       title="Galeria"
       breadcrumbs={[{ label: "Início", href: "/" }, { label: "Galeria" }]}
+      bannerImages={bannerImages.length > 0 ? bannerImages : undefined}
     >
       {loading ? (
         <div className="flex justify-center py-20">

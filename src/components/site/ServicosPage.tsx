@@ -41,19 +41,22 @@ function ServiceCard({ service }: { service: ServiceItem }) {
 
 export default function ServicosPage() {
   return (
-    <SiteShell title="Serviços" breadcrumbs={[...PAGE_BREADCRUMBS.servicos]}>
-      <div className="site-section-header site-section-header--center">
-        <div className="site-section-kicker site-section-kicker--center">
-          <span className="site-section-kicker-line site-section-kicker-line--dark" />
-          <p className="site-antetitle text-[#a21b7e]">Serviços</p>
-          <span className="site-section-kicker-line site-section-kicker-line--dark" />
-        </div>
-        <h2 className="site-section-title text-gray-900">
-          Soluções criativas <span className="font-light">para o seu posicionamento</span>
-        </h2>
-        <p className="site-section-desc text-gray-600">{SERVICOS_INTRO}</p>
-      </div>
-
+    <SiteShell
+      title="Serviços"
+      breadcrumbs={[...PAGE_BREADCRUMBS.servicos]}
+      bannerKicker="Serviços"
+      bannerHeading={
+        <>
+          Soluções criativas{" "}
+          <span className="font-light">
+            para o seu
+            <br />
+            posicionamento
+          </span>
+        </>
+      }
+      bannerDescription={SERVICOS_INTRO}
+    >
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
         {SERVICE_ITEMS.map((service) => (
           <div key={service.slug} className="h-full">

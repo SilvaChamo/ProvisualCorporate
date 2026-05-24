@@ -54,9 +54,10 @@ import {
   Globe
 } from "lucide-react";
 import SiteHomeAdminPanel from "./SiteHomeAdminPanel";
+import LeaveAccountDialog from "./LeaveAccountDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn, handleFirestoreError, OperationType } from "../lib/utils";
+import { cn, displayDriveName, handleFirestoreError, OperationType } from "../lib/utils";
 import {
   parseDragPayload,
   toggleSelectionId,
@@ -333,7 +334,7 @@ function FilePreviewModal({ asset, onClose }: { asset: Asset; onClose: () => voi
               driveId={asset.driveId}
               fallbackSize="w1200"
               className="w-full h-full object-cover"
-              alt={asset.name}
+              alt={displayDriveName(asset.name)}
             />
           ) : asset.versions?.[0]?.url ? (
             <iframe
@@ -441,6 +442,7 @@ export default function Dashboard() {
   // Estado para conexão híbrida pessoal de Google Drive do Silva
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; type: string; email: string; configNeeded: boolean } | null>(null);
   const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
+  const [leaveAccountOpen, setLeaveAccountOpen] = useState(false);
   const [isSyncingBackground, setIsSyncingBackground] = useState(false);
   const pendingSyncRef = useRef<{ targetFolderId?: string; filterType?: string; isBackground: boolean } | null>(null);
   const restoredFolderRef = useRef<string | null>(sessionStorage.getItem('prov_selected_folder_id'));
@@ -712,6 +714,12 @@ export default function Dashboard() {
     localStorage.removeItem("provisual_local_admin");
     await supabase.auth.signOut();
     window.location.href = "/login";
+  };
+
+  const handleLeaveToHomepage = async () => {
+    localStorage.removeItem("provisual_local_admin");
+    await supabase.auth.signOut();
+    window.location.href = "/";
   };
 
   // Trigger File Input
@@ -1186,7 +1194,7 @@ export default function Dashboard() {
           const folderData = docSnap.exists() ? docSnap.data() : null;
           // Salvar pasta no Firestore com o mesmo ID do Drive
           await setDoc(docRef, {
-            name: file.name,
+            name: displayDriveName(file.name),
             date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
             ownerId: "google-drive",
             parentId: file.trashed ? 'trash' : (folderId === 'root' ? null : folderId),
@@ -1436,7 +1444,7 @@ export default function Dashboard() {
         const data = doc.data();
         let folderDate = new Date();
         if (data.date && typeof data.date.toDate === 'function') folderDate = data.date.toDate();
-        return { id: doc.id, ...data, date: folderDate } as FolderData;
+        return { id: doc.id, ...data, name: displayDriveName(data.name), date: folderDate } as FolderData;
       });
       setFolders(folderList.sort((a, b) => b.date.getTime() - a.date.getTime()));
       setFoldersLoaded(true);
@@ -1457,7 +1465,7 @@ export default function Dashboard() {
         let upDate = new Date();
         if (data.captureDate && typeof data.captureDate.toDate === 'function') capDate = data.captureDate.toDate();
         if (data.uploadDate && typeof data.uploadDate.toDate === 'function') upDate = data.uploadDate.toDate();
-        return { id: doc.id, ...data, captureDate: capDate, uploadDate: upDate } as Asset;
+        return { id: doc.id, ...data, name: displayDriveName(data.name), captureDate: capDate, uploadDate: upDate } as Asset;
       });
       setAssets(assetList);
       setAssetsLoaded(true);
@@ -1614,7 +1622,7 @@ export default function Dashboard() {
               const docSnap = await getDoc(docRef);
               const folderData = docSnap.exists() ? docSnap.data() : null;
               await setDoc(docRef, {
-                name: file.name,
+                name: displayDriveName(file.name),
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: null,
@@ -1672,7 +1680,7 @@ export default function Dashboard() {
 
               // Prepara o payload para atualizar no Supabase. Se folderClientEmail for null, enviamos null para apagar.
               const payload: any = {
-                name: file.name,
+                name: displayDriveName(file.name),
                 date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
                 ownerId: "google-drive",
                 parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
@@ -1733,7 +1741,7 @@ export default function Dashboard() {
             }
 
             const payload: any = {
-              name: file.name,
+              name: displayDriveName(file.name),
               date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
               ownerId: "google-drive",
               parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
@@ -2001,12 +2009,16 @@ export default function Dashboard() {
       <aside className="w-60 bg-white border-r border-gray-100 flex flex-col shrink-0">
         <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
           <div className="flex items-center gap-2 mb-6 mt-1 px-1">
-            <img src={logoHorizontal} alt="ProVisual" className="h-10 w-auto object-contain" />
+            <button
+              type="button"
+              onClick={() => setLeaveAccountOpen(true)}
+              className="rounded-lg transition-opacity hover:opacity-80"
+              aria-label="Ir para a página inicial"
+            >
+              <img src={logoHorizontal} alt="ProVisual" className="h-10 w-auto object-contain" />
+            </button>
           </div>
 
-          <h3 className="text-[13px] font-black text-[#a21b7e] uppercase tracking-[0.08em] px-3 py-2.5 mb-2 bg-[#a21b7e]/5 rounded-sm">
-            Navegação
-          </h3>
           <nav className="space-y-0.5">
             {userProfile?.role === 'admin' && (
               <>
@@ -2171,7 +2183,7 @@ export default function Dashboard() {
 
             <button
               onClick={handleLogout}
-              className="flex items-center justify-center gap-2 h-9 px-3 bg-red-50 border border-red-100 text-red-600 text-sm font-bold hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer shrink-0"
+              className="flex items-center justify-center gap-2 h-9 px-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-sm font-bold hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer shrink-0"
             >
               <LogOut size={16} />
               Sair
@@ -2544,27 +2556,10 @@ export default function Dashboard() {
                                 dropTargetFolderId === folder.id && "border-[#a21b7e] bg-[#a21b7e]/5",
                               )}
                             >
-                              <div
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleFolderSelect(folder.id);
-                                }}
-                                className={cn(
-                                  "absolute top-2 left-2 z-20 w-5 h-5 rounded-full border bg-white/90 backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer shadow-sm hover:scale-110",
-                                  selectedFolderIds.includes(folder.id)
-                                    ? "border-[#a21b7e] bg-[#a21b7e] text-white"
-                                    : "border-gray-300 text-transparent hover:border-gray-400",
-                                  selectedFolderIds.includes(folder.id) || hasBulkSelectionActive
-                                    ? "opacity-100"
-                                    : "opacity-0 group-hover:opacity-100",
-                                )}
-                              >
-                                <Check size={12} className={cn("stroke-[3]", selectedFolderIds.includes(folder.id) ? "block" : "hidden group-hover:block text-gray-400")} />
-                              </div>
-                              <div className="flex items-center gap-3 truncate flex-1 min-w-0 pl-6">
+                              <div className="flex items-center gap-3 truncate flex-1 min-w-0">
                                 <FolderIcon size={20} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} className="shrink-0 animate-in fade-in" />
                                 <div className="truncate min-w-0">
-                                  <span className="text-xs font-bold text-gray-700 truncate uppercase block">{folder.name}</span>
+                                  <span className="text-xs font-bold text-gray-700 truncate block" title={displayDriveName(folder.name)}>{displayDriveName(folder.name)}</span>
                                   {(folder as any).clientEmail && userProfile?.role === 'admin' && (
                                     <span className="text-[10px] font-medium text-[#a21b7e] flex items-center gap-1 mt-0.5">
                                       <Users size={9} className="shrink-0" />
@@ -3082,7 +3077,7 @@ export default function Dashboard() {
                       >
                         <div className="col-span-6 flex items-center gap-4">
                           <FolderIcon size={24} style={{ color: folder.color || "#e2b13c", fill: `${folder.color || "#e2b13c"}1a` }} />
-                          <span className="text-sm font-bold text-gray-700">{folder.name}</span>
+                          <span className="text-sm font-bold text-gray-700" title={displayDriveName(folder.name)}>{displayDriveName(folder.name)}</span>
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-gray-300 uppercase">Pasta</div>
                         <div className="col-span-2 text-xs text-gray-400 font-medium">
@@ -4273,6 +4268,12 @@ export default function Dashboard() {
           );
         })()}
       </AnimatePresence>
+
+      <LeaveAccountDialog
+        open={leaveAccountOpen}
+        onClose={() => setLeaveAccountOpen(false)}
+        onConfirmLeave={handleLeaveToHomepage}
+      />
     </div>
   );
 }
@@ -4888,7 +4889,7 @@ function AssetCard({
             thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s500') : undefined}
             driveId={asset.driveId}
             fallbackSize="w500"
-            alt={asset.name}
+            alt={displayDriveName(asset.name)}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
@@ -4898,7 +4899,7 @@ function AssetCard({
 
       {/* Hover Overlay - Descrição ao passar o mouse */}
       <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-10">
-        <h4 className="font-bold text-[11px] text-white truncate mb-0.5">{asset.name}</h4>
+        <h4 className="font-bold text-[11px] text-white truncate mb-0.5">{displayDriveName(asset.name)}</h4>
         <div className="flex items-center justify-between">
           <span className="text-[9px] font-bold text-gray-300 uppercase">{format(asset.captureDate, "dd/MM/yy")}</span>
           <span className="text-[9px] font-bold text-[#a21b7e] bg-white px-1.5 py-0.5 rounded-sm uppercase">{asset.versions[0]?.size}</span>
@@ -5017,7 +5018,7 @@ function AssetRow({
         ) : (
           <Icon size={24} className={iconColor} />
         )}
-        <span className="text-[16px] font-bold text-gray-700 truncate">{asset.name}</span>
+        <span className="text-[16px] font-bold text-gray-700 truncate" title={displayDriveName(asset.name)}>{displayDriveName(asset.name)}</span>
         {isNewlyUploaded && (
           <span className="text-emerald-500 flex items-center shrink-0 ml-2 animate-in fade-in duration-300" title="Upload concluído com sucesso!">
             <CheckCircle2 size={16} />

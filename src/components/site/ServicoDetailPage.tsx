@@ -46,6 +46,7 @@ export default function ServicoDetailPage() {
         { label: "Serviços", href: "/servicos" },
         { label: baseService.title },
       ]}
+      bannerImage={serviceImage}
     >
       <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-stretch">
         <div className="relative rounded-2xl overflow-hidden shadow-lg bg-gray-100 min-h-[340px] lg:min-h-0 lg:h-full">

@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "../../lib/utils";
+import { getSectionIdFromHref, scrollToSection } from "../../lib/siteSectionNav";
 
 export interface OffCanvasNavLink {
   href: string;
@@ -28,6 +29,9 @@ export default function SiteOffCanvasMenu({
   loginHref,
   loginLabel = "Entrar",
 }: SiteOffCanvasMenuProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -89,9 +93,17 @@ export default function SiteOffCanvasMenu({
                   key={link.href}
                   href={link.href}
                   onClick={(e) => {
+                    const sectionId = getSectionIdFromHref(link.href);
                     if (link.onNavigate) {
                       e.preventDefault();
                       link.onNavigate();
+                    } else if (sectionId) {
+                      e.preventDefault();
+                      if (location.pathname === "/") {
+                        scrollToSection(sectionId, "smooth");
+                      } else {
+                        navigate({ pathname: "/", hash: `#${sectionId}` });
+                      }
                     }
                     onClose();
                   }}

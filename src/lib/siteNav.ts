@@ -46,6 +46,8 @@ export const FOOTER_LINK_COLUMNS = [
   },
 ];
 
+export const DEFAULT_INTERIOR_BANNER = "/INICIO/producao-grafica.webp";
+
 export const PAGE_BREADCRUMBS = {
   home: [{ label: "Início" }],
   galeria: [{ label: "Início", href: "/" }, { label: "Galeria" }],

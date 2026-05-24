@@ -8,6 +8,27 @@ import { supabase, db } from "../lib/supabase";
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, where } from "../lib/supabase";
 import simboloImg from "../Logo/Simbolo.png";
 
+function normalizeLoginIdentifier(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function matchesAccountIdentifier(userData: any, identifier: string) {
+  const search = normalizeLoginIdentifier(identifier);
+  if (!search) return false;
+
+  const email = String(userData.email || "").toLowerCase();
+  if (email === search) return true;
+
+  const emailPrefix = email.split("@")[0];
+  if (emailPrefix === search) return true;
+
+  const displayName = String(userData.displayName || "");
+  const parts = displayName.split("|").map((part) => part.trim().toLowerCase()).filter(Boolean);
+  if (parts.some((part) => part === search || part.includes(search))) return true;
+
+  return displayName.toLowerCase().includes(search);
+}
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,14 +85,21 @@ export default function Login() {
           });
         }
       } else {
-        const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({ email, password });
-        if (authErr) throw authErr;
-        const user = authData.user;
-        if (user) {
-          const userDoc = await getDoc(doc(db, "users", user.id));
-          const role = userDoc.exists() ? userDoc.data()?.role : "admin";
-          window.location.href = role === "admin" ? "/dashboard" : "/arquivo";
-          return;
+        const identifier = email.trim();
+        const looksLikeEmail = identifier.includes("@");
+
+        if (looksLikeEmail) {
+          const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({ email: identifier, password });
+          if (authErr) throw authErr;
+          const user = authData.user;
+          if (user) {
+            const userDoc = await getDoc(doc(db, "users", user.id));
+            const role = userDoc.exists() ? userDoc.data()?.role : "admin";
+            window.location.href = role === "admin" ? "/dashboard" : "/arquivo";
+            return;
+          }
+        } else {
+          throw new Error("lookup_by_name");
         }
       }
     } catch (err: any) {
@@ -80,17 +108,25 @@ export default function Login() {
       // Permitir login via Firestore em qualquer ambiente (desenvolvimento ou produção)
       // para suportar contas corporativas e de clientes criadas diretamente no painel.
       try {
-        // Buscamos se existe uma conta criada no Firestore com este email (busca case-insensitive)
-        const searchEmail = email.trim().toLowerCase();
-        const { data, error: dbErr } = await supabase.from('user_profiles').select('*').eq('email', searchEmail);
-        if (dbErr) throw dbErr;
+        const identifier = email.trim();
+        const looksLikeEmail = identifier.includes("@");
+        let userData: any = null;
 
-        if (data && data.length > 0) {
-          const userData = data[0];
+        if (looksLikeEmail) {
+          const searchEmail = identifier.toLowerCase();
+          const { data, error: dbErr } = await supabase.from('user_profiles').select('*').eq('email', searchEmail);
+          if (dbErr) throw dbErr;
+          userData = data?.[0] || null;
+        } else {
+          const { data, error: dbErr } = await supabase.from('user_profiles').select('*');
+          if (dbErr) throw dbErr;
+          userData = (data || []).find((profile) => matchesAccountIdentifier(profile, identifier)) || null;
+        }
+
+        if (userData) {
           const userDoc = { id: userData.id };
           
           if (userData.password === password) {
-            // Credencial coincide perfeitamente!
             const simulatedUser = {
               uid: userDoc.id,
               email: userData.email,
@@ -106,7 +142,9 @@ export default function Login() {
             return;
           }
         } else {
-          setError("Esta conta de e-mail não está cadastrada na plataforma.");
+          setError(looksLikeEmail
+            ? "Esta conta de e-mail não está cadastrada na plataforma."
+            : "Esta conta não está cadastrada na plataforma.");
           setIsLoading(false);
           return;
         }
@@ -178,14 +216,14 @@ export default function Login() {
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest mb-2 ml-1" htmlFor="email">
-                    EMAIL
+                    {isSignUp ? "EMAIL" : "EMAIL OU CONTA"}
                   </label>
                   <input
                     id="email"
-                    type="email"
+                    type={isSignUp ? "email" : "text"}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
+                    placeholder={isSignUp ? "seu@email.com" : "email ou nome da conta"}
                     className="w-full h-12 bg-gray-50 border border-gray-100 px-4 text-sm text-gray-800 focus:border-[#a21b7e] placeholder:text-gray-300/70 placeholder:font-light transition-all outline-none rounded-lg"
                     required
                   />
