@@ -56,7 +56,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn, displayDriveName, handleFirestoreError, OperationType } from "../lib/utils";
+import { cn, displayDriveName, handleFirestoreError, isSuperAdmin, OperationType } from "../lib/utils";
 import {
   parseDragPayload,
   toggleSelectionId,
@@ -357,6 +357,8 @@ export default function ClientDashboard() {
   // Estado para conexão híbrida pessoal de Google Drive do Silva
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; type: string; email: string; configNeeded: boolean } | null>(null);
   const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
+  const [bulkMoveMenuOpen, setBulkMoveMenuOpen] = useState(false);
+  const [bulkSelectMenuOpen, setBulkSelectMenuOpen] = useState(false);
   const [leaveAccountOpen, setLeaveAccountOpen] = useState(false);
   const { expanded: sidebarExpanded, collapsed: sidebarCollapsed, toggle: toggleSidebar } =
     useDashboardSidebar();
@@ -1825,6 +1827,11 @@ export default function ClientDashboard() {
         );
       },
       onClear: clearAllSelection,
+      onOpenBulkMenu: () => {
+        setPreviewAsset(null);
+        setBulkMoveMenuOpen(false);
+        setBulkSelectMenuOpen(true);
+      },
     }),
     [selectedAssetIds, displayedAssets],
   );
@@ -2239,7 +2246,7 @@ export default function ClientDashboard() {
             </div>
 
             {/* Dropdown de Integração Google Drive - Apenas para Admins */}
-            {userProfile?.role === 'admin' && activeTab === 'google_drive' && (
+            {isSuperAdmin(userProfile) && activeTab === 'google_drive' && (
               <div className="relative ml-2 shrink-0">
                 <button
                   onClick={() => setIsDriveDropdownOpen(!isDriveDropdownOpen)}
@@ -3879,42 +3886,61 @@ export default function ClientDashboard() {
 
         {/* Barra Flutuante de Ações em Massa */}
         {hasBulkSelectionActive && (
+          <>
+            {(bulkMoveMenuOpen || bulkSelectMenuOpen) && (
+              <div
+                className="fixed inset-0 z-[240]"
+                onClick={() => {
+                  setBulkMoveMenuOpen(false);
+                  setBulkSelectMenuOpen(false);
+                }}
+              />
+            )}
           <motion.div
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.95 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md border border-gray-200/80 shadow-[0_10px_30px_rgba(0,0,0,0.1)] rounded-[12px] px-6 py-4 flex items-center gap-6 z-[100] font-sans"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[250] font-sans"
           >
-            <div className="flex items-center gap-2 border-r border-gray-200 pr-4">
-              <div className="w-6 h-6 rounded-full bg-[#a21b7e] text-white flex items-center justify-center text-xs font-bold shadow-sm animate-pulse">
+            <div className="bg-white/95 backdrop-blur-md border border-gray-200/80 shadow-[0_10px_30px_rgba(0,0,0,0.12)] rounded-[12px] px-5 py-3 flex flex-nowrap items-center gap-4 w-max max-w-[calc(100vw-2rem)]">
+            <div className="flex flex-nowrap items-center gap-2 border-r border-gray-200 pr-4 shrink-0">
+              <div className="w-6 h-6 rounded-full bg-[#a21b7e] text-white flex items-center justify-center text-xs font-bold shadow-sm animate-pulse shrink-0">
                 {totalSelectedCount}
               </div>
-              <span className="text-sm font-bold text-gray-700">
+              <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
                 {totalSelectedCount === 1 ? 'item selecionado' : 'itens selecionados'}
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Mover para Folder Dropdown Trigger */}
-              <div className="relative group/bulk">
+            <div className="flex flex-nowrap items-center gap-2">
+              <div className="relative shrink-0">
                 <button
-                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none"
+                  type="button"
+                  onClick={() => {
+                    setPreviewAsset(null);
+                    setBulkSelectMenuOpen(false);
+                    setBulkMoveMenuOpen((open) => !open);
+                  }}
+                  className="flex flex-nowrap items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none whitespace-nowrap"
                 >
                   <FolderIcon size={14} className="text-yellow-500 shrink-0" />
                   Mover para...
-                  <ChevronDown size={12} className="text-gray-400" />
+                  <ChevronDown size={12} className={cn("text-gray-400 shrink-0 transition-transform", bulkMoveMenuOpen && "rotate-180")} />
                 </button>
 
-                {/* Dropdown Menu */}
-                <div className="absolute bottom-[100%] left-0 mb-2 w-52 bg-white border border-gray-200 shadow-lg rounded-md py-1 z-[110] hidden group-hover/bulk:block max-h-60 overflow-y-auto">
-                  <div className="px-3 py-1.5 text-[10px] font-black text-gray-300 uppercase tracking-wider border-b border-gray-100 mb-1">Escolha a pasta destino</div>
+                {bulkMoveMenuOpen && (
+                <div className="absolute bottom-[100%] left-0 mb-2 w-52 bg-white border border-gray-200 shadow-lg rounded-md py-1 z-[260] max-h-60 overflow-y-auto">
+                  <div className="px-3 py-1.5 text-[10px] font-black text-gray-300 uppercase tracking-wider border-b border-gray-100 mb-1 whitespace-nowrap">Escolha a pasta destino</div>
 
                   {selectedFolderId !== null && (
                     <button
-                      onClick={() => handleBulkMove(null)}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#a21b7e]/5 text-left text-xs font-bold text-gray-600 hover:text-[#a21b7e] transition-colors cursor-pointer"
+                      onClick={() => {
+                        handleBulkMove(null);
+                        setBulkMoveMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#a21b7e]/5 text-left text-xs font-bold text-gray-600 hover:text-[#a21b7e] transition-colors cursor-pointer whitespace-nowrap"
                     >
-                      <HardDrive size={14} className="text-gray-400" />
+                      <HardDrive size={14} className="text-gray-400 shrink-0" />
                       Raiz (Meu Drive)
                     </button>
                   )}
@@ -3922,64 +3948,84 @@ export default function ClientDashboard() {
                   {filteredFolders.map(folder => (
                     <button
                       key={folder.id}
-                      onClick={() => handleBulkMove(folder.id)}
+                      onClick={() => {
+                        handleBulkMove(folder.id);
+                        setBulkMoveMenuOpen(false);
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#a21b7e]/5 text-left text-xs font-bold text-gray-600 hover:text-[#a21b7e] transition-colors cursor-pointer"
                     >
                       <FolderIcon size={14} className="text-yellow-500 shrink-0" />
-                      {folder.name}
+                      <span className="truncate">{folder.name}</span>
                     </button>
                   ))}
                 </div>
+                )}
               </div>
 
-              {/* Delete Button */}
               <button
                 onClick={handleBulkDelete}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-red-50 hover:text-red-600 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none"
+                className="flex flex-nowrap items-center gap-2 px-3 py-1.5 hover:bg-red-50 hover:text-red-600 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none whitespace-nowrap shrink-0"
               >
                 <Trash2 size={14} className="text-red-400 shrink-0" />
                 Mover para Lixeira
               </button>
 
-              {/* Bulk selection menu */}
-              <div className="relative group/bulk-select">
+              <div className="relative shrink-0">
                 <button
                   type="button"
-                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none"
+                  onClick={() => {
+                    setPreviewAsset(null);
+                    setBulkMoveMenuOpen(false);
+                    setBulkSelectMenuOpen((open) => !open);
+                  }}
+                  className="flex flex-nowrap items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none whitespace-nowrap"
                 >
                   Selecionar
-                  <ChevronDown size={12} className="text-gray-400" />
+                  <ChevronDown size={12} className={cn("text-gray-400 shrink-0 transition-transform", bulkSelectMenuOpen && "rotate-180")} />
                 </button>
-                <div className="absolute bottom-[100%] left-0 mb-2 w-52 bg-white border border-gray-200 shadow-lg rounded-md py-1 z-[110] hidden group-hover/bulk-select:block">
-                  <div className="px-3 py-1.5 text-[10px] font-black text-gray-300 uppercase tracking-wider border-b border-gray-100 mb-1">
+                {bulkSelectMenuOpen && (
+                <div className="absolute bottom-[100%] left-0 mb-2 w-56 bg-white border border-gray-200 shadow-lg rounded-md py-1 z-[260]">
+                  <div className="px-3 py-1.5 text-[10px] font-black text-gray-300 uppercase tracking-wider border-b border-gray-100 mb-1 whitespace-nowrap">
                     Selecção em massa
                   </div>
                   <button
                     type="button"
-                    onClick={() => previewSelection.onSelectAllVisible()}
-                    className="w-full px-3 py-2 text-left text-xs font-bold text-gray-600 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] transition-colors cursor-pointer"
+                    onClick={() => {
+                      previewSelection.onSelectAllVisible();
+                      setBulkSelectMenuOpen(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-bold text-gray-600 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] transition-colors cursor-pointer whitespace-nowrap"
                   >
                     Selecionar todas visíveis
                   </button>
                   <button
                     type="button"
-                    onClick={() => previewSelection.onSelectAllImages()}
-                    className="w-full px-3 py-2 text-left text-xs font-bold text-gray-600 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] transition-colors cursor-pointer"
+                    onClick={() => {
+                      previewSelection.onSelectAllImages();
+                      setBulkSelectMenuOpen(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-bold text-gray-600 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] transition-colors cursor-pointer whitespace-nowrap"
                   >
                     Selecionar todas as imagens
                   </button>
                 </div>
+                )}
               </div>
 
-              {/* Clear Selection */}
               <button
-                onClick={clearAllSelection}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none"
+                onClick={() => {
+                  clearAllSelection();
+                  setBulkMoveMenuOpen(false);
+                  setBulkSelectMenuOpen(false);
+                }}
+                className="flex flex-nowrap items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none whitespace-nowrap shrink-0"
               >
                 Limpar seleção
               </button>
             </div>
+            </div>
           </motion.div>
+          </>
         )}
 
         {/* Modal de Visualização */}

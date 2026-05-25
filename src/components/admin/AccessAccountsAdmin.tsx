@@ -401,19 +401,20 @@ export default function AccessAccountsAdmin({
         </div>
       ) : null}
 
-      <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+      <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[960px] text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                <th className="px-4 py-3">Nome do Cliente / Empresa</th>
-                <th className="px-4 py-3">ID do Cliente</th>
-                <th className="px-4 py-3">E-mail de Acesso</th>
-                <th className="px-4 py-3">Senha de Acesso</th>
-                <th className="px-4 py-3">Perfil</th>
-                <th className="px-4 py-3 text-right">Ações</th>
+                <th className="px-4 py-3 whitespace-nowrap">Nome do Cliente / Empresa</th>
+                <th className="px-4 py-3 whitespace-nowrap">ID do Cliente</th>
+                <th className="px-4 py-3 whitespace-nowrap">E-mail de Acesso</th>
+                <th className="px-4 py-3 whitespace-nowrap">Senha de Acesso</th>
+                <th className="px-4 py-3 whitespace-nowrap">Perfil</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-sm">
+            <tbody className="divide-y divide-gray-100 text-sm bg-white">
               {!accountsLoaded ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
@@ -512,6 +513,7 @@ export default function AccessAccountsAdmin({
             </tbody>
           </table>
         </div>
+      </div>
     </div>
   );
 }

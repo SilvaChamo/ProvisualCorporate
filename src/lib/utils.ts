@@ -6,6 +6,26 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /** Normaliza nomes vindos do Google Drive para exibição legível nos painéis. */
+type AdminProfile = {
+  email?: string;
+  id?: string;
+  uid?: string;
+  displayName?: string;
+};
+
+/** Apenas a conta master (Silva Chamo) pode ligar OAuth pessoal ao Google Drive. */
+export function isSuperAdmin(profile: AdminProfile | null | undefined): boolean {
+  if (!profile) return false;
+  const email = String(profile.email || "").toLowerCase();
+  const id = String(profile.id || profile.uid || "");
+  const name = String(profile.displayName || "").toLowerCase();
+  return (
+    email === "silva.chamo@gmail.com" ||
+    id === "admin_master_silva" ||
+    name.includes("admin master")
+  );
+}
+
 export function displayDriveName(name: unknown): string {
   if (typeof name !== "string") return "Sem nome";
   let cleaned = name.normalize("NFC").replace(/\uFFFD/g, "").trim();

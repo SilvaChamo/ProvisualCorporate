@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ImgHTMLAttributes } from "react";
+import { useEffect, useState, type ImgHTMLAttributes } from "react";
 import { CheckSquare, ChevronDown, ChevronLeft, ChevronRight, Download, Plus, Square } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "motion/react";
@@ -25,6 +25,8 @@ export interface PreviewSelectionActions {
   onSelectAllVisible: () => void;
   onSelectAllImages: () => void;
   onClear: () => void;
+  /** Fecha o preview e abre o menu de selecção na barra flutuante. */
+  onOpenBulkMenu?: () => void;
 }
 
 interface PhotoPreviewModalProps {
@@ -131,86 +133,6 @@ function handleDownload(item: PreviewItem) {
   if (staticUrl) {
     triggerFileDownload(staticUrl, item.name);
   }
-}
-
-function PreviewSelectionMenu({ selection }: { selection: PreviewSelectionActions }) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const count = selection.selectedIds.length;
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open]);
-
-  return (
-    <div ref={menuRef} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen((value) => !value);
-        }}
-        className="flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white px-2.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer select-none border border-white/10"
-      >
-        {count > 0 && (
-          <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-[#a21b7e] text-[10px] font-bold flex items-center justify-center">
-            {count}
-          </span>
-        )}
-        Selecionar
-        <ChevronDown size={12} className="opacity-70" />
-      </button>
-
-      {open && (
-        <div className="absolute bottom-full right-0 mb-2 w-52 bg-[#1e1f20] border border-white/10 shadow-2xl rounded-md py-1 z-40 text-left">
-          <div className="px-3 py-1.5 text-[10px] font-black text-gray-500 uppercase tracking-wider border-b border-white/5 mb-1">
-            Selecção em massa
-          </div>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              selection.onSelectAllVisible();
-              setOpen(false);
-            }}
-            className="w-full px-3 py-2 text-left text-xs font-bold text-gray-200 hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            Selecionar todas visíveis
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              selection.onSelectAllImages();
-              setOpen(false);
-            }}
-            className="w-full px-3 py-2 text-left text-xs font-bold text-gray-200 hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            Selecionar todas as imagens
-          </button>
-          <div className="my-1 border-t border-white/5" />
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              selection.onClear();
-              setOpen(false);
-            }}
-            className="w-full px-3 py-2 text-left text-xs font-bold text-gray-300 hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            Limpar seleção
-          </button>
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function PhotoPreviewModal({
@@ -337,7 +259,23 @@ export default function PhotoPreviewModal({
                   {isCurrentSelected ? <CheckSquare size={14} /> : <Square size={14} />}
                   {isCurrentSelected ? "Selecionada" : "Selecionar"}
                 </button>
-                <PreviewSelectionMenu selection={selection} />
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selection.onOpenBulkMenu?.();
+                    onClose();
+                  }}
+                  className="flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white px-2.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer select-none border border-white/10 whitespace-nowrap"
+                >
+                  {selection.selectedIds.length > 0 && (
+                    <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-[#a21b7e] text-[10px] font-bold flex items-center justify-center">
+                      {selection.selectedIds.length}
+                    </span>
+                  )}
+                  Selecionar
+                  <ChevronDown size={12} className="opacity-70 shrink-0" />
+                </button>
                 {selection.selectedIds.length > 0 && (
                   <button
                     type="button"
