@@ -30,6 +30,7 @@ import {
 import {
   getCachedGoogleAuth,
   getCachedThumbnailMeta,
+  clearGoogleAuthCache,
   IMAGE_CACHE_CONTROL,
   HOME_API_CACHE_CONTROL,
 } from "../lib/driveServerCache.js";
@@ -37,6 +38,13 @@ import {
   listAllFilesInFolder,
   streamDriveFileDownload,
 } from "../lib/driveDownloadHelpers.js";
+import {
+  getGoogleOAuthRedirectUri,
+  isInvalidGrantError,
+  mergeOAuthTokens,
+  buildOAuthClient,
+  clearStoredOAuthTokens,
+} from "../lib/googleOAuthRedirect.js";
 
 function loadOAuthKeys() {
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -129,41 +137,37 @@ async function createGoogleAuth() {
       }
 
       if (tokens) {
-        const oauth2Client = new google.auth.OAuth2(
-          oauthKeys.client_id,
-          oauthKeys.client_secret,
-          "http://localhost:3333/api/drive/auth/callback"
-        );
-        oauth2Client.setCredentials(tokens);
-        
-        // Listener para atualizar tokens automaticamente se expirarem
-        oauth2Client.on('tokens', async (newTokens) => {
-          try {
-            let currentTokens = {};
-            if (fs.existsSync(localTokensPath)) {
+        try {
+          const redirectUri = getGoogleOAuthRedirectUri();
+          const oauth2Client = await buildOAuthClient(
+            oauthKeys,
+            tokens,
+            redirectUri,
+            async (mergedTokens) => {
               try {
-                currentTokens = JSON.parse(fs.readFileSync(localTokensPath, "utf-8"));
-              } catch (e) {}
-            }
-            const mergedTokens = { ...currentTokens, ...newTokens };
-            
-            try {
-              fs.writeFileSync(localTokensPath, JSON.stringify(mergedTokens, null, 2));
-            } catch (e) {}
+                fs.writeFileSync(localTokensPath, JSON.stringify(mergedTokens, null, 2));
+              } catch (_) {}
+              try {
+                await supabase.from("settings").upsert({
+                  key: "google_drive_tokens",
+                  value: mergedTokens,
+                });
+              } catch (dbErr) {
+                console.error("Erro ao atualizar tokens no Supabase:", dbErr);
+              }
+            },
+          );
 
-            try {
-              await supabase.from('settings').upsert({ key: 'google_drive_tokens', value: mergedTokens });
-              console.log("Tokens atualizados e salvos no Supabase do Vercel.");
-            } catch (dbErr) {
-              console.error("Erro ao atualizar tokens no Supabase do Vercel:", dbErr);
-            }
-            console.log("Tokens atualizados e salvos no Firestore do Vercel.");
-          } catch (e) {
-            console.error("Erro ao salvar tokens atualizados:", e);
+          return { auth: oauth2Client, type: "oauth2" };
+        } catch (err) {
+          if (isInvalidGrantError(err)) {
+            console.warn("Tokens OAuth inválidos — a usar conta de serviço:", err.message);
+            await clearStoredOAuthTokens(supabase, localTokensPath, fs);
+            clearGoogleAuthCache();
+          } else {
+            console.warn("Erro OAuth2, fallback para conta de serviço:", err.message);
           }
-        });
-
-        return { auth: oauth2Client, type: "oauth2" };
+        }
       }
     } catch (err) {
       console.warn("Erro ao configurar cliente OAuth2 pessoal no Vercel, fazendo fallback para Conta de Serviço:", err);
@@ -186,6 +190,19 @@ async function createGoogleAuth() {
 
 async function getGoogleAuth() {
   return getCachedGoogleAuth(createGoogleAuth);
+}
+
+function respondDriveAuthError(res, error) {
+  if (isInvalidGrantError(error)) {
+    clearGoogleAuthCache();
+    return res.status(401).json({
+      error: "invalid_grant",
+      message:
+        "Ligação pessoal ao Drive expirou. O painel continua com a conta de serviço; reconecte em Google Drive → Conectar quando puder.",
+      fallback: "service_account",
+    });
+  }
+  return res.status(500).json({ error: error.message || "Erro no Google Drive." });
 }
 
 // ----------------- ROTAS DA API -----------------
@@ -562,6 +579,9 @@ app.post("/api/drive/list", async (req, res) => {
     res.json(normalizedFiles);
   } catch (error) {
     console.error("List Error:", error);
+    if (isInvalidGrantError(error)) {
+      return respondDriveAuthError(res, error);
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -811,16 +831,57 @@ app.post("/api/drive/folder-files", async (req, res) => {
 
 // ----------------- ROTAS DE AUTENTICAÇÃO OAUTH 2.0 -----------------
 
+app.get("/api/drive/auth/status", async (_req, res) => {
+  const oauthConfigured =
+    !!(oauthKeys?.client_id && oauthKeys?.client_secret && !String(oauthKeys.client_id).includes("COLE_AQUI"));
+  const localTokensPath = path.join(process.cwd(), "google-tokens.json");
+  let hasOAuthTokens = fs.existsSync(localTokensPath);
+
+  if (!hasOAuthTokens) {
+    try {
+      const { data, error } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "google_drive_tokens")
+        .single();
+      if (!error && data?.value) hasOAuthTokens = true;
+    } catch (_) {}
+  }
+
+  const serviceKeysConfigured = !!(
+    serviceKeys?.client_email && serviceKeys?.private_key
+  );
+
+  let statusType = "disconnected";
+  let email = "Desconectado";
+
+  if (oauthConfigured && hasOAuthTokens) {
+    statusType = "oauth2";
+    email = "provisualcorporate@gmail.com (Cota Pessoal)";
+  } else if (serviceKeysConfigured) {
+    statusType = "service_account";
+    email = "Conta de Serviço Google Drive";
+  }
+
+  res.json({
+    connected: statusType !== "disconnected",
+    type: statusType,
+    email,
+    configNeeded: !oauthConfigured && !serviceKeysConfigured,
+  });
+});
+
 app.get("/api/drive/auth/url", async (req, res) => {
   try {
     if (!oauthKeys || !oauthKeys.client_id || oauthKeys.client_id.includes("COLE_AQUI") || !oauthKeys.client_secret || oauthKeys.client_secret.includes("COLE_AQUI")) {
       return res.status(400).json({ error: "Por favor, configure o seu client_id e client_secret do Google Cloud no arquivo google-oauth.json na raiz do projeto." });
     }
 
+    const redirectUri = getGoogleOAuthRedirectUri(req);
     const oauth2Client = new google.auth.OAuth2(
       oauthKeys.client_id,
       oauthKeys.client_secret,
-      "http://localhost:3333/api/drive/auth/callback"
+      redirectUri
     );
 
     const url = oauth2Client.generateAuthUrl({
@@ -846,21 +907,26 @@ app.get("/api/drive/auth/callback", async (req, res) => {
       return res.status(400).send("Configuração google-oauth.json ausente.");
     }
     
+    const redirectUri = getGoogleOAuthRedirectUri(req);
     const oauth2Client = new google.auth.OAuth2(
       oauthKeys.client_id,
       oauthKeys.client_secret,
-      "http://localhost:3333/api/drive/auth/callback"
+      redirectUri
     );
 
     const { tokens } = await oauth2Client.getToken(code);
+    const existing = fs.existsSync(localTokensPath)
+      ? JSON.parse(fs.readFileSync(localTokensPath, "utf-8"))
+      : {};
+    const mergedTokens = mergeOAuthTokens(existing, tokens);
     
     try {
-      fs.writeFileSync(localTokensPath, JSON.stringify(tokens, null, 2));
+      fs.writeFileSync(localTokensPath, JSON.stringify(mergedTokens, null, 2));
     } catch (e) {}
 
     // Persistir também no Supabase para resiliência na Vercel
     try {
-      await supabase.from('settings').upsert({ key: 'google_drive_tokens', value: tokens });
+      await supabase.from('settings').upsert({ key: 'google_drive_tokens', value: mergedTokens });
       console.log("Tokens de acesso persistidos com sucesso no Supabase.");
     } catch (dbErr) {
       console.error("Erro ao salvar tokens no Supabase:", dbErr);
@@ -911,6 +977,7 @@ app.post("/api/drive/auth/disconnect", async (req, res) => {
     } catch (dbErr) {
       console.error("Erro ao deletar tokens do Supabase:", dbErr);
     }
+    clearGoogleAuthCache();
     res.json({ success: true, message: "Google Drive desconectado com sucesso." });
   } catch (error) {
     res.status(500).json({ error: error.message });

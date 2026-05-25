@@ -1342,7 +1342,12 @@ export default function ClientDashboard() {
     } catch (error: any) {
       console.error("Sync Error:", error);
       if (!isBackground) {
-        alert("Erro na Sincronização: " + error.message);
+        const msg = String(error?.message || "");
+        if (msg.includes("invalid_grant")) {
+          console.warn("Drive pessoal expirado — use Google Drive → Conectar se precisar da cota pessoal.");
+        } else {
+          alert("Erro na Sincronização: " + error.message);
+        }
         setIsUploading(false);
         setUploadProgress(0);
       }

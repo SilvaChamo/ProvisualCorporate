@@ -1058,7 +1058,7 @@ export default function Dashboard() {
         let errMsg = 'Erro ao conectar com Google Drive';
         try {
           const errorData = await response.json();
-          errMsg = errorData.error || errMsg;
+          errMsg = errorData.message || errorData.error || errMsg;
         } catch (_) {
           try {
             const text = await response.text();
@@ -1285,7 +1285,12 @@ export default function Dashboard() {
     } catch (error: any) {
       console.error("Sync Error:", error);
       if (!isBackground) {
-        alert("Erro na Sincronização: " + error.message);
+        const msg = String(error?.message || "");
+        if (msg.includes("invalid_grant")) {
+          console.warn("Drive pessoal expirado — use Google Drive → Conectar se precisar da cota pessoal.");
+        } else {
+          alert("Erro na Sincronização: " + error.message);
+        }
         setIsUploading(false);
         setUploadProgress(0);
       }
