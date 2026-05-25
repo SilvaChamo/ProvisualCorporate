@@ -37,7 +37,7 @@ export default function SiteShell({
       <header className="sticky top-0 z-50 bg-white shadow-sm">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 h-[70px] grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <Link to="/" className="shrink-0 flex items-center h-full">
-            <img src={logoHorizontal} alt="ProVisual Corporate" className="h-[48px] sm:h-[52px] w-auto object-contain" />
+            <img src={logoHorizontal} alt="ProVisual Corporate" className="h-10 w-auto object-contain" />
           </Link>
 
           <nav className="hidden lg:flex items-center justify-center gap-6 xl:gap-8 flex-wrap">
