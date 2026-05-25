@@ -19,7 +19,6 @@ export const FOOTER_LINK_COLUMNS = [
   {
     title: "Navegação",
     links: [
-      { label: "Sobre nós", href: "/#sobre" },
       { label: "Serviços", href: "/servicos" },
       { label: "Galeria", href: "/galeria" },
       { label: "Vídeos", href: "/videos" },

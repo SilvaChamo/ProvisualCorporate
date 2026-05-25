@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useLayoutEffect } from "react";
+import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from "react";
 import { Link, useLocation, useNavigationType } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -43,6 +43,12 @@ import {
   restoreHomeScrollIfPending,
 } from "../lib/homeScrollRestore";
 import { scrollToHomeSectionWhenReady, scrollToSection } from "../lib/siteSectionNav";
+import FormAntiSpamFields from "./FormAntiSpamFields";
+import {
+  formSpamUserMessage,
+  recordFormSubmit,
+  shouldBlockFormSubmit,
+} from "../lib/formSpamGuard";
 import { youtubeThumbnail } from "../lib/youtubeEmbed";
 
 const NAV_LINKS = [
@@ -190,6 +196,8 @@ export default function Home() {
   const [activeProcessCard, setActiveProcessCard] = useState(0);
   const [featuredVideoId, setFeaturedVideoId] = useState(VIDEO_ITEMS[0]?.youtubeId ?? "");
   const [videoItems, setVideoItems] = useState<VideoItem[]>(VIDEO_ITEMS);
+  const [contactFormNotice, setContactFormNotice] = useState<string | null>(null);
+  const contactFormStartedAt = useRef(Date.now());
   const [quickLinksVisible, setQuickLinksVisible] = useState(() =>
     typeof window !== "undefined" ? getQuickLinksVisible(window.innerWidth) : 3,
   );
@@ -1077,12 +1085,14 @@ export default function Home() {
               ))}
             </div>
 
-            <SiteYoutubePlayer
-              videoId={featuredVideoId}
-              playWhenVisible
-              saveScrollOnLeave
-              className="order-1 shadow-lg lg:order-2"
-            />
+            <div className="order-1 w-full lg:order-2">
+              <SiteYoutubePlayer
+                videoId={featuredVideoId}
+                playWhenVisible
+                saveScrollOnLeave
+                className="shadow-lg"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -1285,19 +1295,28 @@ export default function Home() {
               </div>
 
               <form
-                className="bg-white pb-5 pt-0 sm:pb-6"
+                className="relative bg-white pb-5 pt-0 sm:pb-6"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const form = e.target as HTMLFormElement;
+                  const form = e.currentTarget;
+                  const blocked = shouldBlockFormSubmit(form, contactFormStartedAt.current, "home-contact");
+                  if (blocked) {
+                    const message = formSpamUserMessage(blocked);
+                    if (message) setContactFormNotice(message);
+                    return;
+                  }
+                  setContactFormNotice(null);
                   const data = new FormData(form);
                   const nome = data.get("nome") as string;
                   const email = data.get("email") as string;
                   const mensagem = data.get("mensagem") as string;
                   const terms = data.get("terms");
                   if (!terms) return;
+                  recordFormSubmit("home-contact");
                   window.location.href = `mailto:${content.contact.email}?subject=${encodeURIComponent("Contacto via site")}&body=${encodeURIComponent(`Nome: ${nome}\nEmail: ${email}\n\n${mensagem}`)}`;
                 }}
               >
+                <FormAntiSpamFields idPrefix="home-contact" />
                 <div className="flex min-h-[120px] items-center bg-[#fafafa] px-[80px] py-5 sm:min-h-[132px] sm:py-6">
                   <h2 className="site-section-title mb-0 w-full text-gray-900">
                     Fale <span className="font-light">connosco</span>
@@ -1356,6 +1375,12 @@ export default function Home() {
                       </a>
                     </span>
                   </label>
+
+                  {contactFormNotice && (
+                    <p className="text-sm text-[#a21b7e]" role="status">
+                      {contactFormNotice}
+                    </p>
+                  )}
 
                   <button
                     type="submit"

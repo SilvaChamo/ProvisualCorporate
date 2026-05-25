@@ -59,7 +59,7 @@ export default function SiteFooter() {
           </div>
 
           {FOOTER_LINK_COLUMNS.map((column) => (
-            <div key={column.title}>
+            <div key={column.title} className={column.title === "Navegação" ? "pl-[40px]" : undefined}>
               <h3 className="text-white font-semibold text-sm uppercase tracking-wider mb-4">{column.title}</h3>
               <ul className="space-y-2.5">
                 {column.links.map((link) => (

@@ -1,5 +1,11 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import FormAntiSpamFields from "../FormAntiSpamFields";
+import {
+  formSpamUserMessage,
+  recordFormSubmit,
+  shouldBlockFormSubmit,
+} from "../../lib/formSpamGuard";
 import { buildMailtoUrl, SERVICE_REQUEST_EMAIL } from "../../lib/siteContact";
 
 interface ServiceRequestFormProps {
@@ -10,6 +16,8 @@ interface ServiceRequestFormProps {
 
 export default function ServiceRequestForm({ serviceTitle, serviceSlug, onClose }: ServiceRequestFormProps) {
   const [submitted, setSubmitted] = useState(false);
+  const [formNotice, setFormNotice] = useState<string | null>(null);
+  const formStartedAt = useRef(Date.now());
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -25,7 +33,20 @@ export default function ServiceRequestForm({ serviceTitle, serviceSlug, onClose 
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const data = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const blocked = shouldBlockFormSubmit(
+      form,
+      formStartedAt.current,
+      `service-request-${serviceSlug}`,
+    );
+    if (blocked) {
+      const message = formSpamUserMessage(blocked);
+      if (message) setFormNotice(message);
+      return;
+    }
+    setFormNotice(null);
+
+    const data = new FormData(form);
 
     const institution = String(data.get("instituicao") || "").trim();
     const nif = String(data.get("nif") || "").trim();
@@ -65,6 +86,7 @@ export default function ServiceRequestForm({ serviceTitle, serviceSlug, onClose 
       .filter(Boolean)
       .join("\n");
 
+    recordFormSubmit(`service-request-${serviceSlug}`);
     window.location.href = buildMailtoUrl(SERVICE_REQUEST_EMAIL, subject, body);
     setSubmitted(true);
   };
@@ -111,8 +133,15 @@ export default function ServiceRequestForm({ serviceTitle, serviceSlug, onClose 
               .
             </p>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="relative space-y-5">
+              <FormAntiSpamFields idPrefix={`service-${serviceSlug}`} />
               <input type="hidden" name="servico" value={serviceTitle} />
+
+              {formNotice && (
+                <p className="text-sm text-[#a21b7e] bg-[#a21b7e]/5 border border-[#a21b7e]/15 rounded-xl px-4 py-3" role="status">
+                  {formNotice}
+                </p>
+              )}
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">

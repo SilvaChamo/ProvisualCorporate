@@ -83,6 +83,14 @@ function loadYoutubeIframeApi() {
   return youtubeApiPromise;
 }
 
+function isElementVisibleInViewport(el: HTMLElement, threshold = 0.35) {
+  const rect = el.getBoundingClientRect();
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  if (rect.height <= 0) return false;
+  const visibleHeight = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
+  return visibleHeight / rect.height >= threshold;
+}
+
 function applyPreferredQuality(player: YTPlayer) {
   const levels = player.getAvailableQualityLevels?.() ?? [];
   const available = new Set(levels.map((level) => level.quality));
@@ -153,6 +161,13 @@ export default function SiteYoutubePlayer({
             applyPreferredQuality(event.target);
             if (autoplay) {
               event.target.playVideo();
+              return;
+            }
+            const root = rootRef.current;
+            if (playWhenVisible && root && isElementVisibleInViewport(root)) {
+              visibleRef.current = true;
+              setEnded(false);
+              event.target.playVideo();
             }
           },
           onStateChange: (event) => {
@@ -172,7 +187,7 @@ export default function SiteYoutubePlayer({
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [videoId, autoplay, containerId]);
+  }, [videoId, autoplay, containerId, playWhenVisible]);
 
   useEffect(() => {
     if (!playWhenVisible || !ready) return;
@@ -197,10 +212,21 @@ export default function SiteYoutubePlayer({
       ([entry]) => {
         syncPlayback(entry.isIntersecting);
       },
-      { threshold: 0.35 },
+      { threshold: [0, 0.35] },
     );
 
     observer.observe(root);
+
+    // IntersectionObserver often skips the first frame when the section is already on screen.
+    requestAnimationFrame(() => {
+      const records = observer.takeRecords();
+      const last = records[records.length - 1];
+      if (last) {
+        syncPlayback(last.isIntersecting);
+        return;
+      }
+      syncPlayback(isElementVisibleInViewport(root));
+    });
 
     return () => observer.disconnect();
   }, [playWhenVisible, ready, videoId]);
