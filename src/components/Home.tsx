@@ -234,6 +234,12 @@ export default function Home() {
   const logoEnd = logoStart + clientLogos.length;
   const logoResetBack = logoEnd - logoVisible;
 
+  const homeVideos = useMemo(() => videoItems.slice(0, 3), [videoItems]);
+  const sideVideos = useMemo(
+    () => homeVideos.filter((video) => video.youtubeId !== featuredVideoId),
+    [homeVideos, featuredVideoId],
+  );
+
   useEffect(() => {
     const onResize = () => {
       const nextQuick = getQuickLinksVisible(window.innerWidth);
@@ -270,10 +276,18 @@ export default function Home() {
     fetchSiteVideos()
       .then((videos) => {
         setVideoItems(videos);
-        if (videos[0]?.youtubeId) setFeaturedVideoId(videos[0].youtubeId);
+        const first = videos[0]?.youtubeId;
+        if (first) setFeaturedVideoId(first);
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!homeVideos.some((video) => video.youtubeId === featuredVideoId)) {
+      const fallback = homeVideos[0]?.youtubeId;
+      if (fallback) setFeaturedVideoId(fallback);
+    }
+  }, [homeVideos, featuredVideoId]);
 
   useLayoutEffect(() => {
     if (navigationType === "POP") {
@@ -1033,51 +1047,42 @@ export default function Home() {
             </HomeLeavingLink>
           </div>
 
-          <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-stretch">
+          <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-stretch">
+            <div className="order-2 grid grid-rows-2 gap-3 lg:order-1 lg:min-h-0">
+              {sideVideos.map((video) => (
+                <button
+                  key={video.slug}
+                  type="button"
+                  onClick={() => setFeaturedVideoId(video.youtubeId)}
+                  className="group relative min-h-[120px] w-full overflow-hidden text-left shadow-md transition-all hover:ring-2 hover:ring-[#a21b7e]/40"
+                  aria-label={`Reproduzir ${video.title}`}
+                >
+                  <img
+                    src={youtubeThumbnail(video.youtubeId)}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/45" />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                    <p className="line-clamp-2 text-xs font-medium text-white sm:text-sm">{video.title}</p>
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white text-sm text-white">
+                      ▶
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
             <SiteYoutubePlayer
               videoId={featuredVideoId}
               playWhenVisible
               saveScrollOnLeave
-              className="shadow-lg"
+              className="order-1 shadow-lg lg:order-2"
             />
-
-            <div className="grid grid-rows-2 gap-3 lg:min-h-0">
-              {videoItems.map((video) => {
-                const isActive = featuredVideoId === video.youtubeId;
-                return (
-                  <button
-                    key={video.slug}
-                    type="button"
-                    onClick={() => setFeaturedVideoId(video.youtubeId)}
-                    className={cn(
-                      "group relative min-h-[120px] w-full overflow-hidden text-left shadow-md transition-all",
-                      isActive ? "ring-2 ring-[#a21b7e]" : "hover:ring-2 hover:ring-[#a21b7e]/40",
-                    )}
-                    aria-label={`Reproduzir ${video.title}`}
-                    aria-current={isActive ? "true" : undefined}
-                  >
-                    <img
-                      src={youtubeThumbnail(video.youtubeId)}
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                    <div className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/45" />
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                      <p className="line-clamp-2 text-xs font-medium text-white sm:text-sm">{video.title}</p>
-                    </div>
-                    {!isActive && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white text-sm text-white">
-                          ▶
-                        </span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
           </div>
         </div>
       </section>
