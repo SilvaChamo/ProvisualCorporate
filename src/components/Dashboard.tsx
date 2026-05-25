@@ -1779,11 +1779,6 @@ export default function Dashboard() {
         );
       },
       onClear: clearAllSelection,
-      onOpenBulkMenu: () => {
-        setPreviewAsset(null);
-        setBulkMoveMenuOpen(false);
-        setBulkSelectMenuOpen(true);
-      },
     }),
     [selectedAssetIds, displayedAssets],
   );
@@ -3812,7 +3807,6 @@ export default function Dashboard() {
               contextLabel={previewFolderLabel}
               onClose={() => setPreviewAsset(null)}
               onChange={setPreviewAsset}
-              selection={previewSelection}
             />
           )}
         </AnimatePresence>

@@ -1,4 +1,4 @@
-import PhotoPreviewModal, { type PreviewItem, type PreviewSelectionActions } from "./PhotoPreviewModal";
+import PhotoPreviewModal, { type PreviewItem } from "./PhotoPreviewModal";
 
 export interface PreviewAsset {
   id: string;
@@ -17,7 +17,6 @@ interface FilePreviewModalProps {
   onClose: () => void;
   onChange?: (asset: PreviewAsset) => void;
   contextLabel?: string;
-  selection?: PreviewSelectionActions;
 }
 
 function toPreviewItem(asset: PreviewAsset): PreviewItem {
@@ -44,7 +43,6 @@ export default function FilePreviewModal({
   onClose,
   onChange,
   contextLabel,
-  selection,
 }: FilePreviewModalProps) {
   const previewableAssets = assets.length > 0 ? assets.filter(isPreviewable) : isPreviewable(asset) ? [asset] : [];
   const items = previewableAssets.map(toPreviewItem);
@@ -62,7 +60,6 @@ export default function FilePreviewModal({
         if (next && onChange) onChange(next);
       }}
       contextLabel={contextLabel}
-      selection={selection}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ImgHTMLAttributes } from "react";
-import { CheckSquare, ChevronDown, ChevronLeft, ChevronRight, Download, Plus, Square } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "motion/react";
 import { displayDriveName } from "../lib/utils";
@@ -19,23 +19,12 @@ export interface PreviewItem {
   versions?: { size?: string; url?: string }[];
 }
 
-export interface PreviewSelectionActions {
-  selectedIds: string[];
-  onToggle: (id: string) => void;
-  onSelectAllVisible: () => void;
-  onSelectAllImages: () => void;
-  onClear: () => void;
-  /** Fecha o preview e abre o menu de selecção na barra flutuante. */
-  onOpenBulkMenu?: () => void;
-}
-
 interface PhotoPreviewModalProps {
   items: PreviewItem[];
   activeIndex: number;
   onClose: () => void;
   onChange: (index: number) => void;
   contextLabel?: string;
-  selection?: PreviewSelectionActions;
 }
 
 interface SafeImageProps extends ImgHTMLAttributes<HTMLImageElement> {
@@ -141,7 +130,6 @@ export default function PhotoPreviewModal({
   onClose,
   onChange,
   contextLabel,
-  selection,
 }: PhotoPreviewModalProps) {
   const item = items[activeIndex];
   const hasPrev = activeIndex > 0;
@@ -165,7 +153,6 @@ export default function PhotoPreviewModal({
 
   if (!item) return null;
 
-  const isCurrentSelected = selection ? selection.selectedIds.includes(item.id) : false;
   const metaText = buildMetaText(item, activeIndex, items.length, contextLabel);
   const previewSrc = item.type === "image" ? null : getDrivePreviewUrl(item);
 
@@ -238,74 +225,27 @@ export default function PhotoPreviewModal({
           )}
         </div>
 
-        <div className="absolute bottom-0 inset-x-0 pt-16 pb-5 px-6 bg-gradient-to-t from-black/95 via-black/70 to-black/0 flex items-center justify-between gap-4 text-white z-20 rounded-b-[10px]">
-          <div className="flex items-center min-w-0 flex-1 text-left">
-            <span className="text-xs md:text-sm font-medium text-white tracking-normal select-text truncate">
+        <div className="absolute bottom-0 inset-x-0 pt-16 pb-5 px-6 bg-gradient-to-t from-black/95 via-black/70 to-black/0 flex items-center justify-between text-white z-20 rounded-b-[10px]">
+          <div className="flex items-center max-w-[75%] text-left">
+            <span className="text-xs md:text-sm font-medium text-white tracking-normal select-text">
               {metaText}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {selection && item.type === "image" && (
-              <>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    selection.onToggle(item.id);
-                  }}
-                  className="flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white px-2.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer select-none border border-white/10"
-                >
-                  {isCurrentSelected ? <CheckSquare size={14} /> : <Square size={14} />}
-                  {isCurrentSelected ? "Selecionada" : "Selecionar"}
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    selection.onOpenBulkMenu?.();
-                    onClose();
-                  }}
-                  className="flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white px-2.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer select-none border border-white/10 whitespace-nowrap"
-                >
-                  {selection.selectedIds.length > 0 && (
-                    <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-[#a21b7e] text-[10px] font-bold flex items-center justify-center">
-                      {selection.selectedIds.length}
-                    </span>
-                  )}
-                  Selecionar
-                  <ChevronDown size={12} className="opacity-70 shrink-0" />
-                </button>
-                {selection.selectedIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      selection.onClear();
-                    }}
-                    className="flex items-center gap-1.5 bg-transparent hover:text-[#a21b7e] text-white/90 px-2 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer select-none"
-                  >
-                    Limpar seleção
-                  </button>
-                )}
-              </>
-            )}
-
-            <button
-              type="button"
-              disabled={downloading}
-              onClick={(event) => {
-                event.stopPropagation();
-                setDownloading(true);
-                handleDownload(item);
-                window.setTimeout(() => setDownloading(false), 1200);
-              }}
-              className="flex items-center gap-1.5 bg-transparent hover:text-[#a21b7e] text-white px-2 py-1.5 rounded-none text-xs font-bold transition-all cursor-pointer select-none border-none shadow-none disabled:opacity-60"
-            >
-              <Download size={14} />
-              <span>{downloading ? "A transferir..." : "Baixar"}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={downloading}
+            onClick={(event) => {
+              event.stopPropagation();
+              setDownloading(true);
+              handleDownload(item);
+              window.setTimeout(() => setDownloading(false), 1200);
+            }}
+            className="flex items-center gap-1.5 bg-transparent hover:text-[#a21b7e] text-white px-2 py-1.5 rounded-none text-xs font-bold transition-all cursor-pointer select-none border-none shadow-none disabled:opacity-60 shrink-0"
+          >
+            <Download size={14} />
+            <span>{downloading ? "A transferir..." : "Baixar"}</span>
+          </button>
         </div>
       </motion.div>
     </motion.div>
