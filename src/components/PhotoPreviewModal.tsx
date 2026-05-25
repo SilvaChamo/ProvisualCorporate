@@ -45,16 +45,16 @@ interface SafeImageProps extends ImgHTMLAttributes<HTMLImageElement> {
 function SafeImage({ item, alt, className, ...props }: SafeImageProps) {
   const driveId = item.driveId || (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
   const initialUrl = driveId
-    ? `/api/drive/media?id=${encodeURIComponent(driveId)}`
-    : item.srcUrl || item.thumbnailUrl?.replace("=s220", "=s1200") || "";
+    ? `/api/drive/thumbnail?id=${driveId}&sz=1200`
+    : item.thumbnailUrl?.replace("=s220", "=s1200") || item.srcUrl || "";
   const [src, setSrc] = useState(initialUrl);
   const [failStep, setFailStep] = useState(0);
 
   useEffect(() => {
     const nextDriveId = item.driveId || (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
     const nextUrl = nextDriveId
-      ? `/api/drive/media?id=${encodeURIComponent(nextDriveId)}`
-      : item.srcUrl || item.thumbnailUrl?.replace("=s220", "=s1200") || "";
+      ? `/api/drive/thumbnail?id=${nextDriveId}&sz=1200`
+      : item.thumbnailUrl?.replace("=s220", "=s1200") || item.srcUrl || "";
     setSrc(nextUrl);
     setFailStep(0);
   }, [item.id, item.driveId, item.srcUrl, item.thumbnailUrl]);
@@ -63,12 +63,12 @@ function SafeImage({ item, alt, className, ...props }: SafeImageProps) {
     const resolvedDriveId = item.driveId || (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
     if (failStep === 0 && resolvedDriveId) {
       setFailStep(1);
-      setSrc(`/api/drive/thumbnail?id=${encodeURIComponent(resolvedDriveId)}&sz=1200`);
+      setSrc(`https://drive.google.com/thumbnail?id=${resolvedDriveId}&sz=w1200`);
       return;
     }
     if (failStep === 1 && resolvedDriveId) {
       setFailStep(2);
-      setSrc(`https://drive.google.com/thumbnail?id=${resolvedDriveId}&sz=w1200`);
+      setSrc(`/api/drive/media?id=${encodeURIComponent(resolvedDriveId)}`);
       return;
     }
     if (failStep === 2 && item.srcUrl && src !== item.srcUrl) {
@@ -216,11 +216,11 @@ export default function PhotoPreviewModal({
           </button>
         )}
 
-        <div className="flex-1 bg-[#0d0d0d] flex items-center justify-center relative overflow-hidden w-full h-full">
+        <div className="flex-1 bg-[#121212] flex items-center justify-center relative overflow-hidden w-full h-full">
           {item.type === "image" ? (
             <SafeImage
               item={item}
-              className="max-w-full max-h-full w-auto h-auto object-contain"
+              className="w-full h-full object-cover"
               alt={displayDriveName(item.name)}
             />
           ) : previewSrc ? (

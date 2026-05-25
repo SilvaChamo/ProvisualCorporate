@@ -312,6 +312,9 @@ interface FolderData {
 interface UserProfile {
   role: "admin" | "cliente";
   email: string;
+  displayName?: string;
+  id?: string;
+  uid?: string;
 }
 
 export default function Dashboard() {
@@ -4969,17 +4972,14 @@ function AssetCard({
         </AnimatePresence>
       </div>
 
-      <div className={cn("w-full h-full flex items-center justify-center", asset.type === "image" ? "bg-neutral-900" : "bg-gray-50")}>
+      <div className="w-full h-full flex items-center justify-center bg-gray-50">
         {((asset.type === 'image' || asset.type === 'video' || asset.type === 'document') && (asset.thumbnailUrl || asset.driveId)) ? (
           <SafeImage
             thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s500') : undefined}
             driveId={asset.driveId}
             fallbackSize="w500"
             alt={displayDriveName(asset.name)}
-            className={cn(
-              "w-full h-full transition-transform duration-700 group-hover:scale-110",
-              asset.type === "image" ? "object-contain" : "object-cover",
-            )}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
           <Icon size={40} className={cn("transition-all duration-300", iconColor)} />
