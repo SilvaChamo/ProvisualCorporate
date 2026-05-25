@@ -2374,7 +2374,7 @@ export default function Dashboard() {
 
                           <div className="my-1 border-t border-gray-100" />
 
-                          {driveStatus?.connected ? (
+                          {driveStatus?.type === "oauth2" ? (
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation();
