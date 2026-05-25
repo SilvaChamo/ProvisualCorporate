@@ -181,6 +181,7 @@ async function main() {
     "producao-grafica.webp",
   );
   const teamBanner = await uploadLocal(drive, supabase, "INICIO/Coberturas.jpg", "home", "coberturas.jpg");
+  const contactPhoto = await uploadLocal(drive, supabase, "INICIO/Fotografo.png", "home", "Fotografo.png");
   const heroBg = await uploadLocal(drive, supabase, "INICIO/Coberturas.jpg", "hero", "coberturas.jpg");
 
   const slideFiles = [
@@ -352,6 +353,10 @@ async function main() {
     newsItems: base.newsItems?.length
       ? base.newsItems.map((item, i) => ({ ...item, image: newsItems[i]?.image || item.image }))
       : newsItems,
+    contact: {
+      ...(base.contact || {}),
+      photo: contactPhoto || base.contact?.photo,
+    },
   };
 
   await supabase.from("settings").upsert({ key: HOME_CONTENT_KEY, value: homeContent });

@@ -34,6 +34,7 @@ import {
   Pencil,
   Copy,
   UserPlus,
+  UserMinus,
   Info,
   CheckCircle2,
   Check,
@@ -49,7 +50,9 @@ import {
   ShieldCheck,
   AlertCircle,
   Database,
-  Link
+  Link,
+  PanelLeft,
+  PanelLeftClose
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -58,12 +61,19 @@ import {
   parseDragPayload,
   toggleSelectionId,
 } from "../lib/drivePanelSelection";
+import { downloadDriveFolder, getDrivePreviewUrl, triggerDriveDownload } from "../lib/driveDownload";
 import { motion, AnimatePresence } from "motion/react";
 import { collection, query, where, onSnapshot, addDoc, getDoc, doc, updateDoc, setDoc, serverTimestamp, Timestamp, deleteDoc, supabase, db } from "../lib/supabase";
 
+const IMAGES_GRID_PAGE_SIZE = 20;
+
 import logoHorizontal from "../Logo/logo_horizontal_clean.png";
 import logoJpg from "../Logo/logo_main_jpg.jpg";
+import simboloImg from "../Logo/Simbolo.png";
 import LeaveAccountDialog from "./LeaveAccountDialog";
+import FilePreviewModal from "./FilePreviewModal";
+import DashboardSidebarItem from "./dashboard/DashboardSidebarItem";
+import { useDashboardSidebar } from "./dashboard/useDashboardSidebar";
 
 // Helper de requisição segura para evitar Unexpected end of JSON input e expor erros reais
 async function fetchWithErrorMessage(url: string, options: RequestInit): Promise<any> {
@@ -252,7 +262,7 @@ function SkeletonView({ viewMode, activeTab }: { viewMode: 'grid' | 'list'; acti
       {/* Grid de Pastas */}
       {showFolders && (
         <div className="w-full flex flex-col gap-3">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={`folder-ske-g-${i}`} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-lg shadow-sm animate-pulse">
                 <div className="flex items-center gap-3 truncate">
@@ -268,7 +278,7 @@ function SkeletonView({ viewMode, activeTab }: { viewMode: 'grid' | 'list'; acti
 
       {/* Grid de Arquivos */}
       <div className="w-full flex flex-col gap-3">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={`file-ske-g-${i}`} className="bg-white border border-gray-100 rounded-lg overflow-hidden shadow-sm aspect-square flex flex-col animate-pulse">
               <div className="flex-1 bg-gray-50 flex items-center justify-center relative">
@@ -283,105 +293,6 @@ function SkeletonView({ viewMode, activeTab }: { viewMode: 'grid' | 'list'; acti
         </div>
       </div>
     </div>
-  );
-}
-
-// Componente do Visualizador Interno
-function FilePreviewModal({ asset, onClose }: { asset: Asset; onClose: () => void }) {
-  const url = asset.versions[0]?.url;
-  // Converter link de visualização para link de incorporação (embed)
-  const embedUrl = url ? url.replace('/view', '/preview') : '';
-
-  // Formatação personalizada conforme pedido
-  const extension = asset.name.includes('.') ? asset.name.split('.').pop() : '';
-  const nameWithoutExt = asset.name.includes('.') ? asset.name.substring(0, asset.name.lastIndexOf('.')) : asset.name;
-  const capitalizedType = asset.type.charAt(0).toUpperCase() + asset.type.slice(1);
-  const formatDisplay = extension ? `${capitalizedType}.${extension.toLowerCase()}` : capitalizedType;
-  const sizeDisplay = asset.versions?.[0]?.size || "0 MB";
-  const dateDisplay = asset.captureDate ? format(asset.captureDate, "dd/MM/yyyy") : "";
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-4 md:p-6"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="bg-[#18191a] max-w-4xl w-full h-[75vh] md:h-[70vh] rounded-[10px] overflow-hidden flex flex-col shadow-2xl relative border border-white/5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Botão de Fechar flutuante */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/70 hover:bg-black/90 text-white flex items-center justify-center transition-all border border-white/15 cursor-pointer shadow-md hover:scale-105"
-        >
-          <Plus className="rotate-45" size={20} />
-        </button>
-
-        <div className="flex-1 bg-[#121212] flex items-center justify-center relative overflow-hidden w-full h-full">
-          {asset.type === 'image' ? (
-            <SafeImage
-              thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s800') : undefined}
-              driveId={asset.driveId}
-              fallbackSize="w1200"
-              className="w-full h-full object-cover"
-              alt={displayDriveName(asset.name)}
-            />
-          ) : asset.versions?.[0]?.url ? (
-            <iframe
-              src={asset.versions[0].url.includes('drive.google.com')
-                ? asset.versions[0].url.replace('/view', '/preview')
-                : asset.versions[0].url}
-              className="w-full h-full border-none bg-white"
-              allow="autoplay"
-            />
-          ) : (
-            <div className="flex flex-col items-center gap-4 text-gray-400">
-              <Plus className="rotate-45" size={48} />
-              <p className="text-sm font-bold uppercase tracking-widest">Visualização indisponível</p>
-            </div>
-          )}
-        </div>
-
-        {/* Barra inferior translúcida com dados e botão baixar */}
-        <div className="absolute bottom-0 inset-x-0 pt-16 pb-5 px-6 bg-gradient-to-t from-black/95 via-black/70 to-black/0 flex items-center justify-between text-white z-10 rounded-b-[10px]">
-          <div className="flex items-center max-w-[75%] text-left">
-            <span className="text-xs md:text-sm font-medium text-white tracking-normal select-text">
-              {formatDisplay} {sizeDisplay} &nbsp;|&nbsp; {nameWithoutExt} &nbsp;|&nbsp; {dateDisplay}
-            </span>
-          </div>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              let downloadUrl = asset.versions?.[0]?.url || asset.webViewLink;
-              if (downloadUrl) {
-                if (downloadUrl.includes('drive.google.com')) {
-                  const matchId = downloadUrl.match(/id=([^&]+)/) || downloadUrl.match(/\/file\/d\/([^/]+)/);
-                  const fileId = matchId ? matchId[1] : asset.driveId;
-                  if (fileId) {
-                    downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-                  }
-                }
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = downloadUrl;
-                document.body.appendChild(iframe);
-                setTimeout(() => document.body.removeChild(iframe), 3000);
-              }
-            }}
-            className="flex items-center gap-1.5 bg-transparent hover:text-[#a21b7e] text-white px-2 py-1.5 rounded-none text-xs font-bold transition-all cursor-pointer select-none border-none shadow-none"
-          >
-            <Download size={14} />
-            <span>Baixar</span>
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
   );
 }
 
@@ -447,6 +358,8 @@ export default function ClientDashboard() {
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; type: string; email: string; configNeeded: boolean } | null>(null);
   const [isDriveDropdownOpen, setIsDriveDropdownOpen] = useState(false);
   const [leaveAccountOpen, setLeaveAccountOpen] = useState(false);
+  const { expanded: sidebarExpanded, collapsed: sidebarCollapsed, toggle: toggleSidebar } =
+    useDashboardSidebar();
   const [isSyncingBackground, setIsSyncingBackground] = useState(false);
   const pendingSyncRef = useRef<{ targetFolderId?: string; filterType?: string; isBackground: boolean } | null>(null);
   const restoredFolderRef = useRef<string | null>(sessionStorage.getItem('prov_selected_folder_id'));
@@ -513,7 +426,7 @@ export default function ClientDashboard() {
 
   const arquivoFolderId = arquivoFolder ? arquivoFolder.id : null;
 
-  const [visibleImagesCount, setVisibleImagesCount] = useState(10);
+  const [visibleImagesCount, setVisibleImagesCount] = useState(IMAGES_GRID_PAGE_SIZE);
   const [foldersLoaded, setFoldersLoaded] = useState(false);
   const [assetsLoaded, setAssetsLoaded] = useState(false);
 
@@ -1061,12 +974,7 @@ export default function ClientDashboard() {
   };
 
   const handleFolderGridClick = (folderId: string) => {
-    if (selectedFolderIds.includes(folderId)) {
-      setSelectedFolderIds([]);
-      openFolder(folderId);
-    } else {
-      setSelectedFolderIds((prev) => toggleSelectionId(prev, folderId));
-    }
+    openFolder(folderId);
   };
 
   const handleToggleFolderSelect = (folderId: string) => {
@@ -1894,6 +1802,23 @@ export default function ClientDashboard() {
     return filteredAssets;
   }, [filteredAssets, activeTab, visibleImagesCount]);
 
+  const previewableAssets = useMemo(
+    () => displayedAssets.filter((asset) => asset.type !== "folder"),
+    [displayedAssets],
+  );
+
+  const previewFolderLabel = useMemo(() => {
+    if (selectedFolderId) {
+      const folder = folders.find((item) => item.id === selectedFolderId);
+      if (folder) return displayDriveName(folder.name);
+    }
+    if (activeTab === "image") return "Imagens";
+    if (activeTab === "video") return "Vídeos";
+    if (activeTab === "document") return "Documentos";
+    if (activeTab === "google_drive") return "Arquivo Provisual";
+    return "Meu Arquivo";
+  }, [selectedFolderId, folders, activeTab]);
+
   const filteredFolders = useMemo(() => {
     let result = folders;
 
@@ -2055,52 +1980,80 @@ export default function ClientDashboard() {
   return (
     <div className="flex h-screen bg-[#fafafa] text-gray-800 font-sans overflow-hidden">
       <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
-      <aside className="w-60 bg-white border-r border-gray-100 flex flex-col shrink-0">
+      <aside
+        className={cn(
+          "bg-white border-r border-gray-100 flex flex-col shrink-0 transition-[width] duration-300 overflow-hidden",
+          sidebarCollapsed ? "w-[4.5rem]" : "w-60",
+        )}
+      >
         <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
-          <div className="flex items-center gap-2 mb-6 mt-1 px-1">
+          <div
+            className={cn(
+              "flex items-center mb-6 mt-1",
+              sidebarCollapsed ? "flex-col gap-2 justify-center" : "gap-2 px-1",
+            )}
+          >
             <button
               type="button"
               onClick={() => setLeaveAccountOpen(true)}
               className="rounded-lg transition-opacity hover:opacity-80"
               aria-label="Ir para a página inicial"
             >
-              <img src={logoHorizontal} alt="ProVisual" className="h-10 w-auto object-contain" />
+              {sidebarCollapsed ? (
+                <img src={simboloImg} alt="ProVisual" className="h-9 w-9 object-contain" />
+              ) : (
+                <img src={logoHorizontal} alt="ProVisual" className="h-10 w-auto object-contain" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+              aria-label={sidebarExpanded ? "Recolher menu lateral" : "Expandir menu lateral"}
+            >
+              {sidebarExpanded ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
             </button>
           </div>
 
           <nav className="space-y-0.5">
-
-            <SidebarItem
+            <DashboardSidebarItem
+              collapsed={sidebarCollapsed}
               icon={<Database size={20} />}
               label="Meu Arquivo"
               active={activeTab === 'all'}
-              onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); handleGoogleSync('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG', undefined, true); }}
+              onClick={() => { setActiveTab('all'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(IMAGES_GRID_PAGE_SIZE); handleGoogleSync('1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG', undefined, true); }}
             />
-            <SidebarItem
+            <DashboardSidebarItem
+              collapsed={sidebarCollapsed}
               icon={<ImageIcon size={20} />}
               label="Imagens"
               active={activeTab === 'image'}
-              onClick={() => { setActiveTab('image'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
+              onClick={() => { setActiveTab('image'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(IMAGES_GRID_PAGE_SIZE); }}
             />
-            <SidebarItem
+            <DashboardSidebarItem
+              collapsed={sidebarCollapsed}
               icon={<Video size={20} />}
               label="Vídeos"
               active={activeTab === 'video'}
-              onClick={() => { setActiveTab('video'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
+              onClick={() => { setActiveTab('video'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(IMAGES_GRID_PAGE_SIZE); }}
             />
-            <SidebarItem
+            <DashboardSidebarItem
+              collapsed={sidebarCollapsed}
               icon={<FileText size={20} />}
               label="Documentos"
               active={activeTab === 'document'}
-              onClick={() => { setActiveTab('document'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(10); }}
+              onClick={() => { setActiveTab('document'); setSelectedFolderId(null); setDriveFilterType(null); setVisibleImagesCount(IMAGES_GRID_PAGE_SIZE); }}
             />
-
-
           </nav>
         </div>
 
         {/* Dados da Empresa Cliente no Rodapé */}
-        <div className="p-3 bg-[#a21b7e]/5 border-t border-[#a21b7e]/10 shrink-0 flex items-center gap-3 w-full">
+        <div
+          className={cn(
+            "bg-[#a21b7e]/5 border-t border-[#a21b7e]/10 shrink-0 flex items-center w-full",
+            sidebarCollapsed ? "justify-center p-2" : "gap-3 p-3",
+          )}
+        >
           {(() => {
             const parsed = (() => {
               const rawName = userProfile?.displayName || "";
@@ -2122,7 +2075,7 @@ export default function ClientDashboard() {
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col min-w-0 leading-tight">
+                <div className={cn("flex flex-col min-w-0 leading-tight", sidebarCollapsed && "hidden")}>
                   <span className="text-[11px] font-black text-gray-700 tracking-wide block uppercase truncate" title={parsed.name || "Cliente Corporativo"}>
                     {parsed.name || "Cliente Corporativo"}
                   </span>
@@ -2137,61 +2090,61 @@ export default function ClientDashboard() {
       </aside>
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         {/* Top Header - Search */}
-        <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-8 shrink-0 z-20">
-          <div className="relative w-96">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-              <Search size={18} />
-            </span>
-            <input
-              type="text"
-              placeholder="Pesquisar arquivos e pastas..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-100 rounded-sm bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all"
-            />
-          </div>
+        <header className="bg-white border-b border-gray-100 shrink-0 z-20">
+          <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between md:h-16 md:px-8 md:py-0">
+            <div className="relative w-full md:w-96 md:shrink-0">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                <Search size={18} />
+              </span>
+              <input
+                type="text"
+                placeholder="Pesquisar arquivos e pastas..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2 border border-gray-100 rounded-sm bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all"
+              />
+            </div>
 
-          <div className="flex items-center gap-2">
-
-            {userProfile && (
-              <div className="flex items-center h-9 px-3 bg-gray-50 border border-gray-100 rounded-lg select-none shrink-0">
-                <div className="flex flex-col items-start leading-none">
-                  <span className="text-[11px] text-gray-800 font-bold max-w-[160px] truncate mb-0.5" title={(() => {
-                    const rawName = userProfile.displayName || "";
-                    return rawName.includes('|') ? rawName.split('|')[0] : rawName;
-                  })()}>
+            <div className="flex items-center justify-between gap-2 md:justify-end">
+              {userProfile && (
+                <div className="flex items-center min-w-0 flex-1 md:flex-none h-9 px-3 bg-gray-50 border border-gray-100 rounded-sm select-none">
+                  <span
+                    className="text-sm text-gray-800 font-bold truncate"
+                    title={(() => {
+                      const rawName = userProfile.displayName || "";
+                      return rawName.includes("|") ? rawName.split("|")[0] : rawName;
+                    })()}
+                  >
                     Olá, {(() => {
                       let name = userProfile.displayName || "";
-                      if (name.includes('|')) {
-                        name = name.split('|')[0];
+                      if (name.includes("|")) {
+                        name = name.split("|")[0];
                       }
                       if (!name) {
-                        const emailPrefix = userProfile.email.split('@')[0];
+                        const emailPrefix = userProfile.email.split("@")[0];
                         return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
                       }
                       if (name.toLowerCase().includes("silva")) return "Silva";
-                      return name.split(' ')[0].replace(/[()]/g, '');
+                      return name.split(" ")[0].replace(/[()]/g, "");
                     })()}
                   </span>
                 </div>
-              </div>
-            )}
+              )}
 
-
-
-            <button
-              onClick={handleLogout}
-              className="flex items-center justify-center gap-2 h-9 px-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-sm font-bold hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer shrink-0"
-            >
-              <LogOut size={16} />
-              Sair
-            </button>
+              <button
+                onClick={handleLogout}
+                className="flex items-center justify-center gap-2 h-9 px-3 rounded-sm bg-red-50 border border-red-100 text-red-600 text-sm font-bold hover:bg-red-100 hover:text-red-700 transition-all cursor-pointer shrink-0"
+              >
+                <LogOut size={16} />
+                Sair
+              </button>
+            </div>
           </div>
         </header>
 
         {/* Path & Primary Actions */}
-        <div className="bg-[#a21b7e]/5 px-8 py-1.5 flex items-center justify-between border-b border-[#a21b7e]/10 z-10">
-          <div className="flex items-center gap-2 text-sm font-medium">
+        <div className="hidden md:flex bg-[#a21b7e]/5 px-8 py-1.5 items-center justify-between border-b border-[#a21b7e]/10 z-10">
+          <div className="flex items-center gap-2 text-sm font-medium min-w-0 flex-1">
             {selectedAsset ? (
               <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
                 <button
@@ -2742,7 +2695,7 @@ export default function ClientDashboard() {
                     {/* Grid de Pastas */}
                     {(activeTab === 'all' || activeTab === 'google_drive') && filteredFolders.length > 0 && (
                       <div className="w-full flex flex-col gap-3">
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
                           {filteredFolders.map(folder => (
                             <div
                               key={folder.id}
@@ -2818,21 +2771,63 @@ export default function ClientDashboard() {
                                           onMouseEnter={() => setActiveFolderSubmenu('none')}
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setSelectedFolderId(folder.id);
-                                            setSearchQuery('');
-                                            handleGoogleSync(folder.id, undefined, true);
+                                            openFolder(folder.id);
                                             setActiveFolderMenuId(null);
                                           }}
                                           className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
                                         >
                                           <div className="flex items-center gap-3">
                                             <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Abrir</span>
                                           </div>
                                           <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
                                         </button>
 
+                                        <button
+                                          onMouseEnter={() => setActiveFolderSubmenu('none')}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleFolderSelect(folder.id);
+                                            setActiveFolderMenuId(null);
+                                          }}
+                                          className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            {selectedFolderIds.includes(folder.id) ? (
+                                              <CheckSquare size={15} className="text-[#a21b7e] shrink-0" />
+                                            ) : (
+                                              <Square size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                            )}
+                                            <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">
+                                              {selectedFolderIds.includes(folder.id) ? "Desmarcar" : "Selecionar"}
+                                            </span>
+                                          </div>
+                                        </button>
+
                                         <div className="my-1 border-t border-gray-100" />
+
+                                        <button
+                                          onMouseEnter={() => setActiveFolderSubmenu('none')}
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            setActiveFolderMenuId(null);
+                                            try {
+                                              setIsProcessingAction(true);
+                                              sessionStorage.setItem('action_in_progress', 'true');
+                                              const count = await downloadDriveFolder(folder.id, folder.name);
+                                              alert(`${count} ficheiro(s) em transferência.`);
+                                              handleActionSuccess();
+                                            } catch (err: any) {
+                                              alert(err.message || "Erro ao transferir pasta.");
+                                              setIsProcessingAction(false);
+                                              sessionStorage.removeItem('action_in_progress');
+                                            }
+                                          }}
+                                          className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                        >
+                                          <Download size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                          <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Transferir pasta</span>
+                                        </button>
 
                                         <button
                                           onMouseEnter={() => setActiveFolderSubmenu('none')}
@@ -3201,7 +3196,7 @@ export default function ClientDashboard() {
                     {/* Grid de Arquivos / Fotos */}
                     {filteredAssets.length > 0 && (
                       <div className="w-full flex flex-col gap-3">
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
                           {displayedAssets.map(asset => (
                             <AssetCard
                               key={asset.id}
@@ -3336,21 +3331,63 @@ export default function ClientDashboard() {
                                       onMouseEnter={() => setActiveFolderSubmenu('none')}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setSelectedFolderId(folder.id);
-                                        setSearchQuery('');
-                                        handleGoogleSync(folder.id, undefined, true);
+                                        openFolder(folder.id);
                                         setActiveFolderMenuId(null);
                                       }}
                                       className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer animate-in fade-in duration-100"
                                     >
                                       <div className="flex items-center gap-3">
                                         <Eye size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Abrir</span>
                                       </div>
                                       <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
                                     </button>
 
+                                    <button
+                                      onMouseEnter={() => setActiveFolderSubmenu('none')}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleFolderSelect(folder.id);
+                                        setActiveFolderMenuId(null);
+                                      }}
+                                      className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        {selectedFolderIds.includes(folder.id) ? (
+                                          <CheckSquare size={15} className="text-[#a21b7e] shrink-0" />
+                                        ) : (
+                                          <Square size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                        )}
+                                        <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">
+                                          {selectedFolderIds.includes(folder.id) ? "Desmarcar" : "Selecionar"}
+                                        </span>
+                                      </div>
+                                    </button>
+
                                     <div className="my-1 border-t border-gray-100" />
+
+                                    <button
+                                      onMouseEnter={() => setActiveFolderSubmenu('none')}
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        setActiveFolderMenuId(null);
+                                        try {
+                                          setIsProcessingAction(true);
+                                          sessionStorage.setItem('action_in_progress', 'true');
+                                          const count = await downloadDriveFolder(folder.id, folder.name);
+                                          alert(`${count} ficheiro(s) em transferência.`);
+                                          handleActionSuccess();
+                                        } catch (err: any) {
+                                          alert(err.message || "Erro ao transferir pasta.");
+                                          setIsProcessingAction(false);
+                                          sessionStorage.removeItem('action_in_progress');
+                                        }
+                                      }}
+                                      className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                                    >
+                                      <Download size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Transferir pasta</span>
+                                    </button>
 
                                     <button
                                       onMouseEnter={() => setActiveFolderSubmenu('none')}
@@ -3755,7 +3792,7 @@ export default function ClientDashboard() {
             {activeTab === 'image' && filteredAssets.length > visibleImagesCount && (
               <div className="flex justify-center my-8 pb-10 w-full">
                 <button
-                  onClick={() => setVisibleImagesCount(prev => prev + 10)}
+                  onClick={() => setVisibleImagesCount((prev) => prev + IMAGES_GRID_PAGE_SIZE)}
                   className="flex items-center gap-2 bg-[#a21b7e] text-white px-6 py-3 rounded-md text-sm font-bold shadow-sm hover:bg-[#8e176e] transition-all cursor-pointer select-none"
                 >
                   <Plus size={18} />
@@ -3898,7 +3935,10 @@ export default function ClientDashboard() {
           {previewAsset && (
             <FilePreviewModal
               asset={previewAsset}
+              assets={previewableAssets}
+              contextLabel={previewFolderLabel}
               onClose={() => setPreviewAsset(null)}
+              onChange={setPreviewAsset}
             />
           )}
         </AnimatePresence>
@@ -4500,34 +4540,6 @@ export default function ClientDashboard() {
 }
 
 // Helper Components
-interface SidebarItemProps {
-  key?: React.Key;
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}
-
-function SidebarItem({ icon, label, active, onClick }: SidebarItemProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "w-full flex items-center gap-3 px-3 py-1.5 rounded-sm text-[16px] font-bold transition-all duration-200 ease-in-out transform hover:translate-x-1 relative cursor-pointer",
-        active
-          ? "text-[#a21b7e]"
-          : "text-gray-500 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e]"
-      )}
-    >
-      <span className={cn("transition-colors", active ? "text-[#a21b7e]" : "text-gray-400")}>{icon}</span>
-      <span className="tracking-tight">{label}</span>
-      {active && (
-        <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-[#a21b7e]" />
-      )}
-    </button>
-  );
-}
-
 interface FolderCardProps {
   key?: React.Key;
   folder: FolderData;
@@ -4614,17 +4626,7 @@ function AssetCard({
         e.stopPropagation();
         onDragStart?.(e);
       }}
-      onClick={() => {
-        if (isBulkSelected) {
-          onOpen();
-        } else {
-          onToggleBulkSelect?.();
-        }
-      }}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        onOpen();
-      }}
+      onClick={() => onOpen()}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -4638,23 +4640,6 @@ function AssetCard({
           : (isSelected ? "border-[#a21b7e] ring-2 ring-[#a21b7e]/10 shadow-lg" : "border-gray-100 hover:border-gray-300")
       )}
     >
-      {/* Checkbox de Seleção em Massa */}
-      <div
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleBulkSelect?.();
-        }}
-        className={cn(
-          "absolute top-2 left-2 z-20 w-5 h-5 rounded-full border bg-white/90 backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer shadow-sm hover:scale-110",
-          isBulkSelected
-            ? "border-[#a21b7e] bg-[#a21b7e] text-white"
-            : "border-gray-300 text-transparent hover:border-gray-400",
-          isBulkSelected || hasSelectionActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        )}
-      >
-        <Check size={12} className={cn("stroke-[3]", isBulkSelected ? "block" : "hidden group-hover:block text-gray-400")} />
-      </div>
-
       {/* 3 dots button over the image in the upper right corner */}
       <div className="absolute top-2 right-2 z-20">
         <motion.button
@@ -4703,9 +4688,29 @@ function AssetCard({
                 >
                   <div className="flex items-center gap-3">
                     <ExternalLink size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Abrir</span>
                   </div>
                   <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleBulkSelect?.();
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    {isBulkSelected ? (
+                      <CheckSquare size={15} className="text-[#a21b7e] shrink-0" />
+                    ) : (
+                      <Square size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                    )}
+                    <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">
+                      {isBulkSelected ? "Desmarcar" : "Selecionar"}
+                    </span>
+                  </div>
                 </button>
 
                 <div className="my-1 border-t border-gray-100" />
@@ -4713,22 +4718,20 @@ function AssetCard({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    let url = asset.versions[0]?.url || asset.webViewLink;
-                    if (url) {
-                      if (url.includes('drive.google.com')) {
-                        const matchId = url.match(/id=([^&]+)/) || url.match(/\/file\/d\/([^/]+)/);
-                        const fileId = matchId ? matchId[1] : asset.driveId;
-                        if (fileId) {
-                          url = `https://drive.google.com/uc?export=download&id=${fileId}`;
-                        }
-                      }
-                      const iframe = document.createElement('iframe');
-                      iframe.style.display = 'none';
-                      iframe.src = url;
-                      document.body.appendChild(iframe);
-                      setTimeout(() => document.body.removeChild(iframe), 3000);
-                    }
                     setShowMenu(false);
+                    if (asset.type === "folder") {
+                      const folderId = asset.driveId || asset.id;
+                      void runAction(async () => {
+                        const count = await downloadDriveFolder(folderId, asset.name);
+                        alert(`${count} ficheiro(s) em transferência.`);
+                      });
+                      return;
+                    }
+                    if (asset.driveId) {
+                      triggerDriveDownload(asset.driveId, asset.name);
+                      return;
+                    }
+                    alert("Não foi possível transferir este ficheiro.");
                   }}
                   className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                 >
@@ -5109,7 +5112,7 @@ function AssetCard({
       </div>
 
       <div className="w-full h-full flex items-center justify-center bg-gray-50">
-        {((asset.type === 'image' || asset.type === 'video') && (asset.thumbnailUrl || asset.driveId)) ? (
+        {((asset.type === 'image' || asset.type === 'video' || asset.type === 'document') && (asset.thumbnailUrl || asset.driveId)) ? (
           <SafeImage
             thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s500') : undefined}
             driveId={asset.driveId}
@@ -5196,17 +5199,7 @@ function AssetRow({
         e.stopPropagation();
         onDragStart?.(e);
       }}
-      onClick={() => {
-        if (isBulkSelected) {
-          onOpen();
-        } else {
-          onToggleBulkSelect?.();
-        }
-      }}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        onOpen();
-      }}
+      onClick={() => onOpen()}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -5218,23 +5211,7 @@ function AssetRow({
       )}
     >
       <div className="col-span-6 flex items-center gap-4">
-        {/* Checkbox de Seleção em Massa */}
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleBulkSelect?.();
-          }}
-          className={cn(
-            "w-5 h-5 rounded-full border flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-sm mr-2",
-            isBulkSelected
-              ? "border-[#a21b7e] bg-[#a21b7e] text-white"
-              : "border-gray-300 text-transparent hover:border-gray-400"
-          )}
-        >
-          <Check size={12} className="stroke-[3]" />
-        </div>
-
-        {((asset.type === 'image' || asset.type === 'video') && (asset.thumbnailUrl || asset.driveId)) ? (
+        {((asset.type === 'image' || asset.type === 'video' || asset.type === 'document') && (asset.thumbnailUrl || asset.driveId)) ? (
           <div className="w-8 h-8 overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-100 rounded-none">
             <SafeImage
               thumbnailUrl={asset.thumbnailUrl}
@@ -5307,9 +5284,29 @@ function AssetRow({
                   >
                     <div className="flex items-center gap-3">
                       <ExternalLink size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
-                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Visualizar</span>
+                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">Abrir</span>
                     </div>
                     <ChevronRight size={14} className="text-gray-300 group-hover:text-[#a21b7e] transition-colors" />
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleBulkSelect?.();
+                      setShowMenu(false);
+                    }}
+                    className="relative w-full flex items-center justify-between px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      {isBulkSelected ? (
+                        <CheckSquare size={15} className="text-[#a21b7e] shrink-0" />
+                      ) : (
+                        <Square size={15} className="text-gray-400 group-hover:text-[#a21b7e] transition-colors shrink-0" />
+                      )}
+                      <span className="text-gray-600 group-hover:text-[#a21b7e] transition-colors">
+                        {isBulkSelected ? "Desmarcar" : "Selecionar"}
+                      </span>
+                    </div>
                   </button>
 
                   <div className="my-1 border-t border-gray-100" />
@@ -5317,22 +5314,20 @@ function AssetRow({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      let url = asset.versions[0]?.url || asset.webViewLink;
-                      if (url) {
-                        if (url.includes('drive.google.com')) {
-                          const matchId = url.match(/id=([^&]+)/) || url.match(/\/file\/d\/([^/]+)/);
-                          const fileId = matchId ? matchId[1] : asset.driveId;
-                          if (fileId) {
-                            url = `https://drive.google.com/uc?export=download&id=${fileId}`;
-                          }
-                        }
-                        const iframe = document.createElement('iframe');
-                        iframe.style.display = 'none';
-                        iframe.src = url;
-                        document.body.appendChild(iframe);
-                        setTimeout(() => document.body.removeChild(iframe), 3000);
-                      }
                       setShowMenu(false);
+                      if (asset.type === "folder") {
+                        const folderId = asset.driveId || asset.id;
+                        void runAction(async () => {
+                          const count = await downloadDriveFolder(folderId, asset.name);
+                          alert(`${count} ficheiro(s) em transferência.`);
+                        });
+                        return;
+                      }
+                      if (asset.driveId) {
+                        triggerDriveDownload(asset.driveId, asset.name);
+                        return;
+                      }
+                      alert("Não foi possível transferir este ficheiro.");
                     }}
                     className="w-full flex items-center gap-3 px-3.5 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold cursor-pointer"
                   >

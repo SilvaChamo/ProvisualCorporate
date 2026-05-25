@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Globe, Images, Key, Video } from "lucide-react";
+import { Images, Key, Video } from "lucide-react";
 import { cn } from "../lib/utils";
 import AlbumsAdminTab from "./admin/AlbumsAdminTab";
 import VideosAdminTab from "./admin/VideosAdminTab";
@@ -20,6 +20,7 @@ export default function SiteHomeAdminPanel() {
   const [pendingTab, setPendingTab] = useState<HomeAdminTab | null>(null);
   const [unsavedOpen, setUnsavedOpen] = useState(false);
   const [unsavedSaving, setUnsavedSaving] = useState(false);
+  const [toolbarActions, setToolbarActions] = useState<React.ReactNode>(null);
   const editorRef = useRef<AdminEditorHandle | null>(null);
 
   const requestTabChange = (tab: HomeAdminTab) => {
@@ -69,44 +70,46 @@ export default function SiteHomeAdminPanel() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <Globe className="text-[#a21b7e] shrink-0" size={24} />
-                Gestão do Site
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Álbuns de fotos, vídeos do YouTube e contas de acesso dos clientes.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-start lg:justify-end gap-1 shrink-0">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => requestTabChange(tab.id)}
+    <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 p-4 md:p-8">
+      <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:gap-2 pb-[10px]">
+          <div className="flex flex-wrap items-center gap-2">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => requestTabChange(tab.id)}
+                className="px-2 py-2 text-sm font-bold transition-colors cursor-pointer bg-transparent border-0"
+              >
+                <span
                   className={cn(
-                    "inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold transition-colors cursor-pointer whitespace-nowrap",
+                    "relative inline-flex items-center gap-1.5 pb-[10px] after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:rounded-full after:transition-colors",
                     activeTab === tab.id
-                      ? "text-[#a21b7e]"
-                      : "text-gray-500 hover:text-gray-700",
+                      ? "text-[#a21b7e] after:bg-[#a21b7e]"
+                      : "text-gray-500 hover:text-[#a21b7e] after:bg-transparent hover:after:bg-[#a21b7e]",
                   )}
                 >
                   {tab.icon}
                   {tab.label}
-                </button>
-              ))}
-            </div>
+                </span>
+              </button>
+            ))}
           </div>
+          {toolbarActions && (
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:ml-auto">
+              {toolbarActions}
+            </div>
+          )}
         </div>
 
         <div className="min-h-[420px]">
-          {activeTab === "albuns" && <AlbumsAdminTab ref={editorRef} />}
-          {activeTab === "videos" && <VideosAdminTab ref={editorRef} />}
-          {activeTab === "contas" && <AccessAccountsAdmin />}
+          {activeTab === "albuns" && (
+            <AlbumsAdminTab ref={editorRef} onToolbarChange={setToolbarActions} />
+          )}
+          {activeTab === "videos" && (
+            <VideosAdminTab ref={editorRef} onToolbarChange={setToolbarActions} />
+          )}
+          {activeTab === "contas" && <AccessAccountsAdmin onToolbarChange={setToolbarActions} />}
         </div>
       </div>
 

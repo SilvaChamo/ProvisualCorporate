@@ -139,17 +139,12 @@ function resolveTeamMemberImage(
   partialImage: string | undefined,
   defaultImage: string | undefined,
 ): string {
-  if (!defaultImage?.includes("/INICIO/Equipa/")) {
-    return partialImage || defaultImage || "";
-  }
-
   const driveImage =
     partialImage?.startsWith("/api/drive/") || /^https?:\/\//i.test(partialImage || "")
       ? partialImage
       : null;
-
-  if (import.meta.env.DEV) return defaultImage;
-  return driveImage || defaultImage;
+  if (driveImage) return driveImage;
+  return partialImage || defaultImage || "";
 }
 
 const DEFAULT_EVENT_TYPES: HomeEventType[] = [

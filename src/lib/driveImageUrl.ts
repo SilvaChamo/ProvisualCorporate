@@ -26,14 +26,12 @@ export function driveDisplayUrl(url: string, size: DriveImageSize = "md"): strin
 
 export function preloadDriveImages(urls: string[], size: DriveImageSize = "md") {
   const seen = new Set<string>();
-  urls.forEach((url, index) => {
+  urls.slice(0, 2).forEach((url) => {
     const optimized = driveDisplayUrl(url, size);
     if (!optimized || seen.has(optimized)) return;
     seen.add(optimized);
-    const link = document.createElement("link");
-    link.rel = index === 0 ? "preload" : "prefetch";
-    link.as = "image";
-    link.href = optimized;
-    document.head.appendChild(link);
+    const img = new Image();
+    img.decoding = "async";
+    img.src = optimized;
   });
 }

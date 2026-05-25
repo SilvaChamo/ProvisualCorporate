@@ -22,7 +22,7 @@ export interface SiteDriveAlbum {
   photoCount: number;
 }
 
-const HOME_CACHE_KEY = "provisual_home_content_v2";
+const HOME_CACHE_KEY = "provisual_home_content_v3";
 const HOME_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface HomeCacheEntry {
@@ -101,19 +101,39 @@ export async function fetchSiteHomeContent(): Promise<HomeContent> {
   }
 }
 
-export async function fetchSiteGalleryAlbums(): Promise<GalleryAlbum[]> {
+export async function fetchSiteGalleryAlbums(options?: { resync?: boolean }): Promise<GalleryAlbum[]> {
   try {
-    const res = await fetch("/api/site/gallery");
+    if (options?.resync) {
+      try {
+        await syncSiteGalleryMeta();
+      } catch (syncErr) {
+        console.warn("Sync galeria falhou:", syncErr);
+      }
+    }
+
+    const res = await fetch("/api/site/gallery", { cache: "no-store" });
     if (!res.ok) throw new Error("API error");
     const data = await res.json();
     const driveAlbums: SiteDriveAlbum[] = data.albums || [];
     if (driveAlbums.length > 0) {
       return driveAlbums.map(mergeAlbumMetadata);
     }
+
+    if (!options?.resync) {
+      return fetchSiteGalleryAlbums({ resync: true });
+    }
   } catch (e) {
-    console.warn("Galeria Drive indisponível:", e);
+    console.warn("Galeria Drive indisponível, usando dados locais:", e);
   }
-  return [];
+
+  if (import.meta.env.DEV) {
+    return GALLERY_ALBUMS;
+  }
+
+  return GALLERY_ALBUMS.map((album) => ({
+    ...album,
+    image: album.image?.includes("/api/drive/") ? album.image : "",
+  }));
 }
 
 export async function syncSiteGalleryMeta(): Promise<GalleryAlbum[]> {
@@ -126,19 +146,42 @@ export async function syncSiteGalleryMeta(): Promise<GalleryAlbum[]> {
   return (data.albums || []).map(mergeAlbumMetadata);
 }
 
-export async function fetchSiteGalleryPhotos(slug: string, fallbackCover: string): Promise<string[]> {
+function localGalleryPhotos(slug: string, fallbackCover: string): SiteDrivePhoto[] {
+  return getGalleryPhotos(slug, fallbackCover).map((url, index) => ({
+    id: `local-${slug}-${index}`,
+    name: url.split("/").pop() || `foto-${index + 1}.jpg`,
+    url,
+    thumbnailUrl: url,
+  }));
+}
+
+export async function fetchSiteGalleryPhotos(slug: string, fallbackCover: string): Promise<SiteDrivePhoto[]> {
   try {
     const res = await fetch(`/api/site/gallery/${encodeURIComponent(slug)}/photos`);
     if (!res.ok) throw new Error("API error");
     const data = await res.json();
     const photos: SiteDrivePhoto[] = data.photos || [];
     if (photos.length > 0) {
-      return photos.map((p) => p.url);
+      return photos;
     }
   } catch (e) {
     console.warn(`Fotos Drive (${slug}) indisponíveis, usando dados locais:`, e);
   }
-  return getGalleryPhotos(slug, fallbackCover);
+
+  if (import.meta.env.DEV) {
+    return localGalleryPhotos(slug, fallbackCover);
+  }
+
+  if (fallbackCover && fallbackCover.includes("/api/drive/")) {
+    return [{
+      id: "cover",
+      name: "capa.jpg",
+      url: fallbackCover,
+      thumbnailUrl: fallbackCover,
+    }];
+  }
+
+  return [];
 }
 
 export async function uploadSiteMedia(file: File, subpath = ""): Promise<SiteDrivePhoto & { folderId: string }> {

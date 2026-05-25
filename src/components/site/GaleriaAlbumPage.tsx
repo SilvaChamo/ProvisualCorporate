@@ -4,7 +4,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import SiteShell from "./SiteShell";
 import { GALLERY_ALBUMS } from "../../lib/sitePages";
 import { driveDisplayUrl } from "../../lib/driveImageUrl";
-import { fetchSiteGalleryAlbums, fetchSiteGalleryPhotos } from "../../lib/siteGalleryApi";
+import {
+  fetchSiteGalleryAlbums,
+  fetchSiteGalleryPhotos,
+  type SiteDrivePhoto,
+} from "../../lib/siteGalleryApi";
 import GalleryAlbumCarousel from "./GalleryAlbumCarousel";
 import PhotoLightbox from "./PhotoLightbox";
 
@@ -16,7 +20,7 @@ export default function GaleriaAlbumPage() {
   const { slug } = useParams();
   const staticAlbum = GALLERY_ALBUMS.find((a) => a.slug === slug);
   const [albumMeta, setAlbumMeta] = useState(staticAlbum || null);
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<SiteDrivePhoto[]>([]);
   const [allAlbums, setAllAlbums] = useState(GALLERY_ALBUMS);
   const [loading, setLoading] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -78,7 +82,13 @@ export default function GaleriaAlbumPage() {
         { label: "Galeria", href: "/galeria" },
         { label: album.title },
       ]}
-      bannerImages={photos.length > 0 ? photos.slice(0, 12) : album.image ? [album.image] : undefined}
+      bannerImages={
+        photos.length > 0
+          ? photos.slice(0, 12).map((photo) => photo.url)
+          : album.image
+            ? [album.image]
+            : undefined
+      }
     >
       {loading ? (
         <div className="flex justify-center py-20 mb-8">
@@ -91,14 +101,14 @@ export default function GaleriaAlbumPage() {
               const globalIndex = start + index;
               return (
                 <button
-                  key={`${photo}-${globalIndex}`}
+                  key={`${photo.id}-${globalIndex}`}
                   type="button"
                   onClick={() => setLightboxIndex(globalIndex)}
                   className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-md bg-gray-100 group text-left w-full"
                   aria-label={`Ver imagem ${globalIndex + 1} de ${album.title}`}
                 >
                   <img
-                    src={driveDisplayUrl(photo, "sm")}
+                    src={driveDisplayUrl(photo.url, "sm")}
                     alt={`${album.title} ${globalIndex + 1}`}
                     loading="lazy"
                     decoding="async"

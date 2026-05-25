@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
-  Key,
   Loader2,
   Mail,
   Pencil,
@@ -50,7 +49,11 @@ function parseAccountDisplay(displayName: string) {
   return { responsible: "", name: rawName, logo: "" };
 }
 
-export default function AccessAccountsAdmin() {
+export default function AccessAccountsAdmin({
+  onToolbarChange,
+}: {
+  onToolbarChange?: (actions: React.ReactNode) => void;
+}) {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -114,6 +117,25 @@ export default function AccessAccountsAdmin() {
     setNewAccountPassword(generateStrongPassword());
     setFormMode("add");
   };
+
+  useEffect(() => {
+    if (!onToolbarChange) return;
+    if (formMode !== "hidden") {
+      onToolbarChange(null);
+      return;
+    }
+    onToolbarChange(
+      <button
+        type="button"
+        onClick={openAddForm}
+        className="flex flex-1 md:flex-none items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
+      >
+        <UserPlus size={16} />
+        Criar Conta de Acesso
+      </button>,
+    );
+    return () => onToolbarChange(null);
+  }, [formMode, onToolbarChange]);
 
   const openEditForm = (account: any) => {
     setEditingAccount(account);
@@ -244,27 +266,7 @@ export default function AccessAccountsAdmin() {
   };
 
   return (
-    <div className="space-y-6 min-h-[420px] bg-white rounded-lg border border-gray-100 shadow-sm p-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <Key className="text-[#a21b7e]" size={24} />
-            Contas de Acesso
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Crie e gerencie contas de e-mail e credenciais de acesso exclusivas para os seus clientes.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={openAddForm}
-          className="flex items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2.5 rounded-md text-sm font-bold shadow-sm transition-all cursor-pointer h-10 shrink-0"
-        >
-          <UserPlus size={16} />
-          Criar Conta de Acesso
-        </button>
-      </div>
-
+    <div className="space-y-6 min-h-[420px]">
       {accountError && formMode === "hidden" && (
         <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-sm flex items-center gap-2">
           <AlertCircle size={16} />
@@ -272,16 +274,18 @@ export default function AccessAccountsAdmin() {
         </div>
       )}
 
-      <div className="relative max-w-md">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Pesquisar contas..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e]"
-        />
-      </div>
+      {accounts.length > 10 && formMode === "hidden" && (
+        <div className="relative max-w-md">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Pesquisar contas..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e]"
+          />
+        </div>
+      )}
 
       {formMode !== "hidden" ? (
         <div className="bg-gray-50 rounded-lg border border-gray-100 p-6">
@@ -381,14 +385,14 @@ export default function AccessAccountsAdmin() {
               <button
                 type="button"
                 onClick={resetForm}
-                className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded text-sm font-bold transition-all cursor-pointer"
+                className="flex-1 py-2.5 border border-gray-300 text-gray-700 bg-transparent hover:border-gray-400 rounded-sm text-sm font-bold transition-all cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isCreatingAccount}
-                className="flex-1 py-2.5 bg-[#a21b7e] hover:bg-[#8e176e] text-white rounded text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
+                className="flex-1 py-2.5 border border-[#a21b7e] text-[#a21b7e] bg-transparent hover:text-[#8e176e] hover:border-[#8e176e] rounded-sm text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isCreatingAccount ? "A salvar..." : formMode === "edit" ? "Salvar Alterações" : "Criar Conta de Acesso"}
               </button>
@@ -397,8 +401,7 @@ export default function AccessAccountsAdmin() {
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
@@ -509,7 +512,6 @@ export default function AccessAccountsAdmin() {
             </tbody>
           </table>
         </div>
-      </div>
     </div>
   );
 }

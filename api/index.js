@@ -33,6 +33,10 @@ import {
   IMAGE_CACHE_CONTROL,
   HOME_API_CACHE_CONTROL,
 } from "../lib/driveServerCache.js";
+import {
+  listAllFilesInFolder,
+  streamDriveFileDownload,
+} from "../lib/driveDownloadHelpers.js";
 
 function loadOAuthKeys() {
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -361,6 +365,7 @@ app.post("/api/site/gallery/sync-meta", async (_req, res) => {
   try {
     const { auth } = await getGoogleAuth();
     const drive = google.drive({ version: "v3", auth });
+    await getSiteContentFolderId(drive, supabase, { refresh: true });
     const driveData = await listSiteGalleryAlbums(drive, supabase);
     const meta = await ensureGalleryAlbumsMetaSeeded(supabase, driveData.albums);
     const data = await listSiteGalleryAlbumsWithMeta(drive, supabase);
@@ -769,6 +774,38 @@ app.get("/api/drive/media", async (req, res) => {
   } catch (error) {
     console.error("Erro ao obter media do Drive:", error);
     res.status(500).send(error.message);
+  }
+});
+
+app.get("/api/drive/download", async (req, res) => {
+  const { id, name } = req.query;
+  if (!id) return res.status(400).send("ID do arquivo é obrigatório");
+
+  try {
+    const { auth } = await getGoogleAuth();
+    const drive = google.drive({ version: "v3", auth });
+    await streamDriveFileDownload(drive, String(id), name ? String(name) : undefined, res);
+  } catch (error) {
+    console.error("Erro ao transferir ficheiro do Drive:", error);
+    const status = error.statusCode || 500;
+    if (!res.headersSent) {
+      res.status(status).send(error.message || "Erro ao transferir ficheiro.");
+    }
+  }
+});
+
+app.post("/api/drive/folder-files", async (req, res) => {
+  const { folderId } = req.body || {};
+  if (!folderId) return res.status(400).json({ error: "ID da pasta é obrigatório." });
+
+  try {
+    const { auth } = await getGoogleAuth();
+    const drive = google.drive({ version: "v3", auth });
+    const files = await listAllFilesInFolder(drive, String(folderId));
+    res.json({ files, count: files.length });
+  } catch (error) {
+    console.error("Erro ao listar ficheiros da pasta:", error);
+    res.status(500).json({ error: error.message || "Erro ao listar ficheiros da pasta." });
   }
 });
 

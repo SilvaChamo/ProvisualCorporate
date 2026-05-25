@@ -32,7 +32,7 @@ export const FOOTER_LINK_COLUMNS = [
       { label: "Eventos", href: "/#eventos" },
       { label: "Clientes", href: "/#clientes" },
       { label: "Contacte-nos", href: "/#contactos" },
-      { label: "Gestão", href: "/login" },
+      { label: "Entrar", href: "/login" },
     ],
   },
   {

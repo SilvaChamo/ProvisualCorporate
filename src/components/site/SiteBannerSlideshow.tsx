@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "../../lib/utils";
+import { driveDisplayUrl } from "../../lib/driveImageUrl";
 
 interface SiteBannerSlideshowProps {
   images: string[];
@@ -30,7 +31,7 @@ export default function SiteBannerSlideshow({
       {slides.map((src, index) => (
         <img
           key={`${src}-${index}`}
-          src={src}
+          src={driveDisplayUrl(src, "lg")}
           alt=""
           className={cn(
             "absolute inset-0 h-full w-full object-cover transition-opacity duration-[1400ms] ease-in-out",

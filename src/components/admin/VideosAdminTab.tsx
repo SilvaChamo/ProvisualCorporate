@@ -20,7 +20,14 @@ type FormState = {
   url: string;
 };
 
-export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref) {
+interface VideosAdminTabProps {
+  onToolbarChange?: (actions: React.ReactNode) => void;
+}
+
+export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function VideosAdminTab(
+  { onToolbarChange },
+  ref,
+) {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,6 +84,25 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
     setSuccess(null);
     setFormMode("add");
   };
+
+  useEffect(() => {
+    if (!onToolbarChange) return;
+    if (formMode !== "hidden") {
+      onToolbarChange(null);
+      return;
+    }
+    onToolbarChange(
+      <button
+        type="button"
+        onClick={openAddForm}
+        className="flex flex-1 md:flex-none items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
+      >
+        <Plus size={16} />
+        Adicionar Vídeo
+      </button>,
+    );
+    return () => onToolbarChange(null);
+  }, [formMode, onToolbarChange]);
 
   const openEditForm = (video: VideoItem) => {
     setError(null);
@@ -202,14 +228,14 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
                 type="button"
                 onClick={resetForm}
                 disabled={saving}
-                className="h-10 px-4 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-bold transition-all cursor-pointer disabled:opacity-50"
+                className="h-10 px-4 border border-gray-300 text-gray-700 bg-transparent hover:border-gray-400 rounded-sm text-sm font-bold transition-all cursor-pointer disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="h-10 px-4 bg-[#a21b7e] hover:bg-[#8e176e] text-white rounded-lg text-sm font-bold transition-all disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
+                className="h-10 px-4 border border-[#a21b7e] text-[#a21b7e] bg-transparent hover:text-[#8e176e] hover:border-[#8e176e] rounded-sm text-sm font-bold transition-all disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
               >
                 {saving && <Loader2 size={16} className="animate-spin" />}
                 {formMode === "add" ? "Adicionar Vídeo" : "Guardar Alterações"}
@@ -235,25 +261,6 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
 
   return (
     <div className="space-y-6 min-h-[420px]">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">Vídeos do Site</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Adicione vídeos pelo link do YouTube. Aparecem na página de vídeos e na secção de vídeos da homepage.
-          </p>
-        </div>
-        {formMode === "hidden" && (
-          <button
-            type="button"
-            onClick={openAddForm}
-            className="flex items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2.5 rounded-md text-sm font-bold shadow-sm transition-all cursor-pointer h-10 shrink-0"
-          >
-            <Plus size={16} />
-            Adicionar Vídeo
-          </button>
-        )}
-      </div>
-
       {error && formMode === "hidden" && (
         <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-sm flex items-center gap-2">
           <AlertCircle size={16} />
@@ -283,16 +290,16 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
           {paginatedVideos.map((video) => (
             <div
               key={`${video.slug}-${video.youtubeId}`}
-              className="bg-white border border-gray-100 shadow-sm flex items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20"
+              className="bg-white border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20"
             >
-              <div className="relative w-28 shrink-0 self-stretch overflow-hidden bg-gray-100">
+              <div className="relative w-full h-32 sm:w-28 sm:h-auto shrink-0 self-stretch overflow-hidden bg-gray-100">
                 <img
                   src={video.image || youtubeThumbnail(video.youtubeId)}
                   alt={video.title}
                   className="absolute inset-0 h-full w-full object-cover object-center"
                 />
               </div>
-              <div className="flex flex-1 min-w-0 items-center gap-3 py-2 pr-3 pl-3">
+              <div className="flex flex-1 min-w-0 flex-col gap-3 py-3 px-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2">
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-gray-800 truncate">{video.title}</h4>
                   <p className="text-xs text-gray-500 truncate flex items-center gap-1 mt-1">
@@ -300,12 +307,12 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
                     {video.youtubeId}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <a
                   href="/videos"
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-2 text-xs font-bold text-gray-600 border border-gray-200 rounded hover:border-[#a21b7e]/30 hover:text-[#a21b7e] inline-flex items-center gap-1"
+                  className="px-3 py-2 text-xs font-bold text-green-600/50 border border-green-600/25 bg-transparent rounded-sm hover:text-green-700 hover:border-green-600 transition-colors inline-flex items-center gap-1"
                 >
                   <ExternalLink size={14} />
                   Ver no site
@@ -313,7 +320,7 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
                 <button
                   type="button"
                   onClick={() => openEditForm(video)}
-                  className="px-3 py-2 text-xs font-bold text-gray-600 border border-gray-200 rounded hover:border-[#a21b7e]/30 hover:text-[#a21b7e] inline-flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-2 text-xs font-bold text-sky-600/50 border border-sky-600/25 bg-transparent rounded-sm hover:text-sky-700 hover:border-sky-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                 >
                   <Pencil size={14} />
                   Editar
@@ -321,7 +328,7 @@ export default forwardRef<AdminEditorHandle>(function VideosAdminTab(_props, ref
                 <button
                   type="button"
                   onClick={() => handleDelete(video)}
-                  className="px-3 py-2 text-xs font-bold text-red-600 border border-red-100 rounded hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-2 text-xs font-bold text-red-600/50 border border-red-600/25 bg-transparent rounded-sm hover:text-red-700 hover:border-red-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                 >
                   <Trash2 size={14} />
                   Eliminar

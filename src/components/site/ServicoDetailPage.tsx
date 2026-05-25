@@ -4,6 +4,7 @@ import SiteShell from "./SiteShell";
 import ServiceRequestForm from "./ServiceRequestForm";
 import { getServiceBySlug } from "../../lib/sitePages";
 import { applyDriveServiceImages, fetchSiteServiceImages } from "../../lib/siteGalleryApi";
+import { driveDisplayUrl } from "../../lib/driveImageUrl";
 
 export default function ServicoDetailPage() {
   const { slug } = useParams();
@@ -51,7 +52,7 @@ export default function ServicoDetailPage() {
       <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-stretch">
         <div className="relative rounded-2xl overflow-hidden shadow-lg bg-gray-100 min-h-[340px] lg:min-h-0 lg:h-full">
           <img
-            src={serviceImage}
+            src={driveDisplayUrl(serviceImage, "lg")}
             alt={baseService.title}
             className="absolute inset-0 w-full h-full object-cover"
           />

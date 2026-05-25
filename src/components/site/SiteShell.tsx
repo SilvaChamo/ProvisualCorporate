@@ -45,7 +45,7 @@ export default function SiteShell({
               <SiteSectionLink
                 key={link.href}
                 href={link.href}
-                className="text-[15px] lg:text-base font-normal text-gray-700 hover:text-[#a21b7e] transition-colors whitespace-nowrap"
+                className="site-nav-link"
               >
                 {link.label}
               </SiteSectionLink>
@@ -53,11 +53,8 @@ export default function SiteShell({
           </nav>
 
           <div className="flex items-center justify-end gap-1.5 sm:gap-2">
-            <Link
-              to="/login"
-              className="hidden lg:inline-flex text-[15px] font-normal text-[#a21b7e] border border-[#a21b7e] rounded-full px-6 py-2 hover:bg-[#a21b7e]/5 transition-colors whitespace-nowrap"
-            >
-              Gestão
+            <Link to="/login" className="site-btn-login hidden lg:inline-flex">
+              Entrar
             </Link>
             <button
               type="button"
@@ -75,7 +72,7 @@ export default function SiteShell({
           onClose={() => setMenuOpen(false)}
           tone="light"
           loginHref="/login"
-          loginLabel="Gestão"
+          loginLabel="Entrar"
           links={SITE_NAV_LINKS.map((link) => ({
             href: link.href,
             label: link.label,

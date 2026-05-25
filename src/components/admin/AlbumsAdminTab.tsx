@@ -6,7 +6,6 @@ import {
   Loader2,
   Pencil,
   Plus,
-  RefreshCw,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -15,14 +14,15 @@ import {
   deleteGalleryAlbum,
   fetchAdminGalleryAlbums,
   fetchAdminGalleryPhotos,
-  syncSiteGalleryMeta,
   updateGalleryAlbum,
   type SiteDriveAlbum,
   type SiteDrivePhoto,
 } from "../../lib/siteGalleryApi";
 import { driveDisplayUrl } from "../../lib/driveImageUrl";
 import type { AdminEditorHandle } from "./AdminEditorHandle";
-import AdminListPagination, { ADMIN_LIST_PAGE_SIZE, paginateList } from "./AdminListPagination";
+
+const ALBUMS_INITIAL_COUNT = 10;
+const ALBUMS_LOAD_MORE_COUNT = 10;
 
 type FormMode = "hidden" | "add" | "edit";
 
@@ -44,10 +44,16 @@ function photoPreviewUrl(photo: SiteDrivePhoto) {
   return driveDisplayUrl(photo.thumbnailUrl || photo.url, "sm");
 }
 
-export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref) {
+interface AlbumsAdminTabProps {
+  onToolbarChange?: (actions: React.ReactNode) => void;
+}
+
+export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function AlbumsAdminTab(
+  { onToolbarChange },
+  ref,
+) {
   const [albums, setAlbums] = useState<SiteDriveAlbum[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +66,7 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [existingPhotos, setExistingPhotos] = useState<SiteDrivePhoto[]>([]);
   const [deletedPhotoIds, setDeletedPhotoIds] = useState<string[]>([]);
-  const [listPage, setListPage] = useState(0);
+  const [visibleAlbumCount, setVisibleAlbumCount] = useState(ALBUMS_INITIAL_COUNT);
 
   const loadAlbums = async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
@@ -80,11 +86,11 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
   }, []);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(albums.length / ADMIN_LIST_PAGE_SIZE));
-    if (listPage >= totalPages) setListPage(Math.max(0, totalPages - 1));
-  }, [albums.length, listPage]);
+    setVisibleAlbumCount(ALBUMS_INITIAL_COUNT);
+  }, [albums.length]);
 
-  const paginatedAlbums = paginateList<SiteDriveAlbum>(albums, listPage);
+  const visibleAlbums = albums.slice(0, visibleAlbumCount);
+  const hasMoreAlbums = visibleAlbumCount < albums.length;
 
   const resetForm = () => {
     pendingPhotos.forEach((photo) => URL.revokeObjectURL(photo.preview));
@@ -101,7 +107,16 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
   };
 
   const openAddForm = () => {
-    resetForm();
+    pendingPhotos.forEach((photo) => URL.revokeObjectURL(photo.preview));
+    setEditingSlug(null);
+    setTitle("");
+    setSubtitle("");
+    setCoverFile(null);
+    setCoverPreview(null);
+    setPendingPhotos([]);
+    setExistingPhotos([]);
+    setDeletedPhotoIds([]);
+    setError(null);
     setFormMode("add");
   };
 
@@ -229,21 +244,27 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
     }
   };
 
-  const handleSync = async () => {
-    setSyncing(true);
-    setError(null);
-    try {
-      await syncSiteGalleryMeta();
-      await loadAlbums();
-    } catch (e: any) {
-      setError(e.message || "Erro ao sincronizar galeria com o Drive.");
-    } finally {
-      setSyncing(false);
+  useEffect(() => {
+    if (!onToolbarChange) return;
+    if (formMode !== "hidden") {
+      onToolbarChange(null);
+      return;
     }
-  };
+    onToolbarChange(
+      <button
+        type="button"
+        onClick={openAddForm}
+        className="flex flex-1 md:flex-none items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
+      >
+        <Plus size={16} />
+        Adicionar Novo Álbum
+      </button>,
+    );
+    return () => onToolbarChange(null);
+  }, [formMode, onToolbarChange]);
 
   const formView = (
-    <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-6">
+    <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 md:p-6">
       <div className="flex items-center justify-between gap-4 mb-4">
         <h3 className="text-base font-bold text-gray-800">
           {formMode === "add" ? "Novo Álbum" : "Editar Álbum"}
@@ -312,7 +333,7 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
           </div>
         </div>
 
-        {(loadingPhotos || visibleExistingPhotos.length > 0 || pendingPhotos.length > 0) && (
+        {(formMode === "add" || loadingPhotos || visibleExistingPhotos.length > 0 || pendingPhotos.length > 0) && (
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
               Fotos do álbum
@@ -321,6 +342,10 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
               <div className="flex justify-center py-8">
                 <Loader2 size={24} className="animate-spin text-[#a21b7e]" />
               </div>
+            ) : visibleExistingPhotos.length === 0 && pendingPhotos.length === 0 ? (
+              <p className="text-xs text-gray-400 italic mb-3">
+                Ainda sem fotos. Use &quot;Carregar fotos&quot; abaixo para adicionar imagens ao álbum.
+              </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {visibleExistingPhotos.map((photo) => (
@@ -370,7 +395,7 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
         )}
 
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
-          <label className="inline-flex items-center justify-center gap-2 h-10 px-4 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:border-[#a21b7e]/40 cursor-pointer shrink-0">
+          <label className="inline-flex items-center justify-center gap-2 h-10 px-4 border border-gray-300 rounded-sm text-sm font-bold text-gray-600 bg-transparent hover:border-[#a21b7e] hover:text-[#a21b7e] cursor-pointer shrink-0">
             <Upload size={16} />
             Carregar fotos
             <input type="file" accept="image/*" multiple onChange={handleBulkPhotos} className="hidden" />
@@ -378,14 +403,14 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
           <button
             type="button"
             onClick={resetForm}
-            className="h-10 px-4 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-bold transition-all cursor-pointer shrink-0"
+            className="h-10 px-4 border border-gray-300 text-gray-700 bg-transparent hover:border-gray-400 rounded-sm text-sm font-bold transition-all cursor-pointer shrink-0"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="h-10 px-4 bg-[#a21b7e] hover:bg-[#8e176e] text-white rounded-lg text-sm font-bold transition-all disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2 shrink-0"
+            className="h-10 px-4 bg-[#a21b7e] hover:bg-[#8e176e] text-white rounded-sm text-sm font-bold transition-all disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2 shrink-0"
           >
             {saving && <Loader2 size={16} className="animate-spin" />}
             {formMode === "add" ? "Criar Álbum" : "Guardar Alterações"}
@@ -397,38 +422,6 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
 
   return (
     <div className="space-y-6 min-h-[420px]">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">Álbuns de Fotos</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Gerencie os álbuns publicados na página de galeria e sincronizados com o Google Drive.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {formMode === "hidden" && (
-            <>
-              <button
-                type="button"
-                onClick={handleSync}
-                disabled={syncing}
-                className="flex items-center justify-center gap-2 border border-gray-200 hover:border-[#a21b7e]/30 text-gray-700 px-4 py-2.5 rounded-md text-sm font-bold transition-all cursor-pointer h-10"
-              >
-                <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
-                Sincronizar Drive
-              </button>
-              <button
-                type="button"
-                onClick={openAddForm}
-                className="flex items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2.5 rounded-md text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
-              >
-                <Plus size={16} />
-                Adicionar Álbum
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
       {error && (
         <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-sm flex items-center gap-2">
           <AlertCircle size={16} />
@@ -444,18 +437,18 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
         </div>
       ) : albums.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-100 p-12 text-center text-gray-400 italic">
-          Nenhum álbum cadastrado. Clique em &quot;Adicionar Álbum&quot; para começar.
+          Nenhum álbum cadastrado. Clique em &quot;Adicionar Novo Álbum&quot; para começar.
         </div>
       ) : (
         <div className="space-y-3">
-          {paginatedAlbums.map((album) => {
+          {visibleAlbums.map((album) => {
             const cover = albumCoverUrl(album);
             return (
               <div
                 key={album.slug}
-                className="group bg-white rounded-lg border border-gray-100 shadow-sm flex items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20"
+                className="group bg-white rounded-lg border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20"
               >
-                <div className="relative w-20 shrink-0 self-stretch overflow-hidden bg-gray-100">
+                <div className="relative w-full h-32 sm:w-20 sm:h-auto shrink-0 self-stretch overflow-hidden bg-gray-100">
                   {cover ? (
                     <img
                       src={cover}
@@ -468,18 +461,18 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
                     </div>
                   )}
                 </div>
-                <div className="flex flex-1 min-w-0 items-center gap-3 py-2 pr-3 pl-3">
+                <div className="flex flex-1 min-w-0 flex-col gap-3 py-3 px-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2">
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-gray-800 truncate">{album.title || album.name}</h4>
                     <p className="text-sm text-gray-500 truncate">{album.subtitle || `${album.photoCount} fotos`}</p>
                     <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wider">{album.photoCount} fotos</p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <a
                     href={`/galeria/${album.slug}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="px-3 py-2 text-xs font-bold text-gray-600 border border-gray-200 rounded hover:border-[#a21b7e]/30 hover:text-[#a21b7e] inline-flex items-center gap-1"
+                    className="px-3 py-2 text-xs font-bold text-green-600/50 border border-green-600/25 bg-transparent rounded-sm hover:text-green-700 hover:border-green-600 transition-colors inline-flex items-center gap-1"
                   >
                     <ExternalLink size={14} />
                     Ver
@@ -487,7 +480,7 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
                   <button
                     type="button"
                     onClick={() => openEditForm(album)}
-                    className="px-3 py-2 text-xs font-bold text-gray-600 border border-gray-200 rounded hover:border-[#a21b7e]/30 hover:text-[#a21b7e] inline-flex items-center gap-1 cursor-pointer"
+                    className="px-3 py-2 text-xs font-bold text-sky-600/50 border border-sky-600/25 bg-transparent rounded-sm hover:text-sky-700 hover:border-sky-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                   >
                     <Pencil size={14} />
                     Editar
@@ -495,7 +488,7 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
                   <button
                     type="button"
                     onClick={() => handleDelete(album)}
-                    className="px-3 py-2 text-xs font-bold text-red-600 border border-red-100 rounded hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer"
+                    className="px-3 py-2 text-xs font-bold text-red-600/50 border border-red-600/25 bg-transparent rounded-sm hover:text-red-700 hover:border-red-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                   >
                     <Trash2 size={14} />
                     Eliminar
@@ -505,11 +498,17 @@ export default forwardRef<AdminEditorHandle>(function AlbumsAdminTab(_props, ref
               </div>
             );
           })}
-          <AdminListPagination
-            page={listPage}
-            totalItems={albums.length}
-            onPageChange={setListPage}
-          />
+          {hasMoreAlbums && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => setVisibleAlbumCount((count) => count + ALBUMS_LOAD_MORE_COUNT)}
+                className="inline-flex h-10 items-center justify-center px-5 rounded-sm border border-gray-300 bg-transparent text-sm font-bold text-gray-700 transition-colors hover:border-[#a21b7e] hover:text-[#a21b7e] cursor-pointer"
+              >
+                Carregar mais álbuns
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

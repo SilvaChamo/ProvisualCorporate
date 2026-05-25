@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-export const ADMIN_LIST_PAGE_SIZE = 6;
+export const ADMIN_LIST_PAGE_SIZE = 10;
 
 interface AdminListPaginationProps {
   page: number;
@@ -32,7 +32,7 @@ export default function AdminListPagination({
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 0}
-          className="inline-flex h-9 items-center gap-1 rounded-lg border border-gray-200 px-3 text-xs font-bold text-gray-600 transition-colors hover:border-[#a21b7e]/30 hover:text-[#a21b7e] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+          className="inline-flex h-9 items-center gap-1 rounded-sm border border-gray-300 bg-transparent px-3 text-xs font-bold text-gray-600 transition-colors hover:border-[#a21b7e] hover:text-[#a21b7e] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
         >
           <ChevronLeft size={14} />
           Anterior
@@ -45,7 +45,7 @@ export default function AdminListPagination({
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages - 1}
           className={cn(
-            "inline-flex h-9 items-center gap-1 rounded-lg border border-gray-200 px-3 text-xs font-bold text-gray-600 transition-colors hover:border-[#a21b7e]/30 hover:text-[#a21b7e] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer",
+            "inline-flex h-9 items-center gap-1 rounded-sm border border-gray-300 bg-transparent px-3 text-xs font-bold text-gray-600 transition-colors hover:border-[#a21b7e] hover:text-[#a21b7e] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer",
           )}
         >
           Seguinte

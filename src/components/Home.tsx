@@ -428,7 +428,7 @@ export default function Home() {
               <SiteSectionLink
                 key={link.href}
                 href={link.href}
-                className="text-[15px] lg:text-base font-normal text-gray-700 transition-colors duration-500 whitespace-nowrap hover:text-[#a21b7e]"
+                className="site-nav-link transition-colors duration-500"
               >
                 {link.label}
               </SiteSectionLink>
@@ -436,10 +436,7 @@ export default function Home() {
           </nav>
 
           <div className="flex items-center justify-end gap-1.5 sm:gap-2">
-            <Link
-              to="/login"
-              className="hidden lg:inline-flex text-[15px] font-normal rounded-full border border-[#a21b7e] px-6 py-1.5 text-[#a21b7e] transition-all duration-500 whitespace-nowrap hover:bg-[#a21b7e]/5"
-            >
+            <Link to="/login" className="site-btn-login hidden lg:inline-flex">
               Entrar
             </Link>
             <button

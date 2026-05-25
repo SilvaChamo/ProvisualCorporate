@@ -1,9 +1,11 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import type { BreadcrumbItem } from "./SiteBreadcrumb.types";
 import SiteBannerSlideshow from "./SiteBannerSlideshow";
 import { DEFAULT_INTERIOR_BANNER } from "../../lib/siteNav";
+import { driveDisplayUrl } from "../../lib/driveImageUrl";
+import { fetchSiteHomeContent } from "../../lib/siteGalleryApi";
 
 interface SitePageHeaderProps {
   title: string;
@@ -45,9 +47,22 @@ export default function SitePageHeader({
   heading,
   description,
 }: SitePageHeaderProps) {
+  const [defaultBanner, setDefaultBanner] = useState(DEFAULT_INTERIOR_BANNER);
   const slideshowImages = bannerImages?.filter(Boolean);
-  const singleImage = bannerImage || (!slideshowImages?.length ? DEFAULT_INTERIOR_BANNER : undefined);
+  const singleImage = bannerImage || (!slideshowImages?.length ? defaultBanner : undefined);
   const isRichBanner = Boolean(kicker || heading || description);
+
+  useEffect(() => {
+    if (bannerImage || slideshowImages?.length) return;
+    fetchSiteHomeContent()
+      .then((content) => {
+        const bg = content.processBackground;
+        if (bg && (bg.includes("/api/drive/") || /^https?:\/\//i.test(bg))) {
+          setDefaultBanner(bg);
+        }
+      })
+      .catch(() => {});
+  }, [bannerImage, slideshowImages?.length]);
 
   return (
     <div className="relative h-[250px] overflow-hidden text-white">
@@ -57,7 +72,7 @@ export default function SitePageHeader({
         <SiteBannerSlideshow images={slideshowImages} />
       ) : singleImage ? (
         <img
-          src={singleImage}
+          src={driveDisplayUrl(singleImage, "lg")}
           alt=""
           aria-hidden="true"
           className="absolute inset-0 h-full w-full object-cover"

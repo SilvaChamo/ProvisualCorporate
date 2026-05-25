@@ -108,7 +108,7 @@ export default function SiteOffCanvasMenu({
                     onClose();
                   }}
                   className={cn(
-                    "rounded-lg px-3 py-2 text-[15px] font-medium transition-colors",
+                    "site-nav-link rounded-lg px-3 py-2",
                     linkClass,
                   )}
                 >
@@ -120,10 +120,8 @@ export default function SiteOffCanvasMenu({
                   to={loginHref}
                   onClick={onClose}
                   className={cn(
-                    "mt-2 self-start rounded-lg border px-3 py-2 text-[15px] font-semibold transition-colors",
-                    tone === "light" || tone === "home-scrolled"
-                      ? "border-[#a21b7e] text-[#a21b7e] hover:bg-[#a21b7e]/5"
-                      : "border-white/60 text-white hover:bg-white/10",
+                    "site-btn-login mt-2 self-start",
+                    tone === "light" || tone === "home-scrolled" ? "" : "bg-white/15 hover:bg-white/25",
                   )}
                 >
                   {loginLabel}
