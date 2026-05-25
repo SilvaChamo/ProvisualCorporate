@@ -794,7 +794,9 @@ async function startServer() {
       }
 
       const requestedSize = Math.min(Math.max(parseInt(String(req.query.sz || "800"), 10) || 800, 200), 1600);
-      const sizeLink = thumbnailLink.replace(/=s\d+/, `=s${requestedSize}`);
+      const crop = req.query.crop === "1" || req.query.crop === "true";
+      const sizeToken = crop ? `s${requestedSize}-c` : `s${requestedSize}`;
+      const sizeLink = thumbnailLink.replace(/=s\d+(-c)?/, `=${sizeToken}`);
 
       // Faz download seguro usando o token de acesso da nossa autenticação
       const tokenResponse = await auth.getAccessToken();

@@ -158,22 +158,24 @@ interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   thumbnailUrl?: string;
   driveId?: string;
   fallbackSize?: 'w100' | 'w500' | 'w1200';
+  crop?: boolean;
   alt?: string;
   className?: string;
 }
 
-function SafeImage({ thumbnailUrl, driveId, fallbackSize = 'w500', alt, className, ...props }: SafeImageProps) {
-  const initialUrl = driveId
-    ? `/api/drive/thumbnail?id=${driveId}`
-    : (thumbnailUrl || '');
+function SafeImage({ thumbnailUrl, driveId, fallbackSize = 'w500', crop = false, alt, className, ...props }: SafeImageProps) {
+  const thumbQuery = driveId
+    ? `/api/drive/thumbnail?id=${encodeURIComponent(driveId)}&sz=800${crop ? "&crop=1" : ""}`
+    : (thumbnailUrl || "");
+  const initialUrl = thumbQuery;
   const [src, setSrc] = useState(initialUrl);
   const [hasFailedOnce, setHasFailedOnce] = useState(false);
   const [hasFailedAlt, setHasFailedAlt] = useState(false);
 
   useEffect(() => {
     const newUrl = driveId
-      ? `/api/drive/thumbnail?id=${driveId}`
-      : (thumbnailUrl || '');
+      ? `/api/drive/thumbnail?id=${encodeURIComponent(driveId)}&sz=800${crop ? "&crop=1" : ""}`
+      : (thumbnailUrl || "");
     setSrc(newUrl);
     setHasFailedOnce(false);
     setHasFailedAlt(false);
@@ -4966,14 +4968,15 @@ function AssetCard({
         </AnimatePresence>
       </div>
 
-      <div className="w-full h-full flex items-center justify-center bg-gray-50">
+      <div className={cn("w-full h-full flex items-center justify-center overflow-hidden", asset.type === "image" ? "bg-gray-50" : "bg-gray-50")}>
         {((asset.type === 'image' || asset.type === 'video' || asset.type === 'document') && (asset.thumbnailUrl || asset.driveId)) ? (
           <SafeImage
             thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s500') : undefined}
             driveId={asset.driveId}
             fallbackSize="w500"
+            crop={asset.type === "image"}
             alt={displayDriveName(asset.name)}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            className="w-full h-full min-w-full min-h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
           <Icon size={40} className={cn("transition-all duration-300", iconColor)} />

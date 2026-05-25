@@ -754,7 +754,9 @@ app.get("/api/drive/thumbnail", async (req, res) => {
     if (!thumbnailLink) return res.status(404).send("Thumbnail não disponível");
 
     const requestedSize = Math.min(Math.max(parseInt(String(req.query.sz || "800"), 10) || 800, 200), 1600);
-    const sizeLink = thumbnailLink.replace(/=s\d+/, `=s${requestedSize}`);
+    const crop = req.query.crop === "1" || req.query.crop === "true";
+    const sizeToken = crop ? `s${requestedSize}-c` : `s${requestedSize}`;
+    const sizeLink = thumbnailLink.replace(/=s\d+(-c)?/, `=${sizeToken}`);
     const tokenResponse = await auth.getAccessToken();
     const imageResponse = await fetch(sizeLink, {
       headers: { Authorization: `Bearer ${tokenResponse.token}` },

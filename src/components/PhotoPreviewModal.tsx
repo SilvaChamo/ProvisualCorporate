@@ -1,5 +1,5 @@
 import { useEffect, useState, type ImgHTMLAttributes } from "react";
-import { ChevronLeft, ChevronRight, Download, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Maximize2, Plus, Shrink } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "motion/react";
 import { displayDriveName } from "../lib/utils";
@@ -33,10 +33,10 @@ interface SafeImageProps extends ImgHTMLAttributes<HTMLImageElement> {
 
 function SafeImage({ item, alt, className, ...props }: SafeImageProps) {
   const driveId = item.driveId || (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
-  const initialUrl = driveId
+  const previewUrl = driveId
     ? `/api/drive/thumbnail?id=${driveId}&sz=1200`
     : item.thumbnailUrl?.replace("=s220", "=s1200") || item.srcUrl || "";
-  const [src, setSrc] = useState(initialUrl);
+  const [src, setSrc] = useState(previewUrl);
   const [failStep, setFailStep] = useState(0);
 
   useEffect(() => {
@@ -136,6 +136,11 @@ export default function PhotoPreviewModal({
   const hasNext = activeIndex < items.length - 1;
   const showNav = items.length > 1;
   const [downloading, setDownloading] = useState(false);
+  const [actualSize, setActualSize] = useState(false);
+
+  useEffect(() => {
+    setActualSize(false);
+  }, [activeIndex, item?.id]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -161,7 +166,7 @@ export default function PhotoPreviewModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-4 md:p-6"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 p-4 md:p-6 [backdrop-filter:none]"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -169,7 +174,7 @@ export default function PhotoPreviewModal({
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-[#18191a] max-w-4xl w-full h-[75vh] md:h-[70vh] rounded-[10px] overflow-hidden flex flex-col shadow-2xl relative border border-white/5"
+        className="bg-[#18191a] max-w-4xl w-full h-[75vh] md:h-[70vh] rounded-[10px] overflow-hidden flex flex-col shadow-[0_8px_40px_rgba(0,0,0,0.45)] relative"
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -207,7 +212,11 @@ export default function PhotoPreviewModal({
           {item.type === "image" ? (
             <SafeImage
               item={item}
-              className="w-full h-full object-cover"
+              className={
+                actualSize
+                  ? "max-w-full max-h-full w-auto h-auto object-contain"
+                  : "w-full h-full object-cover"
+              }
               alt={displayDriveName(item.name)}
             />
           ) : previewSrc ? (
@@ -232,20 +241,36 @@ export default function PhotoPreviewModal({
             </span>
           </div>
 
-          <button
-            type="button"
-            disabled={downloading}
-            onClick={(event) => {
-              event.stopPropagation();
-              setDownloading(true);
-              handleDownload(item);
-              window.setTimeout(() => setDownloading(false), 1200);
-            }}
-            className="flex items-center gap-1.5 bg-transparent hover:text-[#a21b7e] text-white px-2 py-1.5 rounded-none text-xs font-bold transition-all cursor-pointer select-none border-none shadow-none disabled:opacity-60 shrink-0"
-          >
-            <Download size={14} />
-            <span>{downloading ? "A transferir..." : "Baixar"}</span>
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            {item.type === "image" && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setActualSize((value) => !value);
+                }}
+                className="flex items-center gap-1.5 bg-transparent hover:text-[#a21b7e] text-white px-2 py-1.5 rounded-none text-xs font-bold transition-all cursor-pointer select-none border-none shadow-none"
+              >
+                {actualSize ? <Shrink size={14} /> : <Maximize2 size={14} />}
+                <span>{actualSize ? "Preencher ecrã" : "Tamanho real"}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              disabled={downloading}
+              onClick={(event) => {
+                event.stopPropagation();
+                setDownloading(true);
+                handleDownload(item);
+                window.setTimeout(() => setDownloading(false), 1200);
+              }}
+              className="flex items-center gap-1.5 bg-transparent hover:text-[#a21b7e] text-white px-2 py-1.5 rounded-none text-xs font-bold transition-all cursor-pointer select-none border-none shadow-none disabled:opacity-60"
+            >
+              <Download size={14} />
+              <span>{downloading ? "A transferir..." : "Baixar"}</span>
+            </button>
+          </div>
         </div>
       </motion.div>
     </motion.div>
