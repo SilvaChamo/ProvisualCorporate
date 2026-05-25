@@ -481,7 +481,12 @@ export default function Dashboard() {
         const response = await fetch("/api/drive/auth/status");
         if (response.ok) {
           const data = await response.json();
-          setDriveStatus(data);
+          setDriveStatus((prev) => {
+            if (data.connected && data.type === "oauth2" && (!prev?.connected || prev.type !== "oauth2")) {
+              window.dispatchEvent(new CustomEvent("drive-auth-changed"));
+            }
+            return data;
+          });
         }
       } catch (err) {
         console.error("Erro ao buscar status do Drive:", err);
@@ -1754,6 +1759,23 @@ export default function Dashboard() {
   const previewableAssets = useMemo(
     () => displayedAssets.filter((asset) => asset.type !== "folder"),
     [displayedAssets],
+  );
+
+  const previewSelection = useMemo(
+    () => ({
+      selectedIds: selectedAssetIds,
+      onToggle: handleToggleBulkSelect,
+      onSelectAllVisible: () => {
+        setSelectedAssetIds(displayedAssets.map((asset) => asset.id));
+      },
+      onSelectAllImages: () => {
+        setSelectedAssetIds(
+          displayedAssets.filter((asset) => asset.type === "image").map((asset) => asset.id),
+        );
+      },
+      onClear: clearAllSelection,
+    }),
+    [selectedAssetIds, displayedAssets],
   );
 
   const previewFolderLabel = useMemo(() => {
@@ -3691,6 +3713,36 @@ export default function Dashboard() {
                 Mover para Lixeira
               </button>
 
+              {/* Bulk selection menu */}
+              <div className="relative group/bulk-select">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-md text-xs font-bold text-gray-600 transition-colors cursor-pointer select-none"
+                >
+                  Selecionar
+                  <ChevronDown size={12} className="text-gray-400" />
+                </button>
+                <div className="absolute bottom-[100%] left-0 mb-2 w-52 bg-white border border-gray-200 shadow-lg rounded-md py-1 z-[110] hidden group-hover/bulk-select:block">
+                  <div className="px-3 py-1.5 text-[10px] font-black text-gray-300 uppercase tracking-wider border-b border-gray-100 mb-1">
+                    Selecção em massa
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => previewSelection.onSelectAllVisible()}
+                    className="w-full px-3 py-2 text-left text-xs font-bold text-gray-600 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] transition-colors cursor-pointer"
+                  >
+                    Selecionar todas visíveis
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => previewSelection.onSelectAllImages()}
+                    className="w-full px-3 py-2 text-left text-xs font-bold text-gray-600 hover:bg-[#a21b7e]/5 hover:text-[#a21b7e] transition-colors cursor-pointer"
+                  >
+                    Selecionar todas as imagens
+                  </button>
+                </div>
+              </div>
+
               {/* Clear Selection */}
               <button
                 onClick={clearAllSelection}
@@ -3711,6 +3763,7 @@ export default function Dashboard() {
               contextLabel={previewFolderLabel}
               onClose={() => setPreviewAsset(null)}
               onChange={setPreviewAsset}
+              selection={previewSelection}
             />
           )}
         </AnimatePresence>
@@ -4870,14 +4923,17 @@ function AssetCard({
         </AnimatePresence>
       </div>
 
-      <div className="w-full h-full flex items-center justify-center bg-gray-50">
+      <div className={cn("w-full h-full flex items-center justify-center", asset.type === "image" ? "bg-neutral-900" : "bg-gray-50")}>
         {((asset.type === 'image' || asset.type === 'video' || asset.type === 'document') && (asset.thumbnailUrl || asset.driveId)) ? (
           <SafeImage
             thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s500') : undefined}
             driveId={asset.driveId}
             fallbackSize="w500"
             alt={displayDriveName(asset.name)}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            className={cn(
+              "w-full h-full transition-transform duration-700 group-hover:scale-110",
+              asset.type === "image" ? "object-contain" : "object-cover",
+            )}
           />
         ) : (
           <Icon size={40} className={cn("transition-all duration-300", iconColor)} />

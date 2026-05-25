@@ -240,9 +240,17 @@ export function applyDriveServiceImages<T extends { slug: string; image: string 
 }
 
 export async function fetchAdminGalleryAlbums(): Promise<SiteDriveAlbum[]> {
-  const res = await fetch("/api/site/gallery?summary=1");
-  if (!res.ok) throw new Error("Erro ao carregar álbuns.");
-  const data = await res.json();
+  const res = await fetch("/api/site/gallery?summary=1", { cache: "no-store" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data.error || data.message;
+    if (message === "invalid_grant") {
+      throw new Error(
+        "Ligação ao Google Drive expirou. Reconecte em Google Drive → Conectar e actualize esta página.",
+      );
+    }
+    throw new Error(message || "Erro ao carregar álbuns.");
+  }
   return data.albums || [];
 }
 

@@ -86,6 +86,22 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
   }, []);
 
   useEffect(() => {
+    const reload = () => {
+      loadAlbums({ silent: true });
+    };
+    const onFocus = () => {
+      if (error) reload();
+    };
+
+    window.addEventListener("drive-auth-changed", reload);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("drive-auth-changed", reload);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [error]);
+
+  useEffect(() => {
     setVisibleAlbumCount(ALBUMS_INITIAL_COUNT);
   }, [albums.length]);
 

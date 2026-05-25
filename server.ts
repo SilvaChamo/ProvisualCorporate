@@ -31,6 +31,7 @@ import {
 import {
   getCachedGoogleAuth,
   getCachedThumbnailMeta,
+  clearGoogleAuthCache,
   IMAGE_CACHE_CONTROL,
   HOME_API_CACHE_CONTROL,
 } from "./lib/driveServerCache.js";
@@ -38,6 +39,13 @@ import {
   listAllFilesInFolder,
   streamDriveFileDownload,
 } from "./lib/driveDownloadHelpers.js";
+import {
+  getGoogleOAuthRedirectUri,
+  isInvalidGrantError,
+  mergeOAuthTokens,
+  buildOAuthClient,
+  clearStoredOAuthTokens,
+} from "./lib/googleOAuthRedirect.js";
 
 async function startServer() {
   // Ajudar o servidor compilado a encontrar os módulos
@@ -121,15 +129,30 @@ async function startServer() {
 
   // ── Biblioteca de imagens do site (Google Drive > site) ──
   app.get("/api/site/gallery", async (req, res) => {
-    try {
+    const summary = req.query.summary === "1" || req.query.summary === "true";
+
+    const loadGallery = async () => {
       const { auth } = await getGoogleAuth();
       const drive = google.drive({ version: "v3", auth });
-      const summary = req.query.summary === "1" || req.query.summary === "true";
-      const data = summary
+      return summary
         ? await listSiteGalleryAlbumsSummary(drive, supabase)
         : await listSiteGalleryAlbumsWithMeta(drive, supabase);
+    };
+
+    try {
+      const data = await loadGallery();
       res.json(data);
     } catch (err: any) {
+      if (isInvalidGrantError(err)) {
+        clearGoogleAuthCache();
+        try {
+          const data = await loadGallery();
+          return res.json(data);
+        } catch (retryErr: any) {
+          console.error("Site gallery list retry error:", retryErr);
+          return res.status(500).json({ error: retryErr.message || "Erro ao listar galeria do site." });
+        }
+      }
       console.error("Site gallery list error:", err);
       res.status(500).json({ error: err.message || "Erro ao listar galeria do site." });
     }
@@ -385,8 +408,8 @@ async function startServer() {
 
   // Utilitário para inicializar o cliente Google Auth (Híbrido)
   async function createGoogleAuth() {
-    
-    // 1. Tentar ler as credenciais OAuth 2.0 pessoais do Silva
+    const localTokensPath = path.join(process.cwd(), "google-tokens.json");
+
     let oauthKeys: any = null;
     try {
       if (fs.existsSync("./google-oauth.json")) {
@@ -394,32 +417,34 @@ async function startServer() {
       } else if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         oauthKeys = {
           client_id: process.env.GOOGLE_CLIENT_ID,
-          client_secret: process.env.GOOGLE_CLIENT_SECRET
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
         };
       }
-    } catch (err) {
-      // Ignorar erro
-    }
+    } catch (_) {}
 
-    // Se tivermos as credenciais OAuth do Silva
-    if (oauthKeys && oauthKeys.client_id && oauthKeys.client_secret) {
+    if (oauthKeys?.client_id && oauthKeys?.client_secret && !String(oauthKeys.client_id).includes("COLE_AQUI")) {
       try {
         let tokens: any = null;
-        
-        // Se existir localmente no disco, carrega do disco
-        if (fs.existsSync("./google-tokens.json")) {
-          tokens = JSON.parse(fs.readFileSync("./google-tokens.json", "utf-8"));
-        } else {
-          // Caso contrário, tenta recuperar do Supabase (essencial para persistência na Vercel)
+
+        if (fs.existsSync(localTokensPath)) {
           try {
-            const { data, error } = await supabase.from('settings').select('value').eq('key', 'google_drive_tokens').single();
-            if (!error && data && data.value) {
+            tokens = JSON.parse(fs.readFileSync(localTokensPath, "utf-8"));
+          } catch (_) {}
+        }
+
+        if (!tokens) {
+          try {
+            const { data, error } = await supabase
+              .from("settings")
+              .select("value")
+              .eq("key", "google_drive_tokens")
+              .single();
+            if (!error && data?.value) {
               tokens = data.value;
-              // Salva localmente em cache temporário de arquivo se possível
               try {
-                fs.writeFileSync("./google-tokens.json", JSON.stringify(tokens, null, 2));
+                fs.writeFileSync(localTokensPath, JSON.stringify(tokens, null, 2));
               } catch (_) {}
-              console.log("Tokens do Google Drive recuperados com absoluto sucesso do Supabase.");
+              console.log("Tokens do Google Drive recuperados com sucesso do Supabase.");
             }
           } catch (dbErr) {
             console.warn("Erro ao buscar tokens do Supabase:", dbErr);
@@ -427,57 +452,58 @@ async function startServer() {
         }
 
         if (tokens) {
-          const oauth2Client = new google.auth.OAuth2(
-            oauthKeys.client_id,
-            oauthKeys.client_secret,
-            "http://localhost:3333/api/drive/auth/callback"
-          );
-          oauth2Client.setCredentials(tokens);
-          
-          // Listener para atualizar tokens automaticamente se expirarem
-          oauth2Client.on('tokens', async (newTokens: any) => {
-            try {
-              let currentTokens = {};
-              if (fs.existsSync("./google-tokens.json")) {
-                currentTokens = JSON.parse(fs.readFileSync("./google-tokens.json", "utf-8"));
-              }
-              const mergedTokens = { ...currentTokens, ...newTokens };
-              try {
-                fs.writeFileSync("./google-tokens.json", JSON.stringify(mergedTokens, null, 2));
-              } catch (_) {}
-              
-              try {
-                await supabase.from('settings').upsert({ key: 'google_drive_tokens', value: mergedTokens });
-              } catch (dbErr) {
-                console.error("Erro ao atualizar tokens no Supabase:", dbErr);
-              }
-              console.log("Tokens pessoais do Google Drive atualizados e salvos com sucesso localmente e no Supabase.");
-            } catch (e) {
-              console.error("Erro ao salvar tokens atualizados:", e);
-            }
-          });
+          try {
+            const redirectUri = getGoogleOAuthRedirectUri();
+            const oauth2Client = await buildOAuthClient(
+              oauthKeys,
+              tokens,
+              redirectUri,
+              async (mergedTokens) => {
+                try {
+                  fs.writeFileSync(localTokensPath, JSON.stringify(mergedTokens, null, 2));
+                } catch (_) {}
+                try {
+                  await supabase.from("settings").upsert({
+                    key: "google_drive_tokens",
+                    value: mergedTokens,
+                  });
+                } catch (dbErr) {
+                  console.error("Erro ao atualizar tokens no Supabase:", dbErr);
+                }
+              },
+            );
 
-          return { auth: oauth2Client, type: "oauth2" };
+            return { auth: oauth2Client, type: "oauth2" };
+          } catch (err: any) {
+            if (isInvalidGrantError(err)) {
+              console.warn("Tokens OAuth inválidos — a usar conta de serviço:", err.message);
+              await clearStoredOAuthTokens(supabase, localTokensPath, fs);
+              clearGoogleAuthCache();
+            } else {
+              console.warn("Erro OAuth2, fallback para conta de serviço:", err.message);
+            }
+          }
         }
       } catch (err) {
         console.warn("Erro ao configurar cliente OAuth2 pessoal, fazendo fallback para Conta de Serviço:", err);
       }
     }
 
-    // 2. Fallback: Usar a Conta de Serviço padrão (Google API v3)
     let serviceKeys;
     if (process.env.GOOGLE_KEYS) {
       serviceKeys = JSON.parse(process.env.GOOGLE_KEYS);
     } else if (fs.existsSync("./provisual-corporate-a16cee3d2250.json")) {
       serviceKeys = JSON.parse(fs.readFileSync("./provisual-corporate-a16cee3d2250.json", "utf-8"));
     } else {
-      throw new Error("Nenhuma credencial do Google Drive configurada. Adicione as chaves no painel do servidor ou carregue o ficheiro JSON de credenciais.");
+      throw new Error(
+        "Nenhuma credencial do Google Drive configurada. Adicione as chaves no painel do servidor ou carregue o ficheiro JSON de credenciais.",
+      );
     }
 
     const auth = new google.auth.JWT({
       email: serviceKeys.client_email,
       key: serviceKeys.private_key,
-      scopes: ['https://www.googleapis.com/auth/drive']
+      scopes: ["https://www.googleapis.com/auth/drive"],
     });
 
     return { auth, type: "service_account" };
@@ -978,15 +1004,21 @@ async function startServer() {
       );
 
       const { tokens } = await oauth2Client.getToken(code as string);
-      fs.writeFileSync("./google-tokens.json", JSON.stringify(tokens, null, 2));
+      const existing = fs.existsSync("./google-tokens.json")
+        ? JSON.parse(fs.readFileSync("./google-tokens.json", "utf-8"))
+        : {};
+      const mergedTokens = mergeOAuthTokens(existing, tokens);
+      fs.writeFileSync("./google-tokens.json", JSON.stringify(mergedTokens, null, 2));
 
       // Persistir também no Supabase para resiliência na Vercel
       try {
-        await supabase.from('settings').upsert({ key: 'google_drive_tokens', value: tokens });
+        await supabase.from('settings').upsert({ key: 'google_drive_tokens', value: mergedTokens });
         console.log("Tokens de acesso persistidos com sucesso no Supabase.");
       } catch (dbErr) {
         console.error("Erro ao salvar tokens no Supabase:", dbErr);
       }
+
+      clearGoogleAuthCache();
 
       res.send(`
         <html>

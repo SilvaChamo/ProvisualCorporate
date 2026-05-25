@@ -262,16 +262,32 @@ app.put("/api/site/home", async (req, res) => {
 });
 
 app.get("/api/site/gallery", async (req, res) => {
-  try {
+  const summary = req.query.summary === "1" || req.query.summary === "true";
+
+  const loadGallery = async () => {
     const { auth } = await getGoogleAuth();
     const drive = google.drive({ version: "v3", auth });
-    const summary = req.query.summary === "1" || req.query.summary === "true";
-    const data = summary
+    return summary
       ? await listSiteGalleryAlbumsSummary(drive, supabase)
       : await listSiteGalleryAlbumsWithMeta(drive, supabase);
+  };
+
+  try {
+    const data = await loadGallery();
     res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
     res.json(data);
   } catch (err) {
+    if (isInvalidGrantError(err)) {
+      clearGoogleAuthCache();
+      try {
+        const data = await loadGallery();
+        res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
+        return res.json(data);
+      } catch (retryErr) {
+        console.error("Site gallery list retry error:", retryErr);
+        return respondDriveAuthError(res, retryErr);
+      }
+    }
     console.error("Site gallery list error:", err);
     res.status(500).json({ error: err.message || "Erro ao listar galeria do site." });
   }
@@ -931,6 +947,8 @@ app.get("/api/drive/auth/callback", async (req, res) => {
     } catch (dbErr) {
       console.error("Erro ao salvar tokens no Supabase:", dbErr);
     }
+
+    clearGoogleAuthCache();
 
     res.send(`
       <html>
