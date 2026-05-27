@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import SiteShell from "./SiteShell";
@@ -25,6 +25,12 @@ export default function GaleriaAlbumPage() {
   const [loading, setLoading] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const prevPageRef = useRef(1);
+
+  useEffect(() => {
+    setPage(1);
+    prevPageRef.current = 0;
+  }, [slug]);
 
   useEffect(() => {
     if (!slug) return;
@@ -51,6 +57,23 @@ export default function GaleriaAlbumPage() {
     };
   }, [slug, staticAlbum]);
 
+  const totalPages = Math.max(1, Math.ceil(photos.length / PHOTOS_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+
+  const scrollToPageTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  const goToPage = useCallback((nextPage: number) => {
+    setPage(nextPage);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (loading || !albumMeta || prevPageRef.current === safePage) return;
+    prevPageRef.current = safePage;
+    scrollToPageTop();
+  }, [safePage, loading, albumMeta, scrollToPageTop]);
+
   if (!albumMeta && !loading) {
     return (
       <SiteShell
@@ -69,8 +92,6 @@ export default function GaleriaAlbumPage() {
 
   const album = albumMeta!;
   const related = allAlbums.filter((a) => a.slug !== album.slug);
-  const totalPages = Math.max(1, Math.ceil(photos.length / PHOTOS_PER_PAGE));
-  const safePage = Math.min(page, totalPages);
   const start = (safePage - 1) * PHOTOS_PER_PAGE;
   const pagePhotos = photos.slice(start, start + PHOTOS_PER_PAGE);
 
@@ -126,7 +147,7 @@ export default function GaleriaAlbumPage() {
             >
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => goToPage(Math.max(1, safePage - 1))}
                 disabled={safePage === 1}
                 className="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 hover:border-[#a21b7e] hover:text-[#a21b7e] disabled:opacity-40 disabled:pointer-events-none transition-colors"
               >
@@ -138,7 +159,7 @@ export default function GaleriaAlbumPage() {
                 <button
                   key={n}
                   type="button"
-                  onClick={() => setPage(n)}
+                  onClick={() => goToPage(n)}
                   aria-current={safePage === n ? "page" : undefined}
                   className={`min-w-[2.5rem] h-10 px-3 text-sm rounded-lg border transition-colors ${
                     safePage === n
@@ -152,7 +173,7 @@ export default function GaleriaAlbumPage() {
 
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => goToPage(Math.min(totalPages, safePage + 1))}
                 disabled={safePage === totalPages}
                 className="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 hover:border-[#a21b7e] hover:text-[#a21b7e] disabled:opacity-40 disabled:pointer-events-none transition-colors"
               >
