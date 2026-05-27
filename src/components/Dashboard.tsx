@@ -485,6 +485,7 @@ export default function Dashboard() {
   }, [activeTab]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
   const [uploadQueue, setUploadQueue] = useState<{ id: string; name: string; progress: number; status: 'uploading' | 'completed' | 'error' }[]>([]);
@@ -1730,6 +1731,55 @@ export default function Dashboard() {
     }
   };
 
+  const isTrashView = activeTab === "google_drive" && driveFilterType === "trashed";
+
+  const handleEmptyTrash = async () => {
+    const itemCount = filteredAssets.length + filteredFolders.length;
+    if (
+      !confirm(
+        `Eliminar permanentemente ${itemCount > 0 ? itemCount + " item(ns)" : "todos os itens"} da lixeira?\n\nEsta ação não pode ser desfeita e remove os ficheiros do Google Drive.`
+      )
+    ) {
+      return;
+    }
+
+    setIsEmptyingTrash(true);
+    try {
+      const response = await fetch("/api/drive/empty-trash", { method: "POST" });
+      if (!response.ok) {
+        let errMsg = "Erro ao esvaziar lixeira";
+        try {
+          const errData = await response.json();
+          errMsg = errData.error || errMsg;
+        } catch (_) { /* ignore */ }
+        throw new Error(errMsg);
+      }
+
+      const result = await response.json();
+      const trashedAssets = assets.filter((a) => a.trashed || a.folderId === "trash");
+      const trashedFolders = folders.filter((f) => f.trashed || f.parentId === "trash");
+
+      await Promise.all([
+        ...trashedAssets.map((a) => deleteDoc(doc(db, "assets", a.id))),
+        ...trashedFolders.map((f) => deleteDoc(doc(db, "folders", f.id))),
+      ]);
+
+      setDriveBrowseCache((prev) => {
+        const next = { ...prev };
+        delete next.trash;
+        return next;
+      });
+
+      await handleGoogleSync(undefined, "trashed", true, false);
+      alert(`Lixeira esvaziada: ${result.deleted ?? 0} item(ns) eliminado(s) permanentemente.`);
+    } catch (error: any) {
+      console.error("Erro ao esvaziar lixeira:", error);
+      alert("Erro ao esvaziar lixeira: " + (error?.message || "Erro desconhecido"));
+    } finally {
+      setIsEmptyingTrash(false);
+    }
+  };
+
   const filteredAssets = useMemo(() => {
     let result = assets;
 
@@ -2293,6 +2343,24 @@ export default function Dashboard() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {isTrashView ? (
+              userProfile?.role === "admin" && (
+                <button
+                  type="button"
+                  onClick={handleEmptyTrash}
+                  disabled={isEmptyingTrash || (filteredAssets.length === 0 && filteredFolders.length === 0)}
+                  className={cn(
+                    "flex items-center justify-center gap-2 h-9 px-3 text-sm font-bold transition-colors cursor-pointer bg-transparent border border-red-200 text-red-600 hover:bg-red-50 rounded-sm shrink-0",
+                    (isEmptyingTrash || (filteredAssets.length === 0 && filteredFolders.length === 0)) &&
+                      "opacity-50 cursor-not-allowed hover:bg-transparent",
+                  )}
+                >
+                  <Trash2 size={16} className={cn(isEmptyingTrash && "animate-pulse")} />
+                  {isEmptyingTrash ? "A esvaziar..." : "Esvaziar lixeira"}
+                </button>
+              )
+            ) : (
+              <>
             <div className="relative" ref={uploadMenuRef}>
               <button
                 onClick={() => {
@@ -2359,6 +2427,8 @@ export default function Dashboard() {
                 <FolderPlus size={16} />
                 Nova pasta
               </button>
+            )}
+              </>
             )}
 
             <div className="hidden md:block h-5 w-px bg-gray-200 mx-1" />
@@ -3013,12 +3083,37 @@ export default function Dashboard() {
                                         <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
-                                            if (confirm("Tem certeza que deseja mover a pasta " + folder.name + " para o lixo?")) {
+                                            if (isTrashView) {
+                                              if (!confirm(`Eliminar permanentemente a pasta "${folder.name}"? Esta ação não pode ser desfeita.`)) {
+                                                setActiveFolderMenuId(null);
+                                                return;
+                                              }
+                                              try {
+                                                setIsProcessingAction(true);
+                                                sessionStorage.setItem('action_in_progress', 'true');
+                                                const deleteResponse = await fetch('/api/drive/delete', {
+                                                  method: 'POST',
+                                                  headers: { 'Content-Type': 'application/json' },
+                                                  body: JSON.stringify({ fileId: folder.id, permanent: true })
+                                                });
+                                                if (!deleteResponse.ok) {
+                                                  let errMsg = 'Erro desconhecido';
+                                                  try { const errData = await deleteResponse.json(); errMsg = errData.error || errMsg; } catch (_) { /* ignore */ }
+                                                  throw new Error(errMsg);
+                                                }
+                                                await deleteDoc(doc(db, "folders", folder.id));
+                                                setIsProcessingAction(false);
+                                                sessionStorage.removeItem('action_in_progress');
+                                              } catch (err: any) {
+                                                alert("Erro ao eliminar permanentemente: " + err.message);
+                                                setIsProcessingAction(false);
+                                                sessionStorage.removeItem('action_in_progress');
+                                              }
+                                            } else if (confirm("Tem certeza que deseja mover a pasta " + folder.name + " para o lixo?")) {
                                               try {
                                                 setIsProcessingAction(true);
                                                 sessionStorage.setItem('action_in_progress', 'true');
 
-                                                // Mover fisicamente no Google Drive
                                                 if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
                                                   const trashResponse = await fetch('/api/drive/update', {
                                                     method: 'POST',
@@ -3049,7 +3144,9 @@ export default function Dashboard() {
                                         >
                                           <div className="flex items-center gap-3">
                                             <Trash2 size={15} className="text-red-400 group-hover:text-red-600 transition-colors shrink-0" />
-                                            <span className="text-red-600 group-hover:text-red-700 transition-colors">Mover para o lixo</span>
+                                            <span className="text-red-600 group-hover:text-red-700 transition-colors">
+                                              {isTrashView ? "Eliminar permanentemente" : "Mover para o lixo"}
+                                            </span>
                                           </div>
                                         </button>
                                       </motion.div>
@@ -3102,6 +3199,7 @@ export default function Dashboard() {
                                   sessionStorage.removeItem('action_in_progress');
                                 }
                               }}
+                              isTrashView={isTrashView}
                             />
                           ))}
                         </div>
@@ -3566,12 +3664,36 @@ export default function Dashboard() {
                                     <button
                                       onClick={async (e) => {
                                         e.stopPropagation();
-                                        if (confirm("Tem certeza que deseja mover a pasta " + folder.name + " para o lixo?")) {
+                                        if (isTrashView) {
+                                          if (!confirm(`Eliminar permanentemente a pasta "${folder.name}"? Esta ação não pode ser desfeita.`)) {
+                                            setActiveFolderMenuId(null);
+                                            return;
+                                          }
+                                          try {
+                                            setIsProcessingAction(true);
+                                            sessionStorage.setItem('action_in_progress', 'true');
+                                            const deleteResponse = await fetch('/api/drive/delete', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ fileId: folder.id, permanent: true })
+                                            });
+                                            if (!deleteResponse.ok) {
+                                              let errMsg = 'Erro desconhecido';
+                                              try { const errData = await deleteResponse.json(); errMsg = errData.error || errMsg; } catch (_) { /* ignore */ }
+                                              throw new Error(errMsg);
+                                            }
+                                            await deleteDoc(doc(db, "folders", folder.id));
+                                            handleActionSuccess();
+                                          } catch (err: any) {
+                                            alert("Erro ao eliminar permanentemente: " + err.message);
+                                            setIsProcessingAction(false);
+                                            sessionStorage.removeItem('action_in_progress');
+                                          }
+                                        } else if (confirm("Tem certeza que deseja mover a pasta " + folder.name + " para o lixo?")) {
                                           try {
                                             setIsProcessingAction(true);
                                             sessionStorage.setItem('action_in_progress', 'true');
 
-                                            // Mover fisicamente no Google Drive
                                             if ((folder as any).ownerId === 'google-drive' || folder.id.length > 20) {
                                               const trashResponse = await fetch('/api/drive/update', {
                                                 method: 'POST',
@@ -3601,7 +3723,9 @@ export default function Dashboard() {
                                     >
                                       <div className="flex items-center gap-3">
                                         <Trash2 size={15} className="text-red-400 group-hover:text-red-600 transition-colors shrink-0" />
-                                        <span className="text-red-600 group-hover:text-red-700 transition-colors">Mover para o lixo</span>
+                                        <span className="text-red-600 group-hover:text-red-700 transition-colors">
+                                          {isTrashView ? "Eliminar permanentemente" : "Mover para o lixo"}
+                                        </span>
                                       </div>
                                     </button>
                                   </motion.div>
@@ -3649,6 +3773,7 @@ export default function Dashboard() {
                             sessionStorage.removeItem('action_in_progress');
                           }
                         }}
+                        isTrashView={isTrashView}
                       />
                     ))}
                   </div>
@@ -4505,6 +4630,7 @@ interface AssetCardProps {
   onDistribute?: (item: { id: string, type: string, currentName: string }) => void;
   setOrganizarModal: (val: any) => void;
   accounts?: any[];
+  isTrashView?: boolean;
 }
 
 function AssetCard({
@@ -4520,7 +4646,8 @@ function AssetCard({
   hasSelectionActive = false,
   onDragStart,
   setOrganizarModal,
-  accounts = []
+  accounts = [],
+  isTrashView = false,
 }: AssetCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar' | 'atribuir'>('none');
@@ -4988,32 +5115,47 @@ function AssetCard({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm("Tem certeza que deseja eliminar " + asset.name + "?")) {
+                    const confirmMsg = isTrashView
+                      ? `Eliminar permanentemente "${asset.name}"? Esta ação não pode ser desfeita.`
+                      : `Tem certeza que deseja eliminar ${asset.name}?`;
+                    if (confirm(confirmMsg)) {
                       setShowMenu(false);
                       runAction(async () => {
-                        // 1. Mover para a Lixeira fisicamente no Google Drive real
-                        if (asset.driveId) {
+                        const driveId = asset.driveId || asset.id;
+                        if (driveId) {
                           try {
-                            const updateResponse = await fetch('/api/drive/update', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                fileId: asset.driveId,
-                                trashed: true
-                              })
-                            });
-                            if (!updateResponse.ok) {
-                              const errData = await updateResponse.json();
-                              console.warn("Erro ao mover no drive:", errData.error);
+                            if (isTrashView) {
+                              const deleteResponse = await fetch('/api/drive/delete', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ fileId: driveId, permanent: true })
+                              });
+                              if (!deleteResponse.ok) {
+                                const errData = await deleteResponse.json();
+                                throw new Error(errData.error || 'Erro ao eliminar no Drive');
+                              }
+                            } else {
+                              const updateResponse = await fetch('/api/drive/update', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ fileId: driveId, trashed: true })
+                              });
+                              if (!updateResponse.ok) {
+                                const errData = await updateResponse.json();
+                                console.warn("Erro ao mover no drive:", errData.error);
+                              }
                             }
                           } catch (driveErr) {
-                            console.warn("Falha física ao lixar no Drive, prosseguindo localmente:", driveErr);
+                            console.warn("Falha na operação no Drive:", driveErr);
+                            if (isTrashView) throw driveErr;
                           }
                         }
 
-                        // 2. Atualizar no Firestore
-                        await updateDoc(doc(db, "assets", asset.id), { folderId: "trash", trashed: true });
-                        /* window.location.reload() removed */
+                        if (isTrashView) {
+                          await deleteDoc(doc(db, "assets", asset.id));
+                        } else {
+                          await updateDoc(doc(db, "assets", asset.id), { folderId: "trash", trashed: true });
+                        }
                       });
                     } else {
                       setShowMenu(false);
@@ -5023,9 +5165,13 @@ function AssetCard({
                 >
                   <div className="flex items-center gap-3">
                     <Trash2 size={15} className="text-red-400 group-hover:text-red-600 transition-colors shrink-0" />
-                    <span className="group-hover:text-red-600 transition-colors font-bold text-red-500">Eliminar</span>
+                    <span className="group-hover:text-red-600 transition-colors font-bold text-red-500">
+                      {isTrashView ? "Eliminar permanentemente" : "Eliminar"}
+                    </span>
                   </div>
-                  <span className="text-[10px] text-red-300 font-mono tracking-tighter group-hover:text-red-500 transition-colors">Delete</span>
+                  <span className="text-[10px] text-red-300 font-mono tracking-tighter group-hover:text-red-500 transition-colors">
+                    {isTrashView ? "Delete forever" : "Delete"}
+                  </span>
                 </button>
               </motion.div>
             </>
@@ -5076,6 +5222,7 @@ interface AssetRowProps {
   onDistribute?: (item: { id: string, type: string, currentName: string }) => void;
   setOrganizarModal: (val: any) => void;
   accounts?: any[];
+  isTrashView?: boolean;
 }
 
 function AssetRow({
@@ -5092,7 +5239,8 @@ function AssetRow({
   onDragStart,
   onDistribute,
   setOrganizarModal,
-  accounts = []
+  accounts = [],
+  isTrashView = false,
 }: AssetRowProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'partilhar' | 'organizar' | 'atribuir'>('none');
@@ -5581,32 +5729,47 @@ function AssetRow({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm("Tem certeza que deseja eliminar " + asset.name + "?")) {
+                      const confirmMsg = isTrashView
+                        ? `Eliminar permanentemente "${asset.name}"? Esta ação não pode ser desfeita.`
+                        : `Tem certeza que deseja eliminar ${asset.name}?`;
+                      if (confirm(confirmMsg)) {
                         setShowMenu(false);
                         runAction(async () => {
-                          // 1. Mover para a Lixeira fisicamente no Google Drive real
-                          if (asset.driveId) {
+                          const driveId = asset.driveId || asset.id;
+                          if (driveId) {
                             try {
-                              const updateResponse = await fetch('/api/drive/update', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  fileId: asset.driveId,
-                                  trashed: true
-                                })
-                              });
-                              if (!updateResponse.ok) {
-                                const errData = await updateResponse.json();
-                                console.warn("Erro ao mover no drive:", errData.error);
+                              if (isTrashView) {
+                                const deleteResponse = await fetch('/api/drive/delete', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ fileId: driveId, permanent: true })
+                                });
+                                if (!deleteResponse.ok) {
+                                  const errData = await deleteResponse.json();
+                                  throw new Error(errData.error || 'Erro ao eliminar no Drive');
+                                }
+                              } else {
+                                const updateResponse = await fetch('/api/drive/update', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ fileId: driveId, trashed: true })
+                                });
+                                if (!updateResponse.ok) {
+                                  const errData = await updateResponse.json();
+                                  console.warn("Erro ao mover no drive:", errData.error);
+                                }
                               }
                             } catch (driveErr) {
-                              console.warn("Falha física ao lixar no Drive, prosseguindo localmente:", driveErr);
+                              console.warn("Falha na operação no Drive:", driveErr);
+                              if (isTrashView) throw driveErr;
                             }
                           }
 
-                          // 2. Atualizar no Firestore
-                          await updateDoc(doc(db, "assets", asset.id), { folderId: "trash", trashed: true });
-                          /* window.location.reload() removed */
+                          if (isTrashView) {
+                            await deleteDoc(doc(db, "assets", asset.id));
+                          } else {
+                            await updateDoc(doc(db, "assets", asset.id), { folderId: "trash", trashed: true });
+                          }
                         });
                       } else {
                         setShowMenu(false);
@@ -5616,9 +5779,13 @@ function AssetRow({
                   >
                     <div className="flex items-center gap-3">
                       <Trash2 size={15} className="text-red-400 group-hover:text-red-600 transition-colors shrink-0" />
-                      <span className="group-hover:text-red-600 transition-colors font-bold text-red-500">Eliminar</span>
+                      <span className="group-hover:text-red-600 transition-colors font-bold text-red-500">
+                        {isTrashView ? "Eliminar permanentemente" : "Eliminar"}
+                      </span>
                     </div>
-                    <span className="text-[10px] text-red-300 font-mono tracking-tighter group-hover:text-red-500 transition-colors">Delete</span>
+                    <span className="text-[10px] text-red-300 font-mono tracking-tighter group-hover:text-red-500 transition-colors">
+                      {isTrashView ? "Delete forever" : "Delete"}
+                    </span>
                   </button>
                 </motion.div>
               </>

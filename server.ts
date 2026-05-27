@@ -900,25 +900,69 @@ async function startServer() {
 
   // Excluir arquivo permanentemente do Google Drive
   app.post("/api/drive/delete", async (req, res) => {
-    const { fileId } = req.body;
+    const { fileId, permanent = true } = req.body;
     if (!fileId) return res.status(400).json({ error: "File ID é obrigatório" });
 
     try {
       console.log('--- Excluindo Arquivo no Drive ---');
-      console.log('File ID:', fileId);
+      console.log('File ID:', fileId, 'Permanent:', permanent);
 
       const { auth } = await getGoogleAuth();
       const drive = google.drive({ version: 'v3', auth });
 
-      await drive.files.delete({
-        fileId: fileId,
-        supportsAllDrives: true
-      });
-
-      console.log('Exclusão física concluída no Drive.');
-      res.json({ success: true, message: "Arquivo excluído permanentemente do Google Drive" });
+      if (permanent) {
+        await drive.files.delete({
+          fileId: fileId,
+          supportsAllDrives: true
+        });
+        console.log('Exclusão física concluída no Drive.');
+        res.json({ success: true, message: "Arquivo excluído permanentemente do Google Drive" });
+      } else {
+        await drive.files.update({
+          fileId: fileId,
+          requestBody: { trashed: true },
+          supportsAllDrives: true
+        });
+        res.json({ success: true, message: "Item movido para a lixeira com sucesso." });
+      }
     } catch (error: any) {
       console.error("Erro ao excluir no Google Drive:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Esvaziar lixeira — elimina permanentemente todos os itens no Google Drive
+  app.post("/api/drive/empty-trash", async (req, res) => {
+    try {
+      console.log('--- Esvaziar Lixeira do Drive ---');
+      const { auth } = await getGoogleAuth();
+      const drive = google.drive({ version: 'v3', auth });
+
+      const trashedFiles = await listAllDriveFiles(drive, 'trashed = true', 'folder,name,createdTime');
+      let deleted = 0;
+      let failed = 0;
+      const DELETE_BATCH = 10;
+
+      for (let i = 0; i < trashedFiles.length; i += DELETE_BATCH) {
+        const batch = trashedFiles.slice(i, i + DELETE_BATCH);
+        await Promise.all(
+          batch.map(async (file: { id?: string }) => {
+            if (!file.id) return;
+            try {
+              await drive.files.delete({ fileId: file.id, supportsAllDrives: true });
+              deleted++;
+            } catch (err) {
+              failed++;
+              console.warn(`Falha ao eliminar ${file.id}:`, (err as Error).message);
+            }
+          })
+        );
+      }
+
+      console.log(`Lixeira esvaziada: ${deleted} eliminados, ${failed} falhas.`);
+      res.json({ success: true, deleted, failed, total: trashedFiles.length });
+    } catch (error: any) {
+      console.error("Erro ao esvaziar lixeira:", error);
       res.status(500).json({ error: error.message });
     }
   });
