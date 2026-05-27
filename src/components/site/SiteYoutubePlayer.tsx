@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, RotateCcw } from "lucide-react";
 import HomeLeavingLink from "../HomeLeavingLink";
@@ -10,6 +10,7 @@ type YTPlayer = {
   playVideo: () => void;
   pauseVideo: () => void;
   stopVideo: () => void;
+  unMute: () => void;
   setPlaybackQuality: (quality: string) => void;
   getAvailableQualityLevels: () => Array<{ quality: string }>;
 };
@@ -35,6 +36,8 @@ declare global {
       PlayerState: {
         ENDED: number;
         PLAYING: number;
+        PAUSED: number;
+        BUFFERING: number;
       };
     };
     onYouTubeIframeAPIReady?: () => void;
@@ -42,6 +45,10 @@ declare global {
 }
 
 let youtubeApiPromise: Promise<void> | null = null;
+
+const VISIBILITY_RATIO = 0.35;
+const HEADER_ROOT_MARGIN = "-72px 0px 0px 0px";
+const PAUSE_DEBOUNCE_MS = 400;
 
 function loadYoutubeIframeApi() {
   if (window.YT?.Player) {
@@ -83,12 +90,12 @@ function loadYoutubeIframeApi() {
   return youtubeApiPromise;
 }
 
-function isElementVisibleInViewport(el: HTMLElement, threshold = 0.35) {
-  const rect = el.getBoundingClientRect();
+function isTargetVisible(target: HTMLElement) {
+  const rect = target.getBoundingClientRect();
   const vh = window.innerHeight || document.documentElement.clientHeight;
   if (rect.height <= 0) return false;
-  const visibleHeight = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
-  return visibleHeight / rect.height >= threshold;
+  const visibleHeight = Math.min(rect.bottom, vh) - Math.max(rect.top, 72);
+  return visibleHeight / rect.height >= VISIBILITY_RATIO;
 }
 
 function applyPreferredQuality(player: YTPlayer) {
@@ -109,6 +116,7 @@ type SiteYoutubePlayerProps = {
   videoId: string;
   autoplay?: boolean;
   playWhenVisible?: boolean;
+  visibilityTargetRef?: RefObject<HTMLElement | null>;
   className?: string;
   saveScrollOnLeave?: boolean;
   moreVideosHref?: string;
@@ -121,6 +129,7 @@ export default function SiteYoutubePlayer({
   videoId,
   autoplay = false,
   playWhenVisible = false,
+  visibilityTargetRef,
   className,
   saveScrollOnLeave = false,
   moreVideosHref = "/videos",
@@ -132,12 +141,18 @@ export default function SiteYoutubePlayer({
   const containerId = `yt-player-${reactId.replace(/:/g, "")}`;
   const playerRef = useRef<YTPlayer | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const visibleRef = useRef(false);
+  const shouldPlayRef = useRef(false);
+  const pauseTimerRef = useRef<number | null>(null);
   const [ended, setEnded] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
+    setEnded(false);
+    shouldPlayRef.current = false;
+
+    if (!videoId) return;
 
     loadYoutubeIframeApi().then(() => {
       if (cancelled || !window.YT?.Player) return;
@@ -159,23 +174,14 @@ export default function SiteYoutubePlayer({
             setReady(true);
             setEnded(false);
             applyPreferredQuality(event.target);
-            if (autoplay) {
-              event.target.playVideo();
-              return;
-            }
-            const root = rootRef.current;
-            if (playWhenVisible && root && isElementVisibleInViewport(root)) {
-              visibleRef.current = true;
-              setEnded(false);
+            if (autoplay || (playWhenVisible && shouldPlayRef.current)) {
+              event.target.unMute();
               event.target.playVideo();
             }
           },
           onStateChange: (event) => {
             if (event.data === window.YT?.PlayerState.ENDED) {
               setEnded(true);
-            }
-            if (event.data === window.YT?.PlayerState.PLAYING) {
-              applyPreferredQuality(event.target);
             }
           },
         },
@@ -190,49 +196,89 @@ export default function SiteYoutubePlayer({
   }, [videoId, autoplay, containerId, playWhenVisible]);
 
   useEffect(() => {
-    if (!playWhenVisible || !ready) return;
+    if (!playWhenVisible || !ready || !videoId) return;
 
-    const root = rootRef.current;
-    if (!root) return;
+    const visibilityTarget = visibilityTargetRef?.current ?? rootRef.current;
+    if (!visibilityTarget) return;
 
-    const syncPlayback = (isVisible: boolean) => {
-      visibleRef.current = isVisible;
-      const player = playerRef.current;
-      if (!player) return;
-
-      if (isVisible) {
-        setEnded(false);
-        player.playVideo();
-      } else {
-        player.pauseVideo();
+    const clearPauseTimer = () => {
+      if (pauseTimerRef.current !== null) {
+        window.clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = null;
       }
     };
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        syncPlayback(entry.isIntersecting);
-      },
-      { threshold: [0, 0.35] },
-    );
+    const playWithSound = () => {
+      const player = playerRef.current;
+      if (!player) return;
+      setEnded(false);
+      player.unMute();
+      player.playVideo();
+    };
 
-    observer.observe(root);
+    const pause = () => {
+      playerRef.current?.pauseVideo();
+    };
 
-    // IntersectionObserver often skips the first frame when the section is already on screen.
-    requestAnimationFrame(() => {
-      const records = observer.takeRecords();
-      const last = records[records.length - 1];
-      if (last) {
-        syncPlayback(last.isIntersecting);
+    const setShouldPlay = (next: boolean, fromScroll = false) => {
+      if (next) {
+        clearPauseTimer();
+        if (!shouldPlayRef.current || fromScroll) {
+          shouldPlayRef.current = true;
+          playWithSound();
+        }
         return;
       }
-      syncPlayback(isElementVisibleInViewport(root));
+
+      if (!shouldPlayRef.current) return;
+      shouldPlayRef.current = false;
+
+      clearPauseTimer();
+      pauseTimerRef.current = window.setTimeout(() => {
+        pauseTimerRef.current = null;
+        if (!shouldPlayRef.current) pause();
+      }, PAUSE_DEBOUNCE_MS);
+    };
+
+    const onScroll = () => {
+      if (!isTargetVisible(visibilityTarget)) return;
+      setShouldPlay(true, true);
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry =
+          entries.find((item) => item.target === visibilityTarget) ?? entries[0];
+        if (!entry) return;
+        const visible =
+          entry.isIntersecting && entry.intersectionRatio >= VISIBILITY_RATIO;
+        setShouldPlay(visible);
+      },
+      {
+        threshold: [0, 0.15, 0.35, 0.5, 0.75, 1],
+        rootMargin: HEADER_ROOT_MARGIN,
+      },
+    );
+
+    observer.observe(visibilityTarget);
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    requestAnimationFrame(() => {
+      if (isTargetVisible(visibilityTarget)) {
+        setShouldPlay(true);
+      }
     });
 
-    return () => observer.disconnect();
-  }, [playWhenVisible, ready, videoId]);
+    return () => {
+      clearPauseTimer();
+      observer.disconnect();
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [playWhenVisible, ready, videoId, visibilityTargetRef]);
 
   const replay = () => {
     setEnded(false);
+    playerRef.current?.unMute();
     playerRef.current?.playVideo();
   };
 

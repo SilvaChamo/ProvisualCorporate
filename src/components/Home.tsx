@@ -197,6 +197,7 @@ export default function Home() {
   const [videoItems, setVideoItems] = useState<VideoItem[]>(VIDEO_ITEMS);
   const [contactFormNotice, setContactFormNotice] = useState<string | null>(null);
   const contactFormStartedAt = useRef(Date.now());
+  const videosSectionRef = useRef<HTMLElement>(null);
   const [quickLinksVisible, setQuickLinksVisible] = useState(() =>
     typeof window !== "undefined" ? getQuickLinksVisible(window.innerWidth) : 3,
   );
@@ -521,7 +522,7 @@ export default function Home() {
         </button>
 
         <div className="relative z-10 flex h-full flex-col items-center px-4 pb-8 pt-8 sm:px-6 sm:pb-10 sm:pt-10">
-          <div className="text-center w-full mt-8 sm:mt-12 md:mt-16">
+          <div className="text-center w-full mt-[80px]">
             <div className="flex flex-col items-center">
               <div className="flex items-center justify-center gap-4 mb-5">
                 <span className="h-px w-10 bg-white/60" />
@@ -546,7 +547,7 @@ export default function Home() {
                   e.preventDefault();
                   scrollTo("#contactos");
                 }}
-                className="inline-flex items-center bg-[#a21b7e] text-white text-sm font-normal px-8 py-3 rounded-full hover:bg-[#8e176e] transition-colors"
+                className="inline-flex items-center bg-[#a21b7e] text-white text-sm font-normal px-8 py-2.5 rounded-full hover:bg-[#8e176e] transition-colors"
               >
                 Siga-nos
               </a>
@@ -1039,7 +1040,11 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="videos" className="scroll-mt-[75px] bg-[#fafafa] py-8 lg:py-10">
+      <section
+        id="videos"
+        ref={videosSectionRef}
+        className="scroll-mt-[75px] bg-[#fafafa] py-8 lg:py-10"
+      >
         <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
           <div className="mt-4 mb-[50px] flex justify-end">
             <HomeLeavingLink
@@ -1085,6 +1090,7 @@ export default function Home() {
               <SiteYoutubePlayer
                 videoId={featuredVideoId}
                 playWhenVisible
+                visibilityTargetRef={videosSectionRef}
                 saveScrollOnLeave
                 className="shadow-lg"
               />
