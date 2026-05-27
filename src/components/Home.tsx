@@ -183,7 +183,6 @@ export default function Home() {
   const location = useLocation();
   const [content, setContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const [bannerParallaxY, setBannerParallaxY] = useState(0);
   const [slideIndex, setSlideIndex] = useState(0);
   const [quickLinkSlide, setQuickLinkSlide] = useState(0);
@@ -314,11 +313,10 @@ export default function Home() {
   }, [content.hero.backgroundImage, content.slides]);
 
   useEffect(() => {
-    const BANNER_HEIGHT = 805;
+    const BANNER_HEIGHT = 730;
 
     const onScroll = () => {
       const scrollY = window.scrollY;
-      setScrolled(scrollY > 40);
       const bannerScroll = Math.min(scrollY, BANNER_HEIGHT);
       setBannerParallaxY(bannerScroll * 0.45);
     };
@@ -432,10 +430,8 @@ export default function Home() {
   const nextSlide = () => setSlideIndex((i) => (i + 1) % content.slides.length);
 
   return (
-    <div className="site-bg min-h-screen text-gray-900 overflow-x-hidden font-sans">
-      <header
-        className="fixed top-0 left-0 right-0 z-50 h-[70px] border-b border-gray-100 bg-white shadow-sm transition-all duration-500 ease-in-out"
-      >
+    <div className="site-bg min-h-screen overflow-x-hidden text-gray-900 font-sans">
+      <header className="fixed inset-x-0 top-0 z-50 h-[70px] border-b border-gray-100 bg-white shadow-sm">
         <div className="max-w-[1400px] mx-auto px-6 lg:px-10 h-full grid grid-cols-[auto_1fr_auto] items-center gap-4">
           <a href="#inicio" onClick={() => scrollTo("#inicio")} className="shrink-0 flex items-center h-full">
             <img
@@ -484,9 +480,9 @@ export default function Home() {
           }))}
         />
       </header>
+      <div className="h-[70px] shrink-0" aria-hidden="true" />
 
-      {/* Banner + menu integrados como no site original */}
-      <section id="inicio" className="relative h-[805px] overflow-hidden text-white">
+      <section id="inicio" className="relative h-[730px] overflow-hidden text-white">
         <AnimatePresence initial={false}>
           <motion.img
             key={slideImage}
@@ -505,7 +501,7 @@ export default function Home() {
             }}
           />
         </AnimatePresence>
-        <div className="absolute inset-0 bg-black/65" />
+        <div className="absolute inset-0 bg-black/55" />
 
         <button
           type="button"
@@ -524,8 +520,8 @@ export default function Home() {
           <ChevronRight size={24} className="text-[#c958a8] group-hover:text-white transition-colors" strokeWidth={2.25} />
         </button>
 
-        <div className="relative z-10 flex h-full flex-col items-center px-4 pb-8 pt-16 sm:px-6 sm:pb-10 sm:pt-20">
-          <div className="text-center w-full mt-16 sm:mt-[100px] md:mt-[120px]">
+        <div className="relative z-10 flex h-full flex-col items-center px-4 pb-8 pt-8 sm:px-6 sm:pb-10 sm:pt-10">
+          <div className="text-center w-full mt-8 sm:mt-12 md:mt-16">
             <div className="flex flex-col items-center">
               <div className="flex items-center justify-center gap-4 mb-5">
                 <span className="h-px w-10 bg-white/60" />
