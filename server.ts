@@ -26,6 +26,7 @@ import {
   resolveSiteSubfolderId,
   driveMediaUrl,
   resolveHomeContentImages,
+  resolveHomeContentWithIndex,
   persistResolvedHomeContentIfNeeded,
 } from "./lib/siteDriveHelpers.js";
 import {
@@ -99,6 +100,7 @@ async function startServer() {
         );
       } catch (driveErr) {
         console.warn("Home Drive image resolve skipped:", driveErr);
+        content = resolveHomeContentWithIndex(content);
       }
 
       res.setHeader("Cache-Control", HOME_API_CACHE_CONTROL);
