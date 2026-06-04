@@ -1,4 +1,5 @@
 import { SERVICE_REQUEST_EMAIL, SITE_CONTACT_EMAIL } from "./siteContact";
+import { homeDisplayImage } from "./homeImageFallback";
 
 export interface HomeSlide {
   category: string;
@@ -139,12 +140,8 @@ function resolveTeamMemberImage(
   partialImage: string | undefined,
   defaultImage: string | undefined,
 ): string {
-  const driveImage =
-    partialImage?.startsWith("/api/drive/") || /^https?:\/\//i.test(partialImage || "")
-      ? partialImage
-      : null;
-  if (driveImage) return driveImage;
-  return partialImage || defaultImage || "";
+  const fallback = defaultImage || "";
+  return homeDisplayImage(partialImage, fallback);
 }
 
 const DEFAULT_EVENT_TYPES: HomeEventType[] = [
@@ -338,20 +335,33 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
 
 export function mergeHomeContent(partial?: Partial<HomeContent> | null): HomeContent {
   if (!partial) return DEFAULT_HOME_CONTENT;
+  const defaultHeroBg = DEFAULT_HOME_CONTENT.hero.backgroundImage;
   return {
-    hero: { ...DEFAULT_HOME_CONTENT.hero, ...partial.hero },
+    hero: {
+      ...DEFAULT_HOME_CONTENT.hero,
+      ...partial.hero,
+      backgroundImage: homeDisplayImage(partial.hero?.backgroundImage, defaultHeroBg),
+    },
     slides: partial.slides?.length
-      ? partial.slides.map((slide, index) => ({
-          ...DEFAULT_HOME_CONTENT.slides[index % DEFAULT_HOME_CONTENT.slides.length],
-          ...slide,
-          image:
-            slide.image ||
-            DEFAULT_HOME_CONTENT.slides[index % DEFAULT_HOME_CONTENT.slides.length]?.image,
-        }))
+      ? partial.slides.map((slide, index) => {
+          const fallback =
+            DEFAULT_HOME_CONTENT.slides[index % DEFAULT_HOME_CONTENT.slides.length]?.image || "";
+          return {
+            ...DEFAULT_HOME_CONTENT.slides[index % DEFAULT_HOME_CONTENT.slides.length],
+            ...slide,
+            image: homeDisplayImage(slide.image, fallback),
+          };
+        })
       : DEFAULT_HOME_CONTENT.slides,
-    aboutImage: partial.aboutImage || DEFAULT_HOME_CONTENT.aboutImage,
-    processBackground: partial.processBackground || DEFAULT_HOME_CONTENT.processBackground,
-    teamBanner: partial.teamBanner || DEFAULT_HOME_CONTENT.teamBanner,
+    aboutImage: homeDisplayImage(
+      partial.aboutImage,
+      DEFAULT_HOME_CONTENT.aboutImage,
+    ),
+    processBackground: homeDisplayImage(
+      partial.processBackground,
+      DEFAULT_HOME_CONTENT.processBackground,
+    ),
+    teamBanner: homeDisplayImage(partial.teamBanner, DEFAULT_HOME_CONTENT.teamBanner),
     teamMembers: partial.teamMembers?.length
       ? partial.teamMembers.map((member, index) => {
           const fallback =
@@ -372,36 +382,52 @@ export function mergeHomeContent(partial?: Partial<HomeContent> | null): HomeCon
     about: { ...DEFAULT_HOME_CONTENT.about, ...partial.about },
     servicesIntro: partial.servicesIntro ?? DEFAULT_HOME_CONTENT.servicesIntro,
     services: partial.services?.length ? partial.services : DEFAULT_HOME_CONTENT.services,
-    contact: { ...DEFAULT_HOME_CONTENT.contact, ...partial.contact },
+    contact: {
+      ...DEFAULT_HOME_CONTENT.contact,
+      ...partial.contact,
+      photo: homeDisplayImage(
+        partial.contact?.photo,
+        DEFAULT_HOME_CONTENT.contact.photo,
+      ),
+    },
     eventIntro: partial.eventIntro ?? DEFAULT_HOME_CONTENT.eventIntro,
     eventTypes: partial.eventTypes?.length
-      ? partial.eventTypes.map((item, index) => ({
-          ...DEFAULT_HOME_CONTENT.eventTypes[index % DEFAULT_HOME_CONTENT.eventTypes.length],
-          ...item,
-          image:
-            item.image ||
-            DEFAULT_HOME_CONTENT.eventTypes[index % DEFAULT_HOME_CONTENT.eventTypes.length]?.image,
-        }))
+      ? partial.eventTypes.map((item, index) => {
+          const fallback =
+            DEFAULT_HOME_CONTENT.eventTypes[index % DEFAULT_HOME_CONTENT.eventTypes.length]?.image ||
+            "";
+          return {
+            ...DEFAULT_HOME_CONTENT.eventTypes[index % DEFAULT_HOME_CONTENT.eventTypes.length],
+            ...item,
+            image: homeDisplayImage(item.image, fallback),
+          };
+        })
       : DEFAULT_HOME_CONTENT.eventTypes,
     clientLogos: normalizeClientLogos(
       partial.clientLogos?.length
-        ? partial.clientLogos.map((item, index) => ({
-            ...DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length],
-            ...item,
-            image:
-              item.image ||
-              DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length]?.image,
-          }))
+        ? partial.clientLogos.map((item, index) => {
+            const fallback =
+              DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length]
+                ?.image || "";
+            return {
+              ...DEFAULT_HOME_CONTENT.clientLogos[index % DEFAULT_HOME_CONTENT.clientLogos.length],
+              ...item,
+              image: homeDisplayImage(item.image, fallback),
+            };
+          })
         : DEFAULT_HOME_CONTENT.clientLogos,
     ),
     newsItems: partial.newsItems?.length
-      ? partial.newsItems.map((item, index) => ({
-          ...DEFAULT_HOME_CONTENT.newsItems[index % DEFAULT_HOME_CONTENT.newsItems.length],
-          ...item,
-          image:
-            item.image ||
-            DEFAULT_HOME_CONTENT.newsItems[index % DEFAULT_HOME_CONTENT.newsItems.length]?.image,
-        }))
+      ? partial.newsItems.map((item, index) => {
+          const fallback =
+            DEFAULT_HOME_CONTENT.newsItems[index % DEFAULT_HOME_CONTENT.newsItems.length]?.image ||
+            "";
+          return {
+            ...DEFAULT_HOME_CONTENT.newsItems[index % DEFAULT_HOME_CONTENT.newsItems.length],
+            ...item,
+            image: homeDisplayImage(item.image, fallback),
+          };
+        })
       : DEFAULT_HOME_CONTENT.newsItems,
   };
 }

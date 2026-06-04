@@ -31,7 +31,8 @@ import {
   type HomeContent,
 } from "../lib/homeContent";
 import { fetchSiteHomeContent, fetchSiteVideos } from "../lib/siteGalleryApi";
-import { driveDisplayUrl, preloadDriveImages } from "../lib/driveImageUrl";
+import { driveDisplayUrl } from "../lib/driveImageUrl";
+import { homeDisplayImage, isDriveProxyImageUrl } from "../lib/homeImageFallback";
 import SiteOffCanvasMenu from "./site/SiteOffCanvasMenu";
 import SiteSectionLink from "./site/SiteSectionLink";
 import OptimizedDriveImage from "./site/OptimizedDriveImage";
@@ -307,14 +308,6 @@ export default function Home() {
   }, [navigationType]);
 
   useEffect(() => {
-    const urls = [
-      content.hero.backgroundImage,
-      ...content.slides.map((s) => s.image),
-    ].filter(Boolean);
-    preloadDriveImages(urls, "md");
-  }, [content.hero.backgroundImage, content.slides]);
-
-  useEffect(() => {
     const BANNER_HEIGHT = 730;
 
     const onScroll = () => {
@@ -420,26 +413,24 @@ export default function Home() {
   }, [location.pathname, location.hash]);
 
   const activeSlide = content.slides[slideIndex] ?? content.slides[0];
-  const slideImageDrive = useMemo(
-    () =>
-      driveDisplayUrl(
-        activeSlide?.image ||
-          DEFAULT_HOME_CONTENT.slides[slideIndex]?.image ||
-          content.hero.backgroundImage,
-        "md",
-      ),
-    [activeSlide?.image, slideIndex, content.hero.backgroundImage],
-  );
-  const slideImageFallback = useMemo(
-    () =>
+  const slideStaticSrc = useMemo(() => {
+    const fallback =
       DEFAULT_HOME_CONTENT.slides[slideIndex % DEFAULT_HOME_CONTENT.slides.length]?.image ||
-      DEFAULT_HOME_CONTENT.hero.backgroundImage,
-    [slideIndex],
-  );
+      DEFAULT_HOME_CONTENT.hero.backgroundImage;
+    return homeDisplayImage(
+      activeSlide?.image || fallback,
+      fallback,
+    );
+  }, [activeSlide?.image, slideIndex]);
+
+  const slideImageSrc = useMemo(() => {
+    if (!isDriveProxyImageUrl(slideStaticSrc)) return slideStaticSrc;
+    return driveDisplayUrl(slideStaticSrc, "md");
+  }, [slideStaticSrc]);
 
   useEffect(() => {
-    setBannerSlideSrc(slideImageDrive || slideImageFallback);
-  }, [slideImageDrive, slideImageFallback]);
+    setBannerSlideSrc(slideImageSrc);
+  }, [slideImageSrc]);
 
   const prevSlide = () =>
     setSlideIndex((i) => (i - 1 + content.slides.length) % content.slides.length);
@@ -511,8 +502,8 @@ export default function Home() {
             fetchPriority="high"
             decoding="async"
             onError={() => {
-              if (slideImageFallback && bannerSlideSrc !== slideImageFallback) {
-                setBannerSlideSrc(slideImageFallback);
+              if (slideStaticSrc && bannerSlideSrc !== slideStaticSrc) {
+                setBannerSlideSrc(slideStaticSrc);
               }
             }}
             className="absolute inset-0 h-full w-full object-cover will-change-transform"
