@@ -207,6 +207,7 @@ export default function Home() {
   const [logoVisible, setLogoVisible] = useState(() =>
     typeof window !== "undefined" ? getLogoVisible(window.innerWidth) : 6,
   );
+  const [bannerSlideSrc, setBannerSlideSrc] = useState(DEFAULT_HOME_CONTENT.slides[0]?.image || "");
 
   const quickLinkExtended = useMemo(
     () => [...QUICK_LINKS, ...QUICK_LINKS.slice(0, quickLinksVisible)],
@@ -419,12 +420,26 @@ export default function Home() {
   }, [location.pathname, location.hash]);
 
   const activeSlide = content.slides[slideIndex] ?? content.slides[0];
-  const slideImage = driveDisplayUrl(
-    activeSlide?.image ||
-      DEFAULT_HOME_CONTENT.slides[slideIndex]?.image ||
-      content.hero.backgroundImage,
-    "md",
+  const slideImageDrive = useMemo(
+    () =>
+      driveDisplayUrl(
+        activeSlide?.image ||
+          DEFAULT_HOME_CONTENT.slides[slideIndex]?.image ||
+          content.hero.backgroundImage,
+        "md",
+      ),
+    [activeSlide?.image, slideIndex, content.hero.backgroundImage],
   );
+  const slideImageFallback = useMemo(
+    () =>
+      DEFAULT_HOME_CONTENT.slides[slideIndex % DEFAULT_HOME_CONTENT.slides.length]?.image ||
+      DEFAULT_HOME_CONTENT.hero.backgroundImage,
+    [slideIndex],
+  );
+
+  useEffect(() => {
+    setBannerSlideSrc(slideImageDrive || slideImageFallback);
+  }, [slideImageDrive, slideImageFallback]);
 
   const prevSlide = () =>
     setSlideIndex((i) => (i - 1 + content.slides.length) % content.slides.length);
@@ -486,8 +501,8 @@ export default function Home() {
       <section id="inicio" className="relative h-[730px] overflow-hidden text-white">
         <AnimatePresence initial={false}>
           <motion.img
-            key={slideImage}
-            src={slideImage}
+            key={bannerSlideSrc}
+            src={bannerSlideSrc}
             alt=""
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -495,6 +510,11 @@ export default function Home() {
             transition={{ duration: 0.9, ease: "easeInOut" }}
             fetchPriority="high"
             decoding="async"
+            onError={() => {
+              if (slideImageFallback && bannerSlideSrc !== slideImageFallback) {
+                setBannerSlideSrc(slideImageFallback);
+              }
+            }}
             className="absolute inset-0 h-full w-full object-cover will-change-transform"
             style={{
               transformOrigin: "center center",
