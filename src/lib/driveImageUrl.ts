@@ -1,3 +1,22 @@
+/** ID do ficheiro no Drive (Firestore usa o mesmo id quando vem do sync). */
+export function resolveDriveFileId(
+  driveId?: string | null,
+  fallbackId?: string | null,
+): string | undefined {
+  const id = (driveId || fallbackId || "").trim();
+  return id || undefined;
+}
+
+/** URL do proxy de thumbnail (evita bloqueio de URLs directas do Google no browser). */
+export function driveThumbnailSrc(
+  fileId: string,
+  options?: { sz?: number; crop?: boolean },
+): string {
+  const sz = Math.min(Math.max(options?.sz ?? 800, 200), 1600);
+  const crop = options?.crop ? "&crop=1" : "";
+  return `/api/drive/thumbnail?id=${encodeURIComponent(fileId)}&sz=${sz}${crop}`;
+}
+
 /** Extrai ID do Google Drive a partir de URL da API local. */
 export function extractDriveFileId(url: string): string | null {
   if (!url) return null;

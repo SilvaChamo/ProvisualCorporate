@@ -63,6 +63,7 @@ import { useDashboardSidebar } from "./dashboard/useDashboardSidebar";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, displayDriveName, handleFirestoreError, isSuperAdmin, OperationType } from "../lib/utils";
+import { driveThumbnailSrc, resolveDriveFileId } from "../lib/driveImageUrl";
 import {
   mergeById,
   parentMatchesFolder,
@@ -163,37 +164,46 @@ interface Asset {
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   thumbnailUrl?: string;
   driveId?: string;
+  /** ID alternativo (ex.: asset.id do Firestore = ID do Drive). */
+  fileId?: string;
   fallbackSize?: 'w100' | 'w500' | 'w1200';
   crop?: boolean;
   alt?: string;
   className?: string;
 }
 
-function SafeImage({ thumbnailUrl, driveId, fallbackSize = 'w500', crop = false, alt, className, ...props }: SafeImageProps) {
-  const thumbQuery = driveId
-    ? `/api/drive/thumbnail?id=${encodeURIComponent(driveId)}&sz=800${crop ? "&crop=1" : ""}`
-    : (thumbnailUrl || "");
-  const initialUrl = thumbQuery;
+function SafeImage({
+  thumbnailUrl,
+  driveId,
+  fileId,
+  fallbackSize = 'w500',
+  crop = false,
+  alt,
+  className,
+  ...props
+}: SafeImageProps) {
+  const resolvedId = resolveDriveFileId(driveId, fileId);
+  const proxyUrl = resolvedId ? driveThumbnailSrc(resolvedId, { sz: 800, crop }) : "";
+  const initialUrl = proxyUrl || thumbnailUrl || "";
   const [src, setSrc] = useState(initialUrl);
   const [hasFailedOnce, setHasFailedOnce] = useState(false);
   const [hasFailedAlt, setHasFailedAlt] = useState(false);
 
   useEffect(() => {
-    const newUrl = driveId
-      ? `/api/drive/thumbnail?id=${encodeURIComponent(driveId)}&sz=800${crop ? "&crop=1" : ""}`
-      : (thumbnailUrl || "");
+    const id = resolveDriveFileId(driveId, fileId);
+    const newUrl = id ? driveThumbnailSrc(id, { sz: 800, crop }) : (thumbnailUrl || "");
     setSrc(newUrl);
     setHasFailedOnce(false);
     setHasFailedAlt(false);
-  }, [thumbnailUrl, driveId, fallbackSize]);
+  }, [thumbnailUrl, driveId, fileId, fallbackSize, crop]);
 
   const handleError = () => {
-    if (!hasFailedOnce && driveId) {
+    if (!hasFailedOnce && resolvedId) {
       setHasFailedOnce(true);
-      setSrc(`https://drive.google.com/thumbnail?id=${driveId}&sz=${fallbackSize}`);
-    } else if (!hasFailedAlt && driveId) {
+      setSrc(`https://drive.google.com/thumbnail?id=${resolvedId}&sz=${fallbackSize}`);
+    } else if (!hasFailedAlt && resolvedId) {
       setHasFailedAlt(true);
-      setSrc(`https://docs.google.com/uc?export=view&id=${driveId}`);
+      setSrc(`https://docs.google.com/uc?export=view&id=${resolvedId}`);
     }
   };
 
@@ -4136,10 +4146,11 @@ export default function Dashboard() {
             </div>
 
             <div className="aspect-square bg-gray-50 mb-6 flex items-center justify-center border border-gray-100 relative group overflow-hidden shadow-inner">
-              {(selectedAsset.thumbnailUrl || selectedAsset.driveId) ? (
+              {(selectedAsset.thumbnailUrl || resolveDriveFileId(selectedAsset.driveId, selectedAsset.id)) ? (
                 <SafeImage
                   thumbnailUrl={selectedAsset.thumbnailUrl}
                   driveId={selectedAsset.driveId}
+                  fileId={selectedAsset.id}
                   fallbackSize="w500"
                   alt=""
                   className="w-full h-full object-cover"
@@ -5180,10 +5191,12 @@ function AssetCard({
       </div>
 
       <div className={cn("w-full h-full flex items-center justify-center overflow-hidden", asset.type === "image" ? "bg-gray-50" : "bg-gray-50")}>
-        {((asset.type === 'image' || asset.type === 'video' || asset.type === 'document') && (asset.thumbnailUrl || asset.driveId)) ? (
+        {((asset.type === 'image' || asset.type === 'video' || asset.type === 'document') &&
+          (asset.thumbnailUrl || resolveDriveFileId(asset.driveId, asset.id))) ? (
           <SafeImage
             thumbnailUrl={asset.thumbnailUrl ? asset.thumbnailUrl.replace('=s220', '=s500') : undefined}
             driveId={asset.driveId}
+            fileId={asset.id}
             fallbackSize="w500"
             crop={asset.type === "image"}
             alt={displayDriveName(asset.name)}
@@ -5278,11 +5291,13 @@ function AssetRow({
       )}
     >
       <div className="col-span-6 flex items-center gap-4">
-        {((asset.type === 'image' || asset.type === 'video' || asset.type === 'document') && (asset.thumbnailUrl || asset.driveId)) ? (
+        {((asset.type === 'image' || asset.type === 'video' || asset.type === 'document') &&
+          (asset.thumbnailUrl || resolveDriveFileId(asset.driveId, asset.id))) ? (
           <div className="w-8 h-8 overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-100 rounded-none">
             <SafeImage
               thumbnailUrl={asset.thumbnailUrl}
               driveId={asset.driveId}
+              fileId={asset.id}
               fallbackSize="w100"
               alt=""
               className="w-full h-full object-cover"

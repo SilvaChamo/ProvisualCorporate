@@ -32,7 +32,10 @@ interface SafeImageProps extends ImgHTMLAttributes<HTMLImageElement> {
 }
 
 function SafeImage({ item, alt, className, ...props }: SafeImageProps) {
-  const driveId = item.driveId || (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
+  const driveId =
+    item.driveId ||
+    (item.id && !item.id.startsWith("local-") ? item.id : null) ||
+    (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
   const previewUrl = driveId
     ? `/api/drive/thumbnail?id=${driveId}&sz=1200`
     : item.thumbnailUrl?.replace("=s220", "=s1200") || item.srcUrl || "";
@@ -40,7 +43,10 @@ function SafeImage({ item, alt, className, ...props }: SafeImageProps) {
   const [failStep, setFailStep] = useState(0);
 
   useEffect(() => {
-    const nextDriveId = item.driveId || (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
+    const nextDriveId =
+      item.driveId ||
+      (item.id && !item.id.startsWith("local-") ? item.id : null) ||
+      (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
     const nextUrl = nextDriveId
       ? `/api/drive/thumbnail?id=${nextDriveId}&sz=1200`
       : item.thumbnailUrl?.replace("=s220", "=s1200") || item.srcUrl || "";
@@ -49,7 +55,10 @@ function SafeImage({ item, alt, className, ...props }: SafeImageProps) {
   }, [item.id, item.driveId, item.srcUrl, item.thumbnailUrl]);
 
   const handleError = () => {
-    const resolvedDriveId = item.driveId || (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
+    const resolvedDriveId =
+      item.driveId ||
+      (item.id && !item.id.startsWith("local-") ? item.id : null) ||
+      (item.srcUrl ? extractDriveFileId(item.srcUrl) : null);
     if (failStep === 0 && resolvedDriveId) {
       setFailStep(1);
       setSrc(`https://drive.google.com/thumbnail?id=${resolvedDriveId}&sz=w1200`);
