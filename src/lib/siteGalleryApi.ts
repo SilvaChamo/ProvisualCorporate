@@ -22,7 +22,7 @@ export interface SiteDriveAlbum {
   photoCount: number;
 }
 
-const HOME_CACHE_KEY = "provisual_home_content_v5";
+const HOME_CACHE_KEY = "provisual_home_content_v6";
 const HOME_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface HomeCacheEntry {

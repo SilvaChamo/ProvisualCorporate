@@ -373,6 +373,51 @@ export default function HomeSiteEditor() {
 
         <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-4">
           <h3 className="text-sm font-black text-[#a21b7e] uppercase tracking-widest">Sobre nós</h3>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+              Título história (AMIC)
+            </label>
+            <input
+              value={content.about.historyTitle ?? ""}
+              onChange={(e) => updateAbout("historyTitle", e.target.value)}
+              className="w-full h-11 px-3 border border-gray-100 rounded-lg text-sm focus:border-[#a21b7e] outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+              Texto história
+            </label>
+            <textarea
+              value={content.about.history ?? ""}
+              onChange={(e) => updateAbout("history", e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-100 rounded-lg text-sm focus:border-[#a21b7e] outline-none resize-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+              URL PDF estatutos
+            </label>
+            <input
+              value={content.about.documents?.[0]?.pdfUrl ?? ""}
+              onChange={(e) =>
+                setContent((prev) => ({
+                  ...prev,
+                  about: {
+                    ...prev.about,
+                    documents: [
+                      {
+                        title: prev.about.documents?.[0]?.title ?? "Estatutos",
+                        pdfUrl: e.target.value,
+                        previewImage: prev.about.documents?.[0]?.previewImage,
+                      },
+                    ],
+                  },
+                }))
+              }
+              className="w-full h-11 px-3 border border-gray-100 rounded-lg text-sm focus:border-[#a21b7e] outline-none"
+            />
+          </div>
           {(
             [
               ["missionTitle", "Título missão"],

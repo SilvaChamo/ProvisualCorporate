@@ -43,6 +43,12 @@ export interface HomeNewsItem {
   href?: string;
 }
 
+export interface AboutDocument {
+  title: string;
+  pdfUrl: string;
+  previewImage?: string;
+}
+
 const SCRAPE_ASSETS = "INICIO/Home - ProvisualCorporate_files";
 
 export interface HomeContent {
@@ -60,6 +66,9 @@ export interface HomeContent {
   teamBanner: string;
   teamMembers: HomeTeamMember[];
   about: {
+    historyTitle?: string;
+    history?: string;
+    documents?: AboutDocument[];
     missionTitle: string;
     mission: string;
     visionTitle: string;
@@ -263,6 +272,15 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
   teamBanner: "/INICIO/Coberturas.jpg",
   teamMembers: DEFAULT_TEAM_MEMBERS,
   about: {
+    historyTitle: "História da AMIC",
+    history:
+      "A ProVisual Corporate consolidou-se como parceira estratégica em comunicação audiovisual e gestão de activos visuais, apoiando organizações públicas e privadas em Moçambique com soluções criativas, rigor técnico e entrega consistente.",
+    documents: [
+      {
+        title: "Estatutos",
+        pdfUrl: "/INICIO/documentos/estatutos.pdf",
+      },
+    ],
     missionTitle: "Missão",
     mission:
       "Proporcionar soluções de comunicação eficientes e inovadoras, com foco na criação de conteúdos que agregam valor significativo aos nossos clientes.",
@@ -379,7 +397,13 @@ export function mergeHomeContent(partial?: Partial<HomeContent> | null): HomeCon
           };
         })
       : DEFAULT_HOME_CONTENT.teamMembers,
-    about: { ...DEFAULT_HOME_CONTENT.about, ...partial.about },
+    about: {
+      ...DEFAULT_HOME_CONTENT.about,
+      ...partial.about,
+      documents: partial.about?.documents?.length
+        ? partial.about.documents
+        : DEFAULT_HOME_CONTENT.about.documents,
+    },
     servicesIntro: partial.servicesIntro ?? DEFAULT_HOME_CONTENT.servicesIntro,
     services: partial.services?.length ? partial.services : DEFAULT_HOME_CONTENT.services,
     contact: {
