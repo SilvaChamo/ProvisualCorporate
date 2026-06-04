@@ -400,6 +400,8 @@ export function mergeHomeContent(partial?: Partial<HomeContent> | null): HomeCon
     about: {
       ...DEFAULT_HOME_CONTENT.about,
       ...partial.about,
+      historyTitle: partial.about?.historyTitle ?? DEFAULT_HOME_CONTENT.about.historyTitle,
+      history: partial.about?.history ?? DEFAULT_HOME_CONTENT.about.history,
       documents: partial.about?.documents?.length
         ? partial.about.documents
         : DEFAULT_HOME_CONTENT.about.documents,
