@@ -22,7 +22,7 @@ function mapToSnakeCase(table: string, data: any): any {
     else if (key === 'driveId') newKey = 'drive_id';
     else if (key === 'thumbnailUrl') newKey = 'thumbnail_url';
     else if (key === 'displayName') newKey = 'display_name';
-    // clientId removido - sistema usa clientEmail (client_email) como identificador
+    else if (key === 'clientId') newKey = 'client_id';
     else if (key === 'clientEmail') newKey = 'client_email';
     else if (key === 'createdAt') newKey = 'created_at';
 
