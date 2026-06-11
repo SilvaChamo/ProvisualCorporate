@@ -14,6 +14,7 @@ import {
   deleteGalleryAlbum,
   fetchAdminGalleryAlbums,
   fetchAdminGalleryPhotos,
+  syncGalleryPhotosCache,
   updateGalleryAlbum,
   type SiteDriveAlbum,
   type SiteDrivePhoto,
@@ -74,6 +75,11 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
     try {
       const data = await fetchAdminGalleryAlbums();
       setAlbums(data);
+      if (data.length > 0) {
+        syncGalleryPhotosCache().catch((syncErr) => {
+          console.warn("Sync fotos galeria (background):", syncErr);
+        });
+      }
     } catch (e: any) {
       setError(e.message || "Erro ao carregar álbuns.");
     } finally {

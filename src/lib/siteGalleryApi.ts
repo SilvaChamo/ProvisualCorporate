@@ -146,6 +146,19 @@ export async function syncSiteGalleryMeta(): Promise<GalleryAlbum[]> {
   return (data.albums || []).map(mergeAlbumMetadata);
 }
 
+/** Sincroniza fotos Drive → Supabase (uma vez; leituras seguintes usam cache). */
+export async function syncGalleryPhotosCache(slug?: string): Promise<void> {
+  const res = await fetch("/api/site/gallery/sync-photos", {
+    method: "POST",
+    headers: slug ? { "Content-Type": "application/json" } : undefined,
+    body: slug ? JSON.stringify({ slug }) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao sincronizar fotos da galeria.");
+  }
+}
+
 function localGalleryPhotos(slug: string, fallbackCover: string): SiteDrivePhoto[] {
   return getGalleryPhotos(slug, fallbackCover).map((url, index) => ({
     id: `local-${slug}-${index}`,
@@ -331,8 +344,14 @@ export async function createGalleryAlbum(payload: {
   return data.album;
 }
 
-export async function fetchAdminGalleryPhotos(slug: string): Promise<SiteDrivePhoto[]> {
-  const res = await fetch(`/api/site/gallery/${encodeURIComponent(slug)}/photos`);
+export async function fetchAdminGalleryPhotos(
+  slug: string,
+  options?: { refresh?: boolean },
+): Promise<SiteDrivePhoto[]> {
+  const qs = options?.refresh ? "?refresh=1" : "";
+  const res = await fetch(`/api/site/gallery/${encodeURIComponent(slug)}/photos${qs}`, {
+    cache: "no-store",
+  });
   if (!res.ok) throw new Error("Erro ao carregar fotos do álbum.");
   const data = await res.json();
   return data.photos || [];

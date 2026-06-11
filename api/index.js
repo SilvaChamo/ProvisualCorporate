@@ -28,6 +28,9 @@ import {
   resolveHomeContentWithIndex,
   persistResolvedHomeContentIfNeeded,
   listGalleryAlbumsOffline,
+  getGalleryAlbumPhotos,
+  syncAllGalleryPhotosCache,
+  syncGalleryAlbumPhotosFromDrive,
 } from "../lib/siteDriveHelpers.js";
 import {
   getCachedGoogleAuth,
@@ -356,14 +359,52 @@ app.delete("/api/site/gallery/albums/:slug", async (req, res) => {
 });
 
 app.get("/api/site/gallery/:slug/photos", async (req, res) => {
+  const refresh = req.query.refresh === "1" || req.query.refresh === "true";
+  const slug = req.params.slug;
+
+  try {
+    let drive = null;
+    if (refresh || !(await getGalleryAlbumPhotos(supabase, slug))) {
+      try {
+        const { auth } = await getGoogleAuth();
+        drive = google.drive({ version: "v3", auth });
+      } catch (driveErr) {
+        if (refresh || !(await getGalleryAlbumPhotos(supabase, slug))) throw driveErr;
+      }
+    }
+
+    const data = await listSiteGalleryAlbumPhotos(drive, supabase, slug, { refresh });
+    res.set("Cache-Control", data.fromCache ? "private, max-age=300" : "private, max-age=60");
+    res.json(data);
+  } catch (err) {
+    const cached = await getGalleryAlbumPhotos(supabase, slug);
+    if (cached) return res.json(cached);
+    console.error("Site gallery photos error:", err);
+    res.status(500).json({ error: err.message || "Erro ao listar fotos do álbum." });
+  }
+});
+
+app.post("/api/site/gallery/sync-photos", async (req, res) => {
   try {
     const { auth } = await getGoogleAuth();
     const drive = google.drive({ version: "v3", auth });
-    const data = await listSiteGalleryAlbumPhotos(drive, supabase, req.params.slug);
-    res.json(data);
+    const slug = req.body?.slug ? String(req.body.slug) : null;
+
+    if (slug) {
+      const result = await syncGalleryAlbumPhotosFromDrive(drive, supabase, slug);
+      return res.json({ success: true, results: [result] });
+    }
+
+    const results = await syncAllGalleryPhotosCache(drive, supabase);
+    res.json({
+      success: true,
+      synced: results.filter((r) => r.synced).length,
+      total: results.length,
+      results,
+    });
   } catch (err) {
-    console.error("Site gallery photos error:", err);
-    res.status(500).json({ error: err.message || "Erro ao listar fotos do álbum." });
+    console.error("Site gallery sync photos error:", err);
+    res.status(500).json({ error: err.message || "Erro ao sincronizar fotos da galeria." });
   }
 });
 
@@ -388,7 +429,16 @@ app.post("/api/site/gallery/sync-meta", async (_req, res) => {
     const driveData = await listSiteGalleryAlbums(drive, supabase);
     const meta = await ensureGalleryAlbumsMetaSeeded(supabase, driveData.albums);
     const data = await listSiteGalleryAlbumsWithMeta(drive, supabase);
-    res.json({ success: true, meta, albums: data.albums });
+    const photoSync = await syncAllGalleryPhotosCache(drive, supabase);
+    res.json({
+      success: true,
+      meta,
+      albums: data.albums,
+      photoSync: {
+        synced: photoSync.filter((r) => r.synced).length,
+        total: photoSync.length,
+      },
+    });
   } catch (err) {
     console.error("Site gallery sync meta error:", err);
     res.status(500).json({ error: err.message || "Erro ao sincronizar metadados da galeria." });
