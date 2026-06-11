@@ -239,19 +239,48 @@ export function applyDriveServiceImages<T extends { slug: string; image: string 
   }));
 }
 
+function staticAlbumsForAdmin(): SiteDriveAlbum[] {
+  return GALLERY_ALBUMS.map((album) => ({
+    slug: album.slug,
+    name: album.title,
+    title: album.title,
+    subtitle: album.subtitle,
+    image: album.image,
+    folderId: null,
+    coverUrl: album.image,
+    coverDriveId: null,
+    photoCount: 0,
+  }));
+}
+
 export async function fetchAdminGalleryAlbums(): Promise<SiteDriveAlbum[]> {
   const res = await fetch("/api/site/gallery?summary=1", { cache: "no-store" });
   const data = await res.json().catch(() => ({}));
+  if (res.ok && Array.isArray(data.albums) && data.albums.length > 0) {
+    return data.albums;
+  }
+
   if (!res.ok) {
     const message = data.error || data.message;
     if (message === "invalid_grant") {
+      const fallback = staticAlbumsForAdmin();
+      if (fallback.length) return fallback;
       throw new Error(
         "Ligação ao Google Drive expirou. Reconecte em Google Drive → Conectar e actualize esta página.",
       );
     }
+    const fallback = staticAlbumsForAdmin();
+    if (fallback.length) return fallback;
     throw new Error(message || "Erro ao carregar álbuns.");
   }
-  return data.albums || [];
+
+  const fullRes = await fetch("/api/site/gallery", { cache: "no-store" });
+  const fullData = await fullRes.json().catch(() => ({}));
+  if (fullRes.ok && Array.isArray(fullData.albums) && fullData.albums.length > 0) {
+    return fullData.albums;
+  }
+
+  return staticAlbumsForAdmin();
 }
 
 export async function createGalleryAlbum(payload: {

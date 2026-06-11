@@ -33,17 +33,8 @@ export default function SiteHomeAdminPanel() {
       return;
     }
 
-    if (tab === "contas") {
-      setToolbarActions(null);
-    }
     setActiveTab(tab);
   };
-
-  useEffect(() => {
-    if (activeTab === "contas") {
-      setToolbarActions(null);
-    }
-  }, [activeTab]);
 
   const closeUnsavedDialog = () => {
     if (unsavedSaving) return;
@@ -118,7 +109,9 @@ export default function SiteHomeAdminPanel() {
           {activeTab === "videos" && (
             <VideosAdminTab ref={editorRef} onToolbarChange={setToolbarActions} />
           )}
-          {activeTab === "contas" && <AccessAccountsAdmin />}
+          {activeTab === "contas" && (
+            <AccessAccountsAdmin onToolbarChange={setToolbarActions} />
+          )}
         </div>
       </div>
 

@@ -27,6 +27,7 @@ import {
   resolveHomeContentImages,
   resolveHomeContentWithIndex,
   persistResolvedHomeContentIfNeeded,
+  listGalleryAlbumsOffline,
 } from "../lib/siteDriveHelpers.js";
 import {
   getCachedGoogleAuth,
@@ -46,50 +47,11 @@ import {
   buildOAuthClient,
   clearStoredOAuthTokens,
 } from "../lib/googleOAuthRedirect.js";
-
-function loadOAuthKeys() {
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    return {
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-    };
-  }
-  const candidates = [
-    path.join(process.cwd(), "google-oauth.json"),
-    path.join(process.cwd(), "..", "google-oauth.json"),
-  ];
-  for (const filePath of candidates) {
-    try {
-      if (fs.existsSync(filePath)) {
-        return JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      }
-    } catch (_) {}
-  }
-  return null;
-}
-
-function loadServiceKeys() {
-  if (process.env.GOOGLE_KEYS) {
-    try {
-      return JSON.parse(process.env.GOOGLE_KEYS);
-    } catch (_) {}
-  }
-  const candidates = [
-    path.join(process.cwd(), "provisual-corporate-a16cee3d2250.json"),
-    path.join(process.cwd(), "..", "provisual-corporate-a16cee3d2250.json"),
-  ];
-  for (const filePath of candidates) {
-    try {
-      if (fs.existsSync(filePath)) {
-        return JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      }
-    } catch (_) {}
-  }
-  return null;
-}
-
-const oauthKeys = loadOAuthKeys();
-const serviceKeys = loadServiceKeys();
+import {
+  resolveGoogleCredentials,
+  isOAuthKeysConfigured,
+  isServiceKeysConfigured,
+} from "../lib/googleCredentials.js";
 
 const app = express();
 app.use(express.json());
@@ -105,11 +67,11 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Utilitário para inicializar o cliente Google Auth (Híbrido)
 async function createGoogleAuth() {
-  
+  const { oauth: oauthKeys, service: serviceKeys } = await resolveGoogleCredentials(supabase);
   const localTokensPath = path.join(process.cwd(), "google-tokens.json");
 
   // Se tivermos as credenciais OAuth do Silva
-  if (oauthKeys && oauthKeys.client_id && oauthKeys.client_secret && !String(oauthKeys.client_id).includes("COLE_AQUI")) {
+  if (isOAuthKeysConfigured(oauthKeys)) {
     try {
       let tokens = null;
       
@@ -175,8 +137,8 @@ async function createGoogleAuth() {
     }
   }
 
-  // 2. Fallback: Usar a Conta de Serviço padrão que agora está 100% bundled estaticamente
-  if (serviceKeys && serviceKeys.client_email && serviceKeys.private_key) {
+  // 2. Fallback: Conta de Serviço (ficheiro local, env GOOGLE_KEYS ou Supabase)
+  if (isServiceKeysConfigured(serviceKeys)) {
     const auth = new google.auth.JWT({
       email: serviceKeys.client_email,
       key: serviceKeys.private_key,
@@ -275,22 +237,44 @@ app.get("/api/site/gallery", async (req, res) => {
   };
 
   try {
-    const data = await loadGallery();
+    let data = await loadGallery();
+    if (!data.albums?.length) {
+      const offline = await listGalleryAlbumsOffline(supabase);
+      if (offline.albums.length) data = offline;
+    }
     res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
     res.json(data);
   } catch (err) {
     if (isInvalidGrantError(err)) {
       clearGoogleAuthCache();
       try {
-        const data = await loadGallery();
+        let data = await loadGallery();
+        if (!data.albums?.length) {
+          const offline = await listGalleryAlbumsOffline(supabase);
+          if (offline.albums.length) data = offline;
+        }
         res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
         return res.json(data);
       } catch (retryErr) {
         console.error("Site gallery list retry error:", retryErr);
+        try {
+          const offline = await listGalleryAlbumsOffline(supabase);
+          if (offline.albums.length) {
+            res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
+            return res.json(offline);
+          }
+        } catch (_) {}
         return respondDriveAuthError(res, retryErr);
       }
     }
     console.error("Site gallery list error:", err);
+    try {
+      const offline = await listGalleryAlbumsOffline(supabase);
+      if (offline.albums.length) {
+        res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
+        return res.json(offline);
+      }
+    } catch (_) {}
     res.status(500).json({ error: err.message || "Erro ao listar galeria do site." });
   }
 });
@@ -909,8 +893,8 @@ app.post("/api/drive/folder-files", async (req, res) => {
 // ----------------- ROTAS DE AUTENTICAÇÃO OAUTH 2.0 -----------------
 
 app.get("/api/drive/auth/status", async (_req, res) => {
-  const oauthConfigured =
-    !!(oauthKeys?.client_id && oauthKeys?.client_secret && !String(oauthKeys.client_id).includes("COLE_AQUI"));
+  const { oauth: oauthKeys, service: serviceKeys } = await resolveGoogleCredentials(supabase);
+  const oauthConfigured = isOAuthKeysConfigured(oauthKeys);
   const localTokensPath = path.join(process.cwd(), "google-tokens.json");
   let hasOAuthTokens = fs.existsSync(localTokensPath);
 
@@ -925,9 +909,7 @@ app.get("/api/drive/auth/status", async (_req, res) => {
     } catch (_) {}
   }
 
-  const serviceKeysConfigured = !!(
-    serviceKeys?.client_email && serviceKeys?.private_key
-  );
+  const serviceKeysConfigured = isServiceKeysConfigured(serviceKeys);
 
   let statusType = "disconnected";
   let email = "Desconectado";
@@ -950,8 +932,12 @@ app.get("/api/drive/auth/status", async (_req, res) => {
 
 app.get("/api/drive/auth/url", async (req, res) => {
   try {
-    if (!oauthKeys || !oauthKeys.client_id || oauthKeys.client_id.includes("COLE_AQUI") || !oauthKeys.client_secret || oauthKeys.client_secret.includes("COLE_AQUI")) {
-      return res.status(400).json({ error: "Por favor, configure o seu client_id e client_secret do Google Cloud no arquivo google-oauth.json na raiz do projeto." });
+    const { oauth: oauthKeys } = await resolveGoogleCredentials(supabase);
+    if (!isOAuthKeysConfigured(oauthKeys)) {
+      return res.status(400).json({
+        error:
+          "Credenciais OAuth não configuradas. Execute node scripts/push-google-credentials.mjs no Mac ou defina GOOGLE_CLIENT_ID/SECRET na Vercel.",
+      });
     }
 
     const redirectUri = getGoogleOAuthRedirectUri(req);
@@ -980,10 +966,11 @@ app.get("/api/drive/auth/callback", async (req, res) => {
   const localTokensPath = path.join(process.cwd(), "google-tokens.json");
 
   try {
-    if (!oauthKeys || !oauthKeys.client_id) {
-      return res.status(400).send("Configuração google-oauth.json ausente.");
+    const { oauth: oauthKeys } = await resolveGoogleCredentials(supabase);
+    if (!isOAuthKeysConfigured(oauthKeys)) {
+      return res.status(400).send("Credenciais OAuth não configuradas no servidor.");
     }
-    
+
     const redirectUri = getGoogleOAuthRedirectUri(req);
     const oauth2Client = new google.auth.OAuth2(
       oauthKeys.client_id,

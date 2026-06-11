@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import {
   AlertCircle,
   CheckCircle2,
-  Key,
   Loader2,
   Mail,
   Pencil,
@@ -69,7 +68,11 @@ function normalizeAccountRow(row: Record<string, unknown>) {
   };
 }
 
-export default function AccessAccountsAdmin() {
+interface AccessAccountsAdminProps {
+  onToolbarChange?: (actions: React.ReactNode) => void;
+}
+
+export default function AccessAccountsAdmin({ onToolbarChange }: AccessAccountsAdminProps) {
   const [accounts, setAccounts] = useState<ReturnType<typeof normalizeAccountRow>[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -140,6 +143,25 @@ export default function AccessAccountsAdmin() {
     setNewAccountRole("cliente");
     setIsAddAccountModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!onToolbarChange) return;
+    if (isAddAccountModalOpen) {
+      onToolbarChange(null);
+      return;
+    }
+    onToolbarChange(
+      <button
+        type="button"
+        onClick={openAddForm}
+        className="flex flex-1 md:flex-none items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
+      >
+        <UserPlus size={16} />
+        Criar Conta de Acesso
+      </button>,
+    );
+    return () => onToolbarChange(null);
+  }, [onToolbarChange, isAddAccountModalOpen]);
 
   const openEditForm = (account: ReturnType<typeof normalizeAccountRow>) => {
     const parsed = parseAccountDisplay(account.displayNameFull);
@@ -418,26 +440,6 @@ export default function AccessAccountsAdmin() {
 
   return (
     <div className="space-y-6 min-h-[420px]">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <Key className="text-[#a21b7e]" size={24} />
-            Contas de Acesso dos Clientes
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Crie e gerencie contas de e-mail e credenciais de acesso exclusivas para os seus clientes.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={openAddForm}
-          className="flex items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2.5 rounded-md text-sm font-bold shadow-sm transition-all cursor-pointer h-10 shrink-0"
-        >
-          <UserPlus size={16} />
-          Criar Conta de Acesso
-        </button>
-      </div>
-
       {accountError && !isAddAccountModalOpen && (
         <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-sm flex items-center gap-2">
           <AlertCircle size={16} />

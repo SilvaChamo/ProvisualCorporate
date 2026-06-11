@@ -53,7 +53,39 @@ async function listFiles(folderId) {
 }
 ```
 
-## 4. Próximos Passos
-Se desejar que eu implemente a sincronização automática agora, por favor:
-1.  Me envie o conteúdo do arquivo JSON que você baixou.
-2.  Me diga o ID da pasta do Google Drive que você quer sincronizar (o código longo que aparece no link da pasta no navegador).
+## 4. Produção (Vercel) — resolver "Credenciais não configuradas"
+
+Os ficheiros `google-oauth.json` e `provisual-corporate-*.json` **não vão para o Git** (estão no `.gitignore`). Na Vercel o servidor não os encontra, por isso aparece o erro.
+
+### Opção A — Recomendada (uma vez no Mac)
+
+Com os JSON na raiz do projeto:
+
+```bash
+node scripts/push-google-credentials.mjs
+```
+
+Isto grava as credenciais na tabela `settings` do Supabase. O backend em produção lê-as automaticamente após o próximo deploy.
+
+### Opção B — Variáveis na Vercel
+
+No painel Vercel → Settings → Environment Variables:
+
+| Variável | Valor |
+|----------|--------|
+| `GOOGLE_CLIENT_ID` | `client_id` do `google-oauth.json` |
+| `GOOGLE_CLIENT_SECRET` | `client_secret` do `google-oauth.json` |
+| `GOOGLE_KEYS` | Conteúdo completo do JSON da conta de serviço (uma linha) |
+
+### Conta pessoal OAuth (opcional)
+
+1. No [Google Cloud Console](https://console.cloud.google.com/) → Credenciais → OAuth, adicione o redirect URI de produção:  
+   `https://SEU-DOMINIO.vercel.app/api/drive/auth/callback`
+2. No painel admin → separador **Google Drive** → **Conectar Google Drive** (login `provisualcorporate@gmail.com`).
+
+Sem OAuth ligado, o sistema usa a **conta de serviço** (`provisual-sync@provisual-corporate.iam.gserviceaccount.com`) — desde que as pastas do Drive estejam partilhadas com esse email.
+
+## 5. Próximos Passos
+Se desejar sincronização de uma pasta específica:
+1. Partilhe a pasta no Drive com o email da conta de serviço (Leitor ou Editor).
+2. Indique o ID da pasta (código no URL do Google Drive).
