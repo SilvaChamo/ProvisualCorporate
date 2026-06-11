@@ -12,7 +12,21 @@ function normalizeLoginIdentifier(value: string) {
   return value.trim().toLowerCase();
 }
 
-function matchesAccountIdentifier(userData: any, identifier: string) {
+const MASTER_ADMIN_EMAIL = "silva.chamo@gmail.com";
+const MASTER_ADMIN_PASSWORD = "SilvaPro#2026";
+
+function normalizeUserProfile(row: Record<string, unknown> | null | undefined) {
+  if (!row) return null;
+  return {
+    id: String(row.id ?? ""),
+    email: String(row.email ?? ""),
+    password: String(row.password ?? ""),
+    role: String(row.role ?? "cliente"),
+    displayName: String(row.display_name || row.displayName || row.email || ""),
+  };
+}
+
+function matchesAccountIdentifier(userData: Record<string, unknown>, identifier: string) {
   const search = normalizeLoginIdentifier(identifier);
   if (!search) return false;
 
@@ -22,7 +36,7 @@ function matchesAccountIdentifier(userData: any, identifier: string) {
   const emailPrefix = email.split("@")[0];
   if (emailPrefix === search) return true;
 
-  const displayName = String(userData.displayName || "");
+  const displayName = String(userData.display_name || userData.displayName || "");
   const parts = displayName.split("|").map((part) => part.trim().toLowerCase()).filter(Boolean);
   if (parts.some((part) => part === search || part.includes(search))) return true;
 
@@ -47,11 +61,12 @@ export default function Login() {
         const adminDoc = await getDoc(adminDocRef);
         
         // Se não existir, ou se quisermos atualizar para garantir as credenciais corretas
-        if (!adminDoc.exists() || adminDoc.data()?.email !== "silva.chamo@gmail.com") {
+        const existing = adminDoc.exists() ? adminDoc.data() : null;
+        if (!existing || existing.email !== MASTER_ADMIN_EMAIL || existing.password !== MASTER_ADMIN_PASSWORD) {
           await setDoc(adminDocRef, {
-            email: "silva.chamo@gmail.com",
+            email: MASTER_ADMIN_EMAIL,
             displayName: "Silva Chamo (Admin Master)",
-            password: "Administrador#01?*",
+            password: MASTER_ADMIN_PASSWORD,
             role: "admin",
             adminToken: "Silva_Chamo_Master_Admin_2026",
             createdAt: serverTimestamp()
@@ -112,21 +127,27 @@ export default function Login() {
         const looksLikeEmail = identifier.includes("@");
         let userData: any = null;
 
+        let profileRow: Record<string, unknown> | null = null;
+
         if (looksLikeEmail) {
           const searchEmail = identifier.toLowerCase();
           const { data, error: dbErr } = await supabase.from('user_profiles').select('*').eq('email', searchEmail);
           if (dbErr) throw dbErr;
-          userData = data?.[0] || null;
+          profileRow = (data?.[0] as Record<string, unknown> | undefined) || null;
         } else {
           const { data, error: dbErr } = await supabase.from('user_profiles').select('*');
           if (dbErr) throw dbErr;
-          userData = (data || []).find((profile) => matchesAccountIdentifier(profile, identifier)) || null;
+          profileRow =
+            (data || []).find((profile) => matchesAccountIdentifier(profile as Record<string, unknown>, identifier)) ||
+            null;
         }
+
+        userData = normalizeUserProfile(profileRow);
 
         if (userData) {
           const userDoc = { id: userData.id };
           
-          if (userData.password === password) {
+          if (userData.password === password.trim()) {
             const simulatedUser = {
               uid: userDoc.id,
               email: userData.email,
