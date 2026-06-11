@@ -63,6 +63,14 @@ import { useDashboardSidebar } from "./dashboard/useDashboardSidebar";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, displayDriveName, handleFirestoreError, isSuperAdmin, OperationType } from "../lib/utils";
+import {
+  findAccountByEmail,
+  getAccountDisplayTitle,
+  getAccountGreetingName,
+  getAccountListLabel,
+  parseAccountDisplay,
+} from "../lib/accountDisplay";
+import AccountAvatar from "./AccountAvatar";
 import { driveThumbnailSrc, resolveDriveFileId } from "../lib/driveImageUrl";
 import { markFolderSynced, shouldSkipFolderSync } from "../lib/siteAdminCache";
 import {
@@ -2190,16 +2198,11 @@ export default function Dashboard() {
             <div className="flex items-center justify-between gap-2 md:justify-end">
               {userProfile && (
                 <div className="flex items-center min-w-0 flex-1 md:flex-none h-9 px-3 bg-gray-50 border border-gray-100 rounded-sm select-none">
-                  <span className="text-sm text-gray-800 font-bold truncate" title={userProfile.displayName || userProfile.email}>
-                    Olá, {(() => {
-                      const name = userProfile.displayName || "";
-                      if (!name) {
-                        const emailPrefix = userProfile.email.split('@')[0];
-                        return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
-                      }
-                      if (name.toLowerCase().includes("silva")) return "Silva";
-                      return name.split(' ')[0].replace(/[()]/g, '');
-                    })()}
+                  <span
+                    className="text-sm text-gray-800 font-bold truncate"
+                    title={getAccountDisplayTitle(userProfile.displayName || "", userProfile.email)}
+                  >
+                    Olá, {getAccountGreetingName(userProfile.displayName || "", userProfile.email)}
                   </span>
                 </div>
               )}
@@ -2568,8 +2571,14 @@ export default function Dashboard() {
                                 <div className="truncate min-w-0">
                                   <span className="text-xs font-bold text-gray-700 truncate block" title={displayDriveName(folder.name)}>{displayDriveName(folder.name)}</span>
                                   {(folder as any).clientEmail && userProfile?.role === 'admin' && (
-                                    <span className="text-[10px] font-medium text-[#a21b7e] flex items-center gap-1 mt-0.5">
-                                      <Users size={9} className="shrink-0" />
+                                    <span className="text-[10px] font-medium text-[#a21b7e] flex items-center gap-1.5 mt-0.5 min-w-0">
+                                      <AccountAvatar
+                                        size="xs"
+                                        displayName={
+                                          findAccountByEmail(accounts, (folder as any).clientEmail)?.displayName
+                                        }
+                                        email={(folder as any).clientEmail}
+                                      />
                                       <span className="truncate">{(folder as any).clientEmail}</span>
                                     </span>
                                   )}
@@ -2773,7 +2782,7 @@ export default function Dashboard() {
                                                 <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                                   {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
                                                     accounts.filter(a => a.role !== 'admin').map((client: any) => {
-                                                      const clientName = client.displayName?.split('|')[1]?.trim() || client.displayName?.split('|')[0]?.trim() || client.email;
+                                                      const clientName = getAccountListLabel(client.displayName || "", client.email);
                                                       const isActive = (folder as any).clientEmail === client.email?.toLowerCase();
                                                       return (
                                                         <button
@@ -2795,11 +2804,12 @@ export default function Dashboard() {
                                                           )}
                                                         >
                                                           <div className="flex items-center gap-2">
-                                                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
-                                                              isActive ? "bg-[#a21b7e] text-white" : "bg-gray-100 text-gray-500"
-                                                            )}>
-                                                              {isActive ? <Check size={10} /> : clientName?.charAt(0)?.toUpperCase()}
-                                                            </div>
+                                                            <AccountAvatar
+                                                              size="sm"
+                                                              displayName={client.displayName}
+                                                              email={client.email}
+                                                              active={isActive}
+                                                            />
                                                             <div className="min-w-0">
                                                               <div className="font-bold truncate">{clientName}</div>
                                                               <div className="text-[9px] text-gray-400 truncate">{client.email}</div>
@@ -3360,7 +3370,7 @@ export default function Dashboard() {
                                             <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                               {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
                                                 accounts.filter(a => a.role !== 'admin').map((client: any) => {
-                                                  const clientName = client.displayName?.split('|')[1]?.trim() || client.displayName?.split('|')[0]?.trim() || client.email;
+                                                  const clientName = getAccountListLabel(client.displayName || "", client.email);
                                                   const isActive = (folder as any).clientEmail === client.email?.toLowerCase();
                                                   return (
                                                     <button
@@ -3382,11 +3392,12 @@ export default function Dashboard() {
                                                       )}
                                                     >
                                                       <div className="flex items-center gap-2">
-                                                        <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
-                                                          isActive ? "bg-[#a21b7e] text-white" : "bg-gray-100 text-gray-500"
-                                                        )}>
-                                                          {isActive ? <Check size={10} /> : clientName?.charAt(0)?.toUpperCase()}
-                                                        </div>
+                                                        <AccountAvatar
+                                                          size="sm"
+                                                          displayName={client.displayName}
+                                                          email={client.email}
+                                                          active={isActive}
+                                                        />
                                                         <div className="min-w-0">
                                                           <div className="font-bold truncate">{clientName}</div>
                                                           <div className="text-[9px] text-gray-400 truncate">{client.email}</div>
@@ -4213,10 +4224,8 @@ export default function Dashboard() {
                 <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2">Selecione o Cliente</label>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                   {accounts.filter(a => a.role !== 'admin').map(client => {
-                    const rawName = client.displayName || "";
-                    const parsed = rawName.includes('|')
-                      ? { name: rawName.split('|')[0], logo: rawName.split('|')[1] }
-                      : { name: rawName, logo: "" };
+                    const parsed = parseAccountDisplay(client.displayName || "");
+                    const listLabel = getAccountListLabel(client.displayName || "", client.email);
 
                     return (
                       <button
@@ -4225,17 +4234,14 @@ export default function Dashboard() {
                         onClick={() => setSelectedClientId(client.email)}
                         className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedClientId === client.email ? 'border-[#a21b7e] bg-[#a21b7e]/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
                       >
-                        <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
-                          {parsed.logo ? (
-                            <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain" />
-                          ) : (
-                            <span className="text-[10px] font-black text-[#a21b7e] uppercase">
-                              {parsed.name ? parsed.name.charAt(0) : "C"}
-                            </span>
-                          )}
-                        </div>
+                        <AccountAvatar
+                          size="md"
+                          displayName={client.displayName}
+                          email={client.email}
+                          active={selectedClientId === client.email}
+                        />
                         <div>
-                          <p className="text-sm font-bold text-gray-700 font-sans">{parsed.name || 'Cliente'}</p>
+                          <p className="text-sm font-bold text-gray-700 font-sans">{listLabel || "Cliente"}</p>
                           <p className="text-xs text-gray-400 font-sans">{client.email}</p>
                         </div>
                         {selectedClientId === client.email && <CheckCircle2 size={16} className="text-[#a21b7e] ml-auto shrink-0" />}

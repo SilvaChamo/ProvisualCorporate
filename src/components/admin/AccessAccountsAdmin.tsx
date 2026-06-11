@@ -21,6 +21,8 @@ import {
 import { ADMIN_CACHE_KEYS, readAdminCache } from "../../lib/siteAdminCache";
 import type { AdminNavState } from "./AdminBreadcrumb";
 import AdminToolbarSearch from "./AdminToolbarSearch";
+import { parseAccountDisplay } from "../../lib/accountDisplay";
+import AccountAvatar from "../AccountAvatar";
 
 function generateStrongPassword() {
   const chars = "abcdefghijklmnopqrstuvwxyz";
@@ -39,18 +41,6 @@ function generateStrongPassword() {
   return pass.split("").sort(() => 0.5 - Math.random()).join("");
 }
 
-function parseAccountDisplay(displayName: string) {
-  const rawName = String(displayName || "");
-  const parts = rawName.split("|");
-  if (parts.length >= 3) {
-    return { responsible: parts[0], name: parts[1], logo: parts.slice(2).join("|") };
-  }
-  if (parts.length === 2) {
-    return { responsible: "", name: parts[0], logo: parts[1] };
-  }
-  return { responsible: "", name: rawName, logo: "" };
-}
-
 /** Evita carregar logos base64 gigantes na tabela (causa ecrã branco / freeze). */
 function normalizeAccountRow(row: Record<string, unknown>) {
   const fullDisplayName = String(row.displayName || row.display_name || "");
@@ -62,9 +52,9 @@ function normalizeAccountRow(row: Record<string, unknown>) {
     role: String(row.role ?? "cliente"),
     clientId: String(row.clientId || row.client_id || row.id || ""),
     displayNameFull: fullDisplayName,
-    displayName: `${parsed.responsible}|${parsed.name}|`,
+    displayName: `${parsed.responsible}|${parsed.companyName}|`,
     responsible: parsed.responsible,
-    companyName: parsed.name,
+    companyName: parsed.companyName,
   };
 }
 
@@ -207,7 +197,7 @@ export default function AccessAccountsAdmin({
     setEditingAccount(account);
     setNewAccountEmail(account.email);
     setNewAccountResponsible(parsed.responsible);
-    setNewAccountName(parsed.name);
+    setNewAccountName(parsed.companyName);
     setNewAccountLogo(parsed.logo);
     setNewAccountPassword(account.password || "");
     setNewAccountRole((account.role as "admin" | "cliente") || "cliente");
@@ -516,15 +506,11 @@ export default function AccessAccountsAdmin({
                   <tr key={account.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-800">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
-                          <span className="text-[10px] font-black text-gray-400 uppercase">
-                            {account.responsible
-                              ? account.responsible.charAt(0)
-                              : account.companyName
-                                ? account.companyName.charAt(0)
-                                : "C"}
-                          </span>
-                        </div>
+                        <AccountAvatar
+                          size="md"
+                          displayName={account.displayNameFull}
+                          email={account.email}
+                        />
                         <span className="font-bold text-gray-800">{account.responsible || "—"}</span>
                       </div>
                     </td>

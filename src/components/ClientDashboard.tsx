@@ -58,6 +58,14 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, displayDriveName, handleFirestoreError, isSuperAdmin, OperationType } from "../lib/utils";
 import {
+  findAccountByEmail,
+  getAccountDisplayTitle,
+  getAccountGreetingName,
+  getAccountListLabel,
+  parseAccountDisplay,
+} from "../lib/accountDisplay";
+import AccountAvatar from "./AccountAvatar";
+import {
   mergeById,
   parentMatchesFolder,
   parseDriveListing,
@@ -739,21 +747,10 @@ export default function ClientDashboard() {
   const handleEditClick = (account: any) => {
     setEditingAccount(account);
     setNewAccountEmail(account.email);
-    const rawName = String(account.displayName || "");
-    const parts = rawName.split('|');
-    if (parts.length === 3) {
-      setNewAccountResponsible(parts[0]);
-      setNewAccountName(parts[1]);
-      setNewAccountLogo(parts[2] || "");
-    } else if (parts.length === 2) {
-      setNewAccountResponsible("");
-      setNewAccountName(parts[0]);
-      setNewAccountLogo(parts[1] || "");
-    } else {
-      setNewAccountResponsible("");
-      setNewAccountName(rawName);
-      setNewAccountLogo("");
-    }
+    const parsed = parseAccountDisplay(String(account.displayName || ""));
+    setNewAccountResponsible(parsed.responsible);
+    setNewAccountName(parsed.companyName);
+    setNewAccountLogo(parsed.logo);
     setNewAccountPassword(account.password || "");
     setNewAccountRole(account.role || "cliente");
     setAccountError(null);
@@ -2132,29 +2129,20 @@ export default function ClientDashboard() {
           )}
         >
           {(() => {
-            const parsed = (() => {
-              const rawName = userProfile?.displayName || "";
-              if (rawName.includes('|')) {
-                const parts = rawName.split('|');
-                return { name: parts[0], logo: parts[1] };
-              }
-              return { name: rawName, logo: "" };
-            })();
+            const parsed = parseAccountDisplay(userProfile?.displayName || "");
+            const sidebarLabel = parsed.companyName || parsed.responsible || "Cliente Corporativo";
 
             return (
               <>
-                <div className="w-10 h-10 rounded-full bg-white border border-[#a21b7e]/10 shadow-sm flex items-center justify-center overflow-hidden shrink-0">
-                  {parsed.logo ? (
-                    <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain animate-in fade-in duration-300" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-[#a21b7e]/20 to-[#b12a84]/20 text-[#a21b7e] text-sm font-black font-sans uppercase">
-                      {parsed.name ? parsed.name.charAt(0) : "C"}
-                    </div>
-                  )}
-                </div>
+                <AccountAvatar
+                  size="lg"
+                  displayName={userProfile?.displayName}
+                  email={userProfile?.email}
+                  className="bg-white border-[#a21b7e]/10 shadow-sm"
+                />
                 <div className={cn("flex flex-col min-w-0 leading-tight", sidebarCollapsed && "hidden")}>
-                  <span className="text-[11px] font-black text-gray-700 tracking-wide block uppercase truncate" title={parsed.name || "Cliente Corporativo"}>
-                    {parsed.name || "Cliente Corporativo"}
+                  <span className="text-[11px] font-black text-gray-700 tracking-wide block uppercase truncate" title={sidebarLabel}>
+                    {sidebarLabel}
                   </span>
                   <span className="text-[9px] font-semibold text-[#a21b7e]/70 tracking-wider block uppercase mt-0.5">
                     Área Exclusiva
@@ -2187,23 +2175,9 @@ export default function ClientDashboard() {
                 <div className="flex items-center min-w-0 flex-1 md:flex-none h-9 px-3 bg-gray-50 border border-gray-100 rounded-sm select-none">
                   <span
                     className="text-sm text-gray-800 font-bold truncate"
-                    title={(() => {
-                      const rawName = userProfile.displayName || "";
-                      return rawName.includes("|") ? rawName.split("|")[0] : rawName;
-                    })()}
+                    title={getAccountDisplayTitle(userProfile.displayName || "", userProfile.email)}
                   >
-                    Olá, {(() => {
-                      let name = userProfile.displayName || "";
-                      if (name.includes("|")) {
-                        name = name.split("|")[0];
-                      }
-                      if (!name) {
-                        const emailPrefix = userProfile.email.split("@")[0];
-                        return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
-                      }
-                      if (name.toLowerCase().includes("silva")) return "Silva";
-                      return name.split(" ")[0].replace(/[()]/g, "");
-                    })()}
+                    Olá, {getAccountGreetingName(userProfile.displayName || "", userProfile.email)}
                   </span>
                 </div>
               )}
@@ -2445,26 +2419,16 @@ export default function ClientDashboard() {
                             <tr key={account.id || account.uid || Math.random().toString()} className="hover:bg-gray-50/50 transition-colors">
                               <td className="px-6 py-4 font-bold text-gray-800">
                                 {(() => {
-                                  const rawName = String(account.displayName || "");
-                                  const parts = rawName.split('|');
-                                  const parsed = parts.length === 3
-                                    ? { responsible: parts[0], name: parts[1], logo: parts[2] }
-                                    : (parts.length === 2
-                                      ? { responsible: "", name: parts[0], logo: parts[1] }
-                                      : { responsible: "", name: rawName, logo: "" });
+                                  const parsed = parseAccountDisplay(String(account.displayName || ""));
                                   return (
                                     <div className="flex items-center gap-3">
-                                      <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
-                                        {parsed.logo ? (
-                                          <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain" />
-                                        ) : (
-                                          <span className="text-[10px] font-black text-gray-400 uppercase">
-                                            {parsed.name ? parsed.name.charAt(0) : "C"}
-                                          </span>
-                                        )}
-                                      </div>
+                                      <AccountAvatar
+                                        size="md"
+                                        displayName={account.displayName}
+                                        email={account.email}
+                                      />
                                       <div className="flex flex-col">
-                                        <span className="font-bold text-gray-800">{parsed.name || "Sem Nome"}</span>
+                                        <span className="font-bold text-gray-800">{parsed.companyName || "Sem Nome"}</span>
                                         {parsed.responsible && (
                                           <span className="text-[10px] font-normal text-gray-400">Resp: {parsed.responsible}</span>
                                         )}
@@ -2975,7 +2939,7 @@ export default function ClientDashboard() {
                                                 <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                                   {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
                                                     accounts.filter(a => a.role !== 'admin').map((client: any) => {
-                                                      const clientName = client.displayName?.split('|')[1]?.trim() || client.displayName?.split('|')[0]?.trim() || client.email;
+                                                      const clientName = getAccountListLabel(client.displayName || "", client.email);
                                                       const isActive = (folder as any).clientEmail === client.email?.toLowerCase();
                                                       return (
                                                         <button
@@ -2997,11 +2961,12 @@ export default function ClientDashboard() {
                                                           )}
                                                         >
                                                           <div className="flex items-center gap-2">
-                                                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
-                                                              isActive ? "bg-[#a21b7e] text-white" : "bg-gray-100 text-gray-500"
-                                                            )}>
-                                                              {isActive ? <Check size={10} /> : clientName?.charAt(0)?.toUpperCase()}
-                                                            </div>
+                                                            <AccountAvatar
+                                                              size="sm"
+                                                              displayName={client.displayName}
+                                                              email={client.email}
+                                                              active={isActive}
+                                                            />
                                                             <div className="min-w-0">
                                                               <div className="font-bold truncate">{clientName}</div>
                                                               <div className="text-[9px] text-gray-400 truncate">{client.email}</div>
@@ -3536,7 +3501,7 @@ export default function ClientDashboard() {
                                             <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                               {accounts && accounts.filter(a => a.role !== 'admin').length > 0 ? (
                                                 accounts.filter(a => a.role !== 'admin').map((client: any) => {
-                                                  const clientName = client.displayName?.split('|')[1]?.trim() || client.displayName?.split('|')[0]?.trim() || client.email;
+                                                  const clientName = getAccountListLabel(client.displayName || "", client.email);
                                                   const isActive = (folder as any).clientEmail === client.email?.toLowerCase();
                                                   return (
                                                     <button
@@ -3558,11 +3523,12 @@ export default function ClientDashboard() {
                                                       )}
                                                     >
                                                       <div className="flex items-center gap-2">
-                                                        <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
-                                                          isActive ? "bg-[#a21b7e] text-white" : "bg-gray-100 text-gray-500"
-                                                        )}>
-                                                          {isActive ? <Check size={10} /> : clientName?.charAt(0)?.toUpperCase()}
-                                                        </div>
+                                                        <AccountAvatar
+                                                          size="sm"
+                                                          displayName={client.displayName}
+                                                          email={client.email}
+                                                          active={isActive}
+                                                        />
                                                         <div className="min-w-0">
                                                           <div className="font-bold truncate">{clientName}</div>
                                                           <div className="text-[9px] text-gray-400 truncate">{client.email}</div>
@@ -4364,10 +4330,7 @@ export default function ClientDashboard() {
                 <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2">Selecione o Cliente</label>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                   {accounts.filter(a => a.role === 'cliente').map(client => {
-                    const rawName = client.displayName || "";
-                    const parsed = rawName.includes('|')
-                      ? { name: rawName.split('|')[0], logo: rawName.split('|')[1] }
-                      : { name: rawName, logo: "" };
+                    const listLabel = getAccountListLabel(client.displayName || "", client.email);
 
                     return (
                       <button
@@ -4376,17 +4339,14 @@ export default function ClientDashboard() {
                         onClick={() => setSelectedClientId(client.id)}
                         className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedClientId === client.id ? 'border-[#a21b7e] bg-[#a21b7e]/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
                       >
-                        <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
-                          {parsed.logo ? (
-                            <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain" />
-                          ) : (
-                            <span className="text-[10px] font-black text-[#a21b7e] uppercase">
-                              {parsed.name ? parsed.name.charAt(0) : "C"}
-                            </span>
-                          )}
-                        </div>
+                        <AccountAvatar
+                          size="md"
+                          displayName={client.displayName}
+                          email={client.email}
+                          active={selectedClientId === client.id}
+                        />
                         <div>
-                          <p className="text-sm font-bold text-gray-700 font-sans">{parsed.name || 'Cliente'}</p>
+                          <p className="text-sm font-bold text-gray-700 font-sans">{listLabel || "Cliente"}</p>
                           <p className="text-xs text-gray-400 font-sans">{client.email}</p>
                         </div>
                         {selectedClientId === client.id && <CheckCircle2 size={16} className="text-[#a21b7e] ml-auto shrink-0" />}
