@@ -2475,7 +2475,7 @@ export default function Dashboard() {
 
         {/* Site home editor */}
         {activeTab === 'site_home' && userProfile?.role === 'admin' ? (
-          <SiteHomeAdminPanel />
+          <SiteHomeAdminPanel viewerProfile={userProfile} />
         ) : (
           <div
             className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 relative"

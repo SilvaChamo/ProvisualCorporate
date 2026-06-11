@@ -56,7 +56,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn, displayDriveName, handleFirestoreError, isSuperAdmin, OperationType } from "../lib/utils";
+import { cn, displayDriveName, filterAccountsForViewer, handleFirestoreError, isSuperAdmin, OperationType } from "../lib/utils";
 import {
   findAccountByEmail,
   getAccountDisplayTitle,
@@ -2393,14 +2393,14 @@ export default function ClientDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
-                      {accounts.length === 0 ? (
+                      {filterAccountsForViewer(accounts, userProfile).length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
                             Nenhuma conta cadastrada no portal. Clique em "Criar Conta de Acesso" para começar!
                           </td>
                         </tr>
                       ) : (
-                        accounts.map((account) => {
+                        filterAccountsForViewer(accounts, userProfile).map((account) => {
                           let createdDateStr = "—";
                           if (account.createdAt) {
                             if (typeof account.createdAt.toDate === 'function') {

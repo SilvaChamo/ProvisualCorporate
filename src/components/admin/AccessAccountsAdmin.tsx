@@ -11,7 +11,7 @@ import {
   Upload,
   UserPlus,
 } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn, filterAccountsForViewer } from "../../lib/utils";
 import {
   createAdminAccount,
   deleteAdminAccount,
@@ -60,6 +60,7 @@ function normalizeAccountRow(row: Record<string, unknown>) {
 
 interface AccessAccountsAdminProps {
   isActive?: boolean;
+  viewerProfile?: { email?: string; id?: string; uid?: string; displayName?: string } | null;
   onToolbarChange?: (actions: React.ReactNode) => void;
   onNavChange?: (state: AdminNavState) => void;
 }
@@ -75,6 +76,7 @@ function loadAccountsFromCache() {
 
 export default function AccessAccountsAdmin({
   isActive = true,
+  viewerProfile = null,
   onToolbarChange,
   onNavChange,
 }: AccessAccountsAdminProps) {
@@ -129,16 +131,21 @@ export default function AccessAccountsAdmin({
     });
   }, [onNavChange, isActive]);
 
+  const visibleAccounts = useMemo(
+    () => filterAccountsForViewer(accounts, viewerProfile),
+    [accounts, viewerProfile],
+  );
+
   const filteredAccounts = useMemo(() => {
-    if (!searchQuery) return accounts;
+    if (!searchQuery) return visibleAccounts;
     const q = searchQuery.toLowerCase();
-    return accounts.filter((account) => {
+    return visibleAccounts.filter((account) => {
       const name = `${account.responsible} ${account.companyName}`.toLowerCase();
       const email = account.email.toLowerCase();
       const clientId = account.clientId.toLowerCase();
       return name.includes(q) || email.includes(q) || clientId.includes(q);
     });
-  }, [accounts, searchQuery]);
+  }, [visibleAccounts, searchQuery]);
 
   const handleCloseAccountModal = () => {
     setIsAddAccountModalOpen(false);

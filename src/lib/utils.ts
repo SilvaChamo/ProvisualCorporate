@@ -13,6 +13,9 @@ type AdminProfile = {
   displayName?: string;
 };
 
+const MASTER_ADMIN_EMAIL = "silva.chamo@gmail.com";
+const MASTER_ADMIN_ID = "admin_master_silva";
+
 /** Apenas a conta master (Silva Chamo) pode ligar OAuth pessoal ao Google Drive. */
 export function isSuperAdmin(profile: AdminProfile | null | undefined): boolean {
   if (!profile) return false;
@@ -20,10 +23,24 @@ export function isSuperAdmin(profile: AdminProfile | null | undefined): boolean 
   const id = String(profile.id || profile.uid || "");
   const name = String(profile.displayName || "").toLowerCase();
   return (
-    email === "silva.chamo@gmail.com" ||
-    id === "admin_master_silva" ||
+    email === MASTER_ADMIN_EMAIL ||
+    id === MASTER_ADMIN_ID ||
     name.includes("admin master")
   );
+}
+
+/** Identifica a conta master na lista de utilizadores. */
+export function isMasterAccount(account: AdminProfile | null | undefined): boolean {
+  return isSuperAdmin(account);
+}
+
+/** Master vê todas as contas; administrador simples não vê a conta master. */
+export function filterAccountsForViewer<T extends AdminProfile>(
+  accounts: T[],
+  viewer: AdminProfile | null | undefined,
+): T[] {
+  if (isSuperAdmin(viewer)) return accounts;
+  return accounts.filter((account) => !isMasterAccount(account));
 }
 
 export function displayDriveName(name: unknown): string {

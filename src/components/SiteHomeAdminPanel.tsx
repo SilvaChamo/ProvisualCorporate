@@ -11,13 +11,24 @@ import type { AdminEditorHandle } from "./admin/AdminEditorHandle";
 
 type HomeAdminTab = "albuns" | "videos" | "contas";
 
+type ViewerProfile = {
+  email?: string;
+  id?: string;
+  uid?: string;
+  displayName?: string;
+};
+
+interface SiteHomeAdminPanelProps {
+  viewerProfile?: ViewerProfile | null;
+}
+
 const TABS: { id: HomeAdminTab; label: string; icon: React.ReactNode }[] = [
   { id: "albuns", label: "Álbuns", icon: <Images size={16} /> },
   { id: "videos", label: "Vídeos", icon: <Video size={16} /> },
   { id: "contas", label: "Contas de Acesso", icon: <Key size={16} /> },
 ];
 
-export default function SiteHomeAdminPanel() {
+export default function SiteHomeAdminPanel({ viewerProfile = null }: SiteHomeAdminPanelProps) {
   const [activeTab, setActiveTab] = useState<HomeAdminTab>("albuns");
   const [pendingTab, setPendingTab] = useState<HomeAdminTab | null>(null);
   const [unsavedOpen, setUnsavedOpen] = useState(false);
@@ -133,6 +144,7 @@ export default function SiteHomeAdminPanel() {
           <div className={activeTab === "contas" ? "" : "hidden"}>
             <AccessAccountsAdmin
               isActive={activeTab === "contas"}
+              viewerProfile={viewerProfile}
               onToolbarChange={setToolbarActions}
               onNavChange={setAdminNav}
             />
