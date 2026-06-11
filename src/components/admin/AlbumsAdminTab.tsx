@@ -33,11 +33,13 @@ type PendingPhoto = {
 };
 
 function albumCoverUrl(album: SiteDriveAlbum) {
-  if (album.image) return driveDisplayUrl(album.image, "sm");
-  if (album.coverDriveId) {
+  const staticCandidate = [album.coverUrl, album.image].find((u) => u?.startsWith("/INICIO/"));
+  if (staticCandidate) return staticCandidate;
+  if (album.coverDriveId && !String(album.coverDriveId).startsWith("static-")) {
     return `/api/drive/thumbnail?id=${encodeURIComponent(album.coverDriveId)}&sz=400`;
   }
-  return album.coverUrl || "";
+  if (album.image?.includes("/api/drive/")) return driveDisplayUrl(album.image, "sm");
+  return album.image || album.coverUrl || "";
 }
 
 function photoPreviewUrl(photo: SiteDrivePhoto) {

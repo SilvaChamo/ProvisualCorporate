@@ -282,6 +282,9 @@ function albumsFromApiPayload(data: Record<string, unknown>): SiteDriveAlbum[] |
     const slug = String(entry.slug || "");
     const staticAlbum = GALLERY_ALBUMS.find((a) => a.slug === slug);
     const coverDriveId = entry.coverDriveId ? String(entry.coverDriveId) : null;
+    const coverImageUrl = entry.coverImageUrl
+      ? String(entry.coverImageUrl)
+      : staticAlbum?.image || null;
     return {
       slug,
       name: String(entry.title || slug),
@@ -289,13 +292,9 @@ function albumsFromApiPayload(data: Record<string, unknown>): SiteDriveAlbum[] |
       subtitle: String(entry.subtitle || `${entry.photoCount ?? 0} fotos`),
       folderId: entry.folderId ? String(entry.folderId) : null,
       coverDriveId,
-      coverUrl: coverDriveId
-        ? `/api/drive/thumbnail?id=${encodeURIComponent(coverDriveId)}&sz=400`
-        : staticAlbum?.image || null,
+      coverUrl: coverImageUrl,
       photoCount: typeof entry.photoCount === "number" ? entry.photoCount : 0,
-      image: coverDriveId
-        ? `/api/drive/thumbnail?id=${encodeURIComponent(coverDriveId)}&sz=800`
-        : staticAlbum?.image || "",
+      image: coverImageUrl || "",
     };
   });
 }
