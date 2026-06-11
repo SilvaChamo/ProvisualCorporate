@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertCircle,
   CheckCircle2,
@@ -6,6 +7,7 @@ import {
   Loader2,
   Mail,
   Pencil,
+  Plus,
   Search,
   Trash2,
   Upload,
@@ -71,7 +73,7 @@ export default function AccessAccountsAdmin() {
   const [accounts, setAccounts] = useState<ReturnType<typeof normalizeAccountRow>[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
+  const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<ReturnType<typeof normalizeAccountRow> | null>(null);
   const [newAccountEmail, setNewAccountEmail] = useState("");
   const [newAccountResponsible, setNewAccountResponsible] = useState("");
@@ -113,8 +115,8 @@ export default function AccessAccountsAdmin() {
     });
   }, [accounts, searchQuery]);
 
-  const resetForm = () => {
-    setFormOpen(false);
+  const handleCloseAccountModal = () => {
+    setIsAddAccountModalOpen(false);
     setEditingAccount(null);
     setNewAccountEmail("");
     setNewAccountResponsible("");
@@ -136,7 +138,7 @@ export default function AccessAccountsAdmin() {
     setNewAccountLogo("");
     setNewAccountPassword(generateStrongPassword());
     setNewAccountRole("cliente");
-    setFormOpen(true);
+    setIsAddAccountModalOpen(true);
   };
 
   const openEditForm = (account: ReturnType<typeof normalizeAccountRow>) => {
@@ -150,7 +152,7 @@ export default function AccessAccountsAdmin() {
     setNewAccountRole((account.role as "admin" | "cliente") || "cliente");
     setAccountError(null);
     setAccountSuccess(null);
-    setFormOpen(true);
+    setIsAddAccountModalOpen(true);
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -248,7 +250,7 @@ export default function AccessAccountsAdmin() {
       }
 
       await reloadAccounts();
-      setTimeout(resetForm, 1200);
+      setTimeout(handleCloseAccountModal, 1500);
     } catch (err: unknown) {
       console.error("Erro ao salvar conta:", err);
       const message = err instanceof Error ? err.message : String(err);
@@ -271,9 +273,152 @@ export default function AccessAccountsAdmin() {
     }
   };
 
+  const accountModal =
+    isAddAccountModalOpen && typeof document !== "undefined"
+      ? createPortal(
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-white rounded-lg border border-gray-100 shadow-2xl w-full max-w-md overflow-hidden">
+              <div className="bg-[#a21b7e] p-6 text-white flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold flex items-center gap-2">
+                    <UserPlus size={20} />
+                    {editingAccount ? "Editar Conta de Acesso" : "Nova Conta de Acesso"}
+                  </h3>
+                  <p className="text-xs text-white/80 mt-0.5">
+                    {editingAccount
+                      ? "Atualize as credenciais de acesso do seu cliente."
+                      : "Defina as credenciais para o seu cliente."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseAccountModal}
+                  className="p-1 hover:bg-white/10 rounded text-white/80 hover:text-white cursor-pointer"
+                  aria-label="Fechar"
+                >
+                  <Plus className="rotate-45" size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveAccount} className="p-6 space-y-3">
+                {accountError && (
+                  <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-xs flex items-center gap-2">
+                    <AlertCircle size={16} />
+                    <span>{accountError}</span>
+                  </div>
+                )}
+                {accountSuccess && (
+                  <div className="bg-emerald-50 border border-emerald-100 text-emerald-600 p-3 rounded text-xs flex items-center gap-2">
+                    <CheckCircle2 size={16} />
+                    <span>{accountSuccess}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2 items-stretch">
+                  <div className="flex-1 flex flex-col gap-2 justify-center">
+                    <input
+                      type="text"
+                      placeholder="Nome do responsável"
+                      value={newAccountResponsible}
+                      onChange={(e) => setNewAccountResponsible(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                      required
+                    />
+                    <input
+                      type="text"
+                      placeholder="Nome da empresa"
+                      value={newAccountName}
+                      onChange={(e) => setNewAccountName(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                      required
+                    />
+                  </div>
+                  <div className="w-[88px] shrink-0">
+                    <label className="relative block w-[88px] h-[88px] border-2 border-dashed border-gray-200 hover:border-[#a21b7e] rounded-lg cursor-pointer overflow-hidden transition-all bg-gray-50 group">
+                      {newAccountLogo ? (
+                        <>
+                          <img src={newAccountLogo} alt="Logo" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition-all">
+                            Alterar
+                          </div>
+                        </>
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-[#a21b7e] transition-all">
+                          <Upload size={18} />
+                          <span className="text-[10px] font-bold mt-1">Logo</span>
+                        </div>
+                      )}
+                      <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                    </label>
+                  </div>
+                </div>
+
+                <input
+                  type="email"
+                  placeholder="Email de acesso"
+                  value={newAccountEmail}
+                  onChange={(e) => setNewAccountEmail(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                  required
+                />
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Senha de Acesso (Ex: @P#s$9w!K%)"
+                    value={newAccountPassword}
+                    onChange={(e) => setNewAccountPassword(e.target.value)}
+                    className="block flex-1 px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50 font-mono"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNewAccountPassword(generateStrongPassword())}
+                    className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold transition-all cursor-pointer border border-gray-200 shrink-0"
+                  >
+                    Gerar Senha
+                  </button>
+                </div>
+
+                <select
+                  value={newAccountRole}
+                  onChange={(e) => setNewAccountRole(e.target.value as "admin" | "cliente")}
+                  className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
+                >
+                  <option value="cliente">Cliente (Acesso de visualização de arquivos)</option>
+                  <option value="admin">Administrador (Gestão completa do portal)</option>
+                </select>
+
+                <div className="flex gap-2 pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={handleCloseAccountModal}
+                    className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded text-sm font-bold transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingAccount}
+                    className="flex-1 py-2.5 bg-[#a21b7e] hover:bg-[#8e176e] text-white rounded text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isCreatingAccount
+                      ? "A salvar..."
+                      : editingAccount
+                        ? "Salvar Alterações"
+                        : "Criar Conta de Acesso"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div className="space-y-6 min-h-[420px] bg-white rounded-lg border border-gray-100 shadow-sm p-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 min-h-[420px]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
         <div>
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <Key className="text-[#a21b7e]" size={24} />
@@ -293,7 +438,7 @@ export default function AccessAccountsAdmin() {
         </button>
       </div>
 
-      {accountError && !formOpen && (
+      {accountError && !isAddAccountModalOpen && (
         <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-sm flex items-center gap-2">
           <AlertCircle size={16} />
           <span>{accountError}</span>
@@ -311,125 +456,7 @@ export default function AccessAccountsAdmin() {
         />
       </div>
 
-      {formOpen ? (
-        <div className="bg-gray-50 rounded-lg border border-gray-100 p-6">
-          <h3 className="text-base font-bold text-gray-800 mb-4">
-            {editingAccount ? "Editar Conta de Acesso" : "Nova Conta de Acesso"}
-          </h3>
-          <form onSubmit={handleSaveAccount} className="space-y-3">
-            {accountError && (
-              <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-xs flex items-center gap-2">
-                <AlertCircle size={16} />
-                <span>{accountError}</span>
-              </div>
-            )}
-            {accountSuccess && (
-              <div className="bg-emerald-50 border border-emerald-100 text-emerald-600 p-3 rounded text-xs flex items-center gap-2">
-                <CheckCircle2 size={16} />
-                <span>{accountSuccess}</span>
-              </div>
-            )}
-
-            <div className="flex gap-2 items-stretch">
-              <div className="flex-1 flex flex-col gap-2 justify-center">
-                <input
-                  type="text"
-                  placeholder="Nome do responsável"
-                  value={newAccountResponsible}
-                  onChange={(e) => setNewAccountResponsible(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
-                  required
-                />
-                <input
-                  type="text"
-                  placeholder="Nome da empresa"
-                  value={newAccountName}
-                  onChange={(e) => setNewAccountName(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
-                  required
-                />
-              </div>
-              <div className="w-[88px] shrink-0">
-                <label className="relative block w-[88px] h-[88px] border-2 border-dashed border-gray-200 hover:border-[#a21b7e] rounded-lg cursor-pointer overflow-hidden transition-all bg-gray-50 group">
-                  {newAccountLogo ? (
-                    <>
-                      <img src={newAccountLogo} alt="Logo" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition-all">
-                        Alterar
-                      </div>
-                    </>
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 group-hover:text-[#a21b7e] transition-all">
-                      <Upload size={18} />
-                      <span className="text-[10px] font-bold mt-1">Logo</span>
-                    </div>
-                  )}
-                  <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                </label>
-              </div>
-            </div>
-
-            <input
-              type="email"
-              placeholder="Email de acesso"
-              value={newAccountEmail}
-              onChange={(e) => setNewAccountEmail(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
-              required
-            />
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Senha de Acesso (Ex: @P#s$9w!K%)"
-                value={newAccountPassword}
-                onChange={(e) => setNewAccountPassword(e.target.value)}
-                className="block flex-1 px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50 font-mono"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setNewAccountPassword(generateStrongPassword())}
-                className="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold transition-all cursor-pointer border border-gray-200 shrink-0"
-              >
-                Gerar Senha
-              </button>
-            </div>
-
-            <select
-              value={newAccountRole}
-              onChange={(e) => setNewAccountRole(e.target.value as "admin" | "cliente")}
-              className="block w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50"
-            >
-              <option value="cliente">Cliente (Acesso de visualização de arquivos)</option>
-              <option value="admin">Administrador (Gestão completa do portal)</option>
-            </select>
-
-            <div className="flex gap-2 pt-4 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={resetForm}
-                className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded text-sm font-bold transition-all cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isCreatingAccount}
-                className="flex-1 py-2.5 bg-[#a21b7e] hover:bg-[#8e176e] text-white rounded text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {isCreatingAccount
-                  ? "A salvar..."
-                  : editingAccount
-                    ? "Salvar Alterações"
-                    : "Criar Conta de Acesso"}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-
-      <div className="rounded-lg border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -533,6 +560,8 @@ export default function AccessAccountsAdmin() {
           </table>
         </div>
       </div>
+
+      {accountModal}
     </div>
   );
 }
