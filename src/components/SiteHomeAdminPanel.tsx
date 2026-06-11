@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Images, Key, Video } from "lucide-react";
 import { cn } from "../lib/utils";
 import AlbumsAdminTab from "./admin/AlbumsAdminTab";
@@ -33,8 +33,17 @@ export default function SiteHomeAdminPanel() {
       return;
     }
 
+    if (tab === "contas") {
+      setToolbarActions(null);
+    }
     setActiveTab(tab);
   };
+
+  useEffect(() => {
+    if (activeTab === "contas") {
+      setToolbarActions(null);
+    }
+  }, [activeTab]);
 
   const closeUnsavedDialog = () => {
     if (unsavedSaving) return;
@@ -109,7 +118,7 @@ export default function SiteHomeAdminPanel() {
           {activeTab === "videos" && (
             <VideosAdminTab ref={editorRef} onToolbarChange={setToolbarActions} />
           )}
-          {activeTab === "contas" && <AccessAccountsAdmin onToolbarChange={setToolbarActions} />}
+          {activeTab === "contas" && <AccessAccountsAdmin />}
         </div>
       </div>
 

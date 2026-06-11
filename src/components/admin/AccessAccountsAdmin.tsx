@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  Key,
   Loader2,
   Mail,
   Pencil,
@@ -40,8 +41,8 @@ function generateStrongPassword() {
 function parseAccountDisplay(displayName: string) {
   const rawName = String(displayName || "");
   const parts = rawName.split("|");
-  if (parts.length === 3) {
-    return { responsible: parts[0], name: parts[1], logo: parts[2] };
+  if (parts.length >= 3) {
+    return { responsible: parts[0], name: parts[1], logo: parts.slice(2).join("|") };
   }
   if (parts.length === 2) {
     return { responsible: "", name: parts[0], logo: parts[1] };
@@ -49,16 +50,29 @@ function parseAccountDisplay(displayName: string) {
   return { responsible: "", name: rawName, logo: "" };
 }
 
-export default function AccessAccountsAdmin({
-  onToolbarChange,
-}: {
-  onToolbarChange?: (actions: React.ReactNode) => void;
-}) {
-  const [accounts, setAccounts] = useState<any[]>([]);
+/** Evita carregar logos base64 gigantes na tabela (causa ecrã branco / freeze). */
+function normalizeAccountRow(row: Record<string, unknown>) {
+  const fullDisplayName = String(row.displayName || row.display_name || "");
+  const parsed = parseAccountDisplay(fullDisplayName);
+  return {
+    id: String(row.id ?? ""),
+    email: String(row.email ?? ""),
+    password: String(row.password ?? ""),
+    role: String(row.role ?? "cliente"),
+    clientId: String(row.clientId || row.client_id || row.id || ""),
+    displayNameFull: fullDisplayName,
+    displayName: `${parsed.responsible}|${parsed.name}|`,
+    responsible: parsed.responsible,
+    companyName: parsed.name,
+  };
+}
+
+export default function AccessAccountsAdmin() {
+  const [accounts, setAccounts] = useState<ReturnType<typeof normalizeAccountRow>[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [formMode, setFormMode] = useState<"hidden" | "add" | "edit">("hidden");
-  const [editingAccount, setEditingAccount] = useState<any | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<ReturnType<typeof normalizeAccountRow> | null>(null);
   const [newAccountEmail, setNewAccountEmail] = useState("");
   const [newAccountResponsible, setNewAccountResponsible] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
@@ -72,7 +86,7 @@ export default function AccessAccountsAdmin({
   const reloadAccounts = useCallback(async () => {
     try {
       const accountsList = await fetchAdminAccounts();
-      setAccounts(accountsList);
+      setAccounts(accountsList.map((row) => normalizeAccountRow(row)));
       setAccountsLoaded(true);
       setAccountError(null);
     } catch (error: unknown) {
@@ -92,15 +106,15 @@ export default function AccessAccountsAdmin({
     if (!searchQuery) return accounts;
     const q = searchQuery.toLowerCase();
     return accounts.filter((account) => {
-      const name = String(account.displayName || "").toLowerCase();
-      const email = String(account.email || "").toLowerCase();
-      const clientId = String(account.clientId || account.id || "").toLowerCase();
+      const name = `${account.responsible} ${account.companyName}`.toLowerCase();
+      const email = account.email.toLowerCase();
+      const clientId = account.clientId.toLowerCase();
       return name.includes(q) || email.includes(q) || clientId.includes(q);
     });
   }, [accounts, searchQuery]);
 
   const resetForm = () => {
-    setFormMode("hidden");
+    setFormOpen(false);
     setEditingAccount(null);
     setNewAccountEmail("");
     setNewAccountResponsible("");
@@ -113,47 +127,40 @@ export default function AccessAccountsAdmin({
   };
 
   const openAddForm = () => {
-    resetForm();
+    setEditingAccount(null);
+    setAccountError(null);
+    setAccountSuccess(null);
+    setNewAccountEmail("");
+    setNewAccountResponsible("");
+    setNewAccountName("");
+    setNewAccountLogo("");
     setNewAccountPassword(generateStrongPassword());
-    setFormMode("add");
+    setNewAccountRole("cliente");
+    setFormOpen(true);
   };
 
-  useEffect(() => {
-    if (!onToolbarChange) return;
-    if (formMode !== "hidden") {
-      onToolbarChange(null);
-      return;
-    }
-    onToolbarChange(
-      <button
-        type="button"
-        onClick={openAddForm}
-        className="flex flex-1 md:flex-none items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
-      >
-        <UserPlus size={16} />
-        Criar Conta de Acesso
-      </button>,
-    );
-    return () => onToolbarChange(null);
-  }, [formMode, onToolbarChange]);
-
-  const openEditForm = (account: any) => {
+  const openEditForm = (account: ReturnType<typeof normalizeAccountRow>) => {
+    const parsed = parseAccountDisplay(account.displayNameFull);
     setEditingAccount(account);
     setNewAccountEmail(account.email);
-    const parsed = parseAccountDisplay(account.displayName);
     setNewAccountResponsible(parsed.responsible);
     setNewAccountName(parsed.name);
     setNewAccountLogo(parsed.logo);
     setNewAccountPassword(account.password || "");
-    setNewAccountRole(account.role || "cliente");
+    setNewAccountRole((account.role as "admin" | "cliente") || "cliente");
     setAccountError(null);
     setAccountSuccess(null);
-    setFormMode("edit");
+    setFormOpen(true);
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAccountError("A imagem selecionada é muito grande. Escolha uma imagem de até 5MB.");
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -219,7 +226,7 @@ export default function AccessAccountsAdmin({
         setAccountSuccess("Conta de acesso editada com sucesso!");
       } else {
         const emailExists = accounts.some(
-          (acc) => acc.email?.toLowerCase() === newAccountEmail.trim().toLowerCase(),
+          (acc) => acc.email.toLowerCase() === newAccountEmail.trim().toLowerCase(),
         );
         if (emailExists) {
           setAccountError("Este e-mail já está cadastrado.");
@@ -240,13 +247,12 @@ export default function AccessAccountsAdmin({
         setAccountSuccess("Conta de acesso criada com sucesso!");
       }
 
-      setTimeout(async () => {
-        resetForm();
-        await reloadAccounts();
-      }, 1200);
-    } catch (err: any) {
+      await reloadAccounts();
+      setTimeout(resetForm, 1200);
+    } catch (err: unknown) {
       console.error("Erro ao salvar conta:", err);
-      setAccountError(`Erro no banco de dados ao salvar a conta: ${err.message || err}`);
+      const message = err instanceof Error ? err.message : String(err);
+      setAccountError(`Erro no banco de dados ao salvar a conta: ${message}`);
     } finally {
       setIsCreatingAccount(false);
     }
@@ -266,31 +272,49 @@ export default function AccessAccountsAdmin({
   };
 
   return (
-    <div className="space-y-6 min-h-[420px]">
-      {accountError && formMode === "hidden" && (
+    <div className="space-y-6 min-h-[420px] bg-white rounded-lg border border-gray-100 shadow-sm p-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <Key className="text-[#a21b7e]" size={24} />
+            Contas de Acesso dos Clientes
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Crie e gerencie contas de e-mail e credenciais de acesso exclusivas para os seus clientes.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={openAddForm}
+          className="flex items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2.5 rounded-md text-sm font-bold shadow-sm transition-all cursor-pointer h-10 shrink-0"
+        >
+          <UserPlus size={16} />
+          Criar Conta de Acesso
+        </button>
+      </div>
+
+      {accountError && !formOpen && (
         <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded text-sm flex items-center gap-2">
           <AlertCircle size={16} />
           <span>{accountError}</span>
         </div>
       )}
 
-      {accounts.length > 10 && formMode === "hidden" && (
-        <div className="relative max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Pesquisar contas..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e]"
-          />
-        </div>
-      )}
+      <div className="relative max-w-md">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Pesquisar contas..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e]"
+        />
+      </div>
 
-      {formMode !== "hidden" ? (
+      {formOpen ? (
         <div className="bg-gray-50 rounded-lg border border-gray-100 p-6">
           <h3 className="text-base font-bold text-gray-800 mb-4">
-            {formMode === "edit" ? "Editar Conta de Acesso" : "Nova Conta de Acesso"}
+            {editingAccount ? "Editar Conta de Acesso" : "Nova Conta de Acesso"}
           </h3>
           <form onSubmit={handleSaveAccount} className="space-y-3">
             {accountError && (
@@ -357,7 +381,7 @@ export default function AccessAccountsAdmin({
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Senha de Acesso"
+                placeholder="Senha de Acesso (Ex: @P#s$9w!K%)"
                 value={newAccountPassword}
                 onChange={(e) => setNewAccountPassword(e.target.value)}
                 className="block flex-1 px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e] transition-all bg-gray-50 font-mono"
@@ -385,36 +409,40 @@ export default function AccessAccountsAdmin({
               <button
                 type="button"
                 onClick={resetForm}
-                className="flex-1 py-2.5 border border-gray-300 text-gray-700 bg-transparent hover:border-gray-400 rounded-sm text-sm font-bold transition-all cursor-pointer"
+                className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded text-sm font-bold transition-all cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isCreatingAccount}
-                className="flex-1 py-2.5 border border-[#a21b7e] text-[#a21b7e] bg-transparent hover:text-[#8e176e] hover:border-[#8e176e] rounded-sm text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
+                className="flex-1 py-2.5 bg-[#a21b7e] hover:bg-[#8e176e] text-white rounded text-sm font-bold transition-all disabled:opacity-50 cursor-pointer"
               >
-                {isCreatingAccount ? "A salvar..." : formMode === "edit" ? "Salvar Alterações" : "Criar Conta de Acesso"}
+                {isCreatingAccount
+                  ? "A salvar..."
+                  : editingAccount
+                    ? "Salvar Alterações"
+                    : "Criar Conta de Acesso"}
               </button>
             </div>
           </form>
         </div>
       ) : null}
 
-      <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+      <div className="rounded-lg border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-left border-collapse">
+          <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                <th className="px-4 py-3 whitespace-nowrap">Nome do Cliente / Empresa</th>
-                <th className="px-4 py-3 whitespace-nowrap">ID do Cliente</th>
-                <th className="px-4 py-3 whitespace-nowrap">E-mail de Acesso</th>
-                <th className="px-4 py-3 whitespace-nowrap">Senha de Acesso</th>
-                <th className="px-4 py-3 whitespace-nowrap">Perfil</th>
-                <th className="px-4 py-3 text-right whitespace-nowrap">Ações</th>
+                <th className="px-4 py-3">Nome do Cliente / Empresa</th>
+                <th className="px-4 py-3">ID do Cliente</th>
+                <th className="px-4 py-3">E-mail de Acesso</th>
+                <th className="px-4 py-3">Senha de Acesso</th>
+                <th className="px-4 py-3">Perfil</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-sm bg-white">
+            <tbody className="divide-y divide-gray-100 text-sm">
               {!accountsLoaded ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
@@ -429,86 +457,77 @@ export default function AccessAccountsAdmin({
                   <td colSpan={6} className="px-4 py-12 text-center text-gray-400 italic">
                     {searchQuery
                       ? "Nenhuma conta corresponde à sua pesquisa."
-                      : 'Nenhuma conta cadastrada. Clique em "Criar Conta de Acesso" para começar!'}
+                      : 'Nenhuma conta cadastrada no portal. Clique em "Criar Conta de Acesso" para começar!'}
                   </td>
                 </tr>
               ) : (
-                filteredAccounts.map((account) => {
-                  const parsed = parseAccountDisplay(account.displayName);
-                  return (
-                    <tr key={account.id || account.uid} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3 font-bold text-gray-800">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
-                            {parsed.logo ? (
-                              <img src={parsed.logo} alt={parsed.name} className="w-full h-full object-contain" />
-                            ) : (
-                              <span className="text-[10px] font-black text-gray-400 uppercase">
-                                {parsed.name ? parsed.name.charAt(0) : "C"}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-800">{parsed.name || "Sem Nome"}</span>
-                            {parsed.responsible && (
-                              <span className="text-[10px] font-normal text-gray-400">Resp: {parsed.responsible}</span>
-                            )}
-                          </div>
+                filteredAccounts.map((account) => (
+                  <tr key={account.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-4 py-3 font-bold text-gray-800">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
+                          <span className="text-[10px] font-black text-gray-400 uppercase">
+                            {account.companyName ? account.companyName.charAt(0) : "C"}
+                          </span>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                        <span className="bg-[#a21b7e]/5 text-[#a21b7e] border border-[#a21b7e]/10 px-2 py-0.5 rounded font-bold select-all">
-                          {account.clientId || account.id}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-600">
-                        <span className="flex items-center gap-2 mt-1 select-all">
-                          <Mail size={14} className="text-gray-400" />
-                          {account.email}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-gray-800">
-                        <span className="bg-gray-100 border border-gray-200 px-2.5 py-1 rounded text-xs select-all">
-                          {account.password || "—"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                            account.role === "admin"
-                              ? "bg-purple-50 text-[#a21b7e] border border-purple-100"
-                              : "bg-blue-50 text-blue-600 border border-blue-100",
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-800">{account.companyName || "Sem Nome"}</span>
+                          {account.responsible && (
+                            <span className="text-[10px] font-normal text-gray-400">
+                              Resp: {account.responsible}
+                            </span>
                           )}
-                        >
-                          {account.role === "admin" ? "Administrador" : "Cliente"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEditForm(account)}
-                            className="p-2 text-gray-400 hover:text-[#a21b7e] hover:bg-[#a21b7e]/5 rounded transition-all cursor-pointer"
-                            title="Editar"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleDeleteAccount(account.id, parsed.name || account.email)
-                            }
-                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all cursor-pointer"
-                            title="Eliminar"
-                          >
-                            <Trash2 size={16} />
-                          </button>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">
+                      <span className="bg-[#a21b7e]/5 text-[#a21b7e] border border-[#a21b7e]/10 px-2 py-0.5 rounded font-bold select-all">
+                        {account.clientId}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-medium text-gray-600">
+                      <span className="flex items-center gap-2 mt-1 select-all">
+                        <Mail size={14} className="text-gray-400" />
+                        {account.email}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-gray-800">
+                      <span className="bg-gray-100 border border-gray-200 px-2.5 py-1 rounded text-xs select-all">
+                        {account.password || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cn(
+                          "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                          account.role === "admin"
+                            ? "bg-purple-50 text-[#a21b7e] border border-purple-100"
+                            : "bg-blue-50 text-blue-600 border border-blue-100",
+                        )}
+                      >
+                        {account.role === "admin" ? "Administrador" : "Cliente"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => openEditForm(account)}
+                        className="p-2 bg-purple-50 hover:bg-purple-100 text-[#a21b7e] rounded-md transition-all cursor-pointer inline-flex items-center justify-center border border-purple-100"
+                        title="Editar Conta"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAccount(account.id, account.companyName || account.email)}
+                        className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-md transition-all cursor-pointer inline-flex items-center justify-center border border-red-100"
+                        title="Excluir Conta"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
