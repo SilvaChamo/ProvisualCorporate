@@ -433,6 +433,8 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
                     <img
                       src={photoPreviewUrl(photo)}
                       alt={photo.name}
+                      loading="lazy"
+                      decoding="async"
                       className="absolute inset-0 h-full w-full object-cover object-center"
                     />
                     <button
@@ -541,6 +543,8 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
                     <img
                       src={cover}
                       alt={album.title || album.name}
+                      loading="lazy"
+                      decoding="async"
                       className="absolute inset-0 h-full w-full object-cover object-center"
                     />
                   ) : (

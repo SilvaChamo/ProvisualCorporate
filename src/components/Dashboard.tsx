@@ -74,6 +74,16 @@ import AccountAvatar from "./AccountAvatar";
 import { driveThumbnailSrc, resolveDriveFileId } from "../lib/driveImageUrl";
 import { markFolderSynced, shouldSkipFolderSync } from "../lib/siteAdminCache";
 import {
+  assetFromCache,
+  assetToCache,
+  folderFromCache,
+  folderToCache,
+  readDashboardAssetsCache,
+  readDashboardFoldersCache,
+  writeDashboardAssetsCache,
+  writeDashboardFoldersCache,
+} from "../lib/dashboardCache";
+import {
   mergeById,
   parentMatchesFolder,
   parseDriveListing,
@@ -222,6 +232,8 @@ function SafeImage({
     <img
       src={src}
       alt={alt}
+      loading="lazy"
+      decoding="async"
       onError={handleError}
       className={className}
       {...props}
@@ -345,7 +357,10 @@ interface UserProfile {
 }
 
 export default function Dashboard() {
-  const [folders, setFolders] = useState<FolderData[]>([]);
+  const [folders, setFolders] = useState<FolderData[]>(() => {
+    const cached = readDashboardFoldersCache();
+    return cached ? (cached.map(folderFromCache) as FolderData[]) : [];
+  });
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
@@ -353,13 +368,20 @@ export default function Dashboard() {
       setCurrentUser(data.user);
     });
   }, []);
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<Asset[]>(() => {
+    const cached = readDashboardAssetsCache();
+    return cached ? (cached.map(assetFromCache) as Asset[]) : [];
+  });
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
     return sessionStorage.getItem('prov_selected_folder_id') || null;
   });
   const [activeTab, setActiveTab] = useState<'all' | 'image' | 'video' | 'document' | 'other' | 'google_drive' | 'site_home'>(() => {
-    return (sessionStorage.getItem('prov_active_tab') as any) || 'all';
+    return (sessionStorage.getItem('prov_active_tab') as any) || 'site_home';
+  });
+  const [driveDataEnabled, setDriveDataEnabled] = useState(() => {
+    const savedTab = sessionStorage.getItem('prov_active_tab');
+    return savedTab !== null && savedTab !== 'site_home';
   });
   const [isClientsMenuOpen, setIsClientsMenuOpen] = useState(true);
   const [isClientsListOpen, setIsClientsListOpen] = useState(true);
@@ -446,8 +468,18 @@ export default function Dashboard() {
   const arquivoFolderId = arquivoFolder ? arquivoFolder.id : null;
 
   const [visibleImagesCount, setVisibleImagesCount] = useState(IMAGES_GRID_PAGE_SIZE);
-  const [foldersLoaded, setFoldersLoaded] = useState(false);
-  const [assetsLoaded, setAssetsLoaded] = useState(false);
+  const [foldersLoaded, setFoldersLoaded] = useState(() => !!readDashboardFoldersCache()?.length);
+  const [assetsLoaded, setAssetsLoaded] = useState(() => !!readDashboardAssetsCache()?.length);
+
+  useEffect(() => {
+    if (activeTab !== 'site_home') setDriveDataEnabled(true);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (driveDataEnabled) return;
+    const timer = window.setTimeout(() => setDriveDataEnabled(true), 3000);
+    return () => window.clearTimeout(timer);
+  }, [driveDataEnabled]);
 
   useEffect(() => {
     if (activeTab) {
@@ -1422,8 +1454,9 @@ export default function Dashboard() {
     fetchProfile();
   }, [currentUser]);
 
-  // Fetch Folders
+  // Fetch Folders (adiado quando Gestão do Site está activa)
   useEffect(() => {
+    if (!driveDataEnabled) return;
     const q = query(collection(db, "folders"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const folderList = snapshot.docs.map(doc => {
@@ -1432,17 +1465,20 @@ export default function Dashboard() {
         if (data.date && typeof data.date.toDate === 'function') folderDate = data.date.toDate();
         return { id: doc.id, ...data, name: displayDriveName(data.name), date: folderDate } as FolderData;
       });
-      setFolders(folderList.sort((a, b) => b.date.getTime() - a.date.getTime()));
+      const sorted = folderList.sort((a, b) => b.date.getTime() - a.date.getTime());
+      setFolders(sorted);
       setFoldersLoaded(true);
+      writeDashboardFoldersCache(sorted.map(folderToCache));
     }, (error) => {
       console.error("Folders read error:", error);
       setFoldersLoaded(true);
     });
     return () => unsubscribe();
-  }, []);
+  }, [driveDataEnabled]);
 
-  // Fetch Assets
+  // Fetch Assets (adiado quando Gestão do Site está activa)
   useEffect(() => {
+    if (!driveDataEnabled) return;
     const q = query(collection(db, "assets"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const assetList = snapshot.docs.map(doc => {
@@ -1455,12 +1491,13 @@ export default function Dashboard() {
       });
       setAssets(assetList);
       setAssetsLoaded(true);
+      writeDashboardAssetsCache(assetList.map(assetToCache));
     }, (error) => {
       console.error("Assets read error:", error);
       setAssetsLoaded(true);
     });
     return () => unsubscribe();
-  }, []);
+  }, [driveDataEnabled]);
 
   // Retentar sync pendente quando metadados estiverem carregados
   useEffect(() => {

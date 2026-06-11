@@ -4,8 +4,15 @@ import { motion } from "motion/react";
 import { Eye, EyeOff, HelpCircle, Phone, Mail, MessageSquare, ExternalLink, Home } from "lucide-react";
 import { cn } from "../lib/utils";
 import { supabase, db } from "../lib/supabase";
+import {
+  fetchLoginProfiles,
+  prefetchLoginProfiles,
+  readLoginProfilesCache,
+  upsertLoginProfileCache,
+} from "../lib/loginProfilesCache";
+import { prefetchAdminPanelData } from "../lib/siteGalleryApi";
 
-import { doc, setDoc, getDoc, serverTimestamp, collection, query, where } from "../lib/supabase";
+import { doc, setDoc, getDoc, serverTimestamp } from "../lib/supabase";
 import simboloImg from "../Logo/Simbolo.png";
 
 function normalizeLoginIdentifier(value: string) {
@@ -60,130 +67,143 @@ export default function Login() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showSupport, setShowSupport] = useState(false);
 
-  // Auto-prover a conta master de administrador no Firestore no primeiro carregamento
   useEffect(() => {
-    const provisionAdmin = async () => {
-      try {
-        const adminDocRef = doc(db, "users", "admin_master_silva");
-        const adminDoc = await getDoc(adminDocRef);
-        
-        // Se não existir, ou se quisermos atualizar para garantir as credenciais corretas
-        const existing = adminDoc.exists() ? adminDoc.data() : null;
-        if (!existing || existing.email !== MASTER_ADMIN_EMAIL || existing.password !== MASTER_ADMIN_PASSWORD) {
-          await setDoc(adminDocRef, {
-            email: MASTER_ADMIN_EMAIL,
-            displayName: "Silva Chamo (Admin Master)",
-            password: MASTER_ADMIN_PASSWORD,
-            role: "admin",
-            adminToken: "Silva_Chamo_Master_Admin_2026",
-            createdAt: serverTimestamp()
-          });
-          console.log("Conta Master de Administrador provisionada com sucesso!");
+    prefetchLoginProfiles();
+    prefetchAdminPanelData();
+
+    if (sessionStorage.getItem("prov_master_provisioned_v1")) return;
+
+    const timer = window.setTimeout(() => {
+      const provisionAdmin = async () => {
+        try {
+          const adminDocRef = doc(db, "users", "admin_master_silva");
+          const adminDoc = await getDoc(adminDocRef);
+          const existing = adminDoc.exists() ? adminDoc.data() : null;
+          if (!existing || existing.email !== MASTER_ADMIN_EMAIL || existing.password !== MASTER_ADMIN_PASSWORD) {
+            await setDoc(adminDocRef, {
+              email: MASTER_ADMIN_EMAIL,
+              displayName: "Silva Chamo (Admin Master)",
+              password: MASTER_ADMIN_PASSWORD,
+              role: "admin",
+              adminToken: "Silva_Chamo_Master_Admin_2026",
+              createdAt: serverTimestamp(),
+            });
+          }
+          sessionStorage.setItem("prov_master_provisioned_v1", "1");
+        } catch (err) {
+          console.warn("Erro ao auto-provisionar administrador master:", err);
         }
-      } catch (err) {
-        console.warn("Erro ao auto-provisionar administrador master:", err);
-      }
-    };
-    provisionAdmin();
+      };
+      provisionAdmin();
+    }, 2500);
+
+    return () => window.clearTimeout(timer);
   }, []);
+
+  const completeCorporateLogin = (userData: NonNullable<ReturnType<typeof normalizeUserProfile>>) => {
+    const simulatedUser = {
+      uid: userData.id,
+      email: userData.email,
+      displayName: userData.displayName || userData.email.split("@")[0],
+      role: userData.role || "cliente",
+    };
+    localStorage.setItem("provisual_local_admin", JSON.stringify(simulatedUser));
+    if (simulatedUser.role === "admin") {
+      prefetchAdminPanelData();
+    }
+    window.location.href = simulatedUser.role === "admin" ? "/dashboard" : "/arquivo";
+  };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
+
     try {
       if (isSignUp) {
         const { data: authData, error: authErr } = await supabase.auth.signUp({ email, password });
         if (authErr) throw authErr;
         const user = authData.user;
-        
+
         if (user) {
           await setDoc(doc(db, "users", user.id), {
             email: user.email,
             role: "admin",
             createdAt: serverTimestamp(),
-            adminToken: "Silva_Chamo_Master_Admin_2026"
+            adminToken: "Silva_Chamo_Master_Admin_2026",
           });
         }
-      } else {
-        const identifier = email.trim();
-        const looksLikeEmail = identifier.includes("@");
-
-        if (looksLikeEmail) {
-          const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({ email: identifier, password });
-          if (authErr) throw authErr;
-          const user = authData.user;
-          if (user) {
-            const userDoc = await getDoc(doc(db, "users", user.id));
-            const role = userDoc.exists() ? userDoc.data()?.role : "admin";
-            window.location.href = role === "admin" ? "/dashboard" : "/arquivo";
-            return;
-          }
-        } else {
-          throw new Error("lookup_by_name");
-        }
+        return;
       }
-    } catch (err: any) {
-      console.warn("Supabase Auth falhou, verificando credenciais locais no Firestore:", err);
-      
-      // Permitir login via Firestore em qualquer ambiente (desenvolvimento ou produção)
-      // para suportar contas corporativas e de clientes criadas diretamente no painel.
-      try {
-        const identifier = email.trim();
-        const looksLikeEmail = identifier.includes("@");
-        let userData: any = null;
 
-        let profileRow: Record<string, unknown> | null = null;
+      const identifier = email.trim();
+      const pwd = password.trim();
+      const looksLikeEmail = identifier.includes("@");
 
-        const searchEmail = identifier.toLowerCase();
-        if (looksLikeEmail) {
-          const { data, error: dbErr } = await supabase.from("user_profiles").select("*").eq("email", searchEmail);
-          if (dbErr) throw dbErr;
-          profileRow = (data?.[0] as Record<string, unknown> | undefined) || null;
-        }
-        if (!profileRow) {
-          const { data, error: dbErr } = await supabase.from("user_profiles").select("*");
-          if (dbErr) throw dbErr;
-          profileRow =
-            (data || []).find((profile) =>
-              matchesAccountIdentifier(profile as Record<string, unknown>, identifier),
-            ) || null;
-        }
-
-        userData = normalizeUserProfile(profileRow);
-
-        if (userData) {
-          const userDoc = { id: userData.id };
-          
-          if (userData.password === password.trim()) {
-            const simulatedUser = {
-              uid: userDoc.id,
-              email: userData.email,
-              displayName: userData.displayName || userData.email.split("@")[0],
-              role: userData.role || "cliente"
-            };
-            localStorage.setItem("provisual_local_admin", JSON.stringify(simulatedUser));
-            window.location.href = simulatedUser.role === "admin" ? "/dashboard" : "/arquivo";
-            return;
-          } else {
-            setError("Senha de acesso incorreta para esta conta.");
-            setIsLoading(false);
+      const cachedProfiles = readLoginProfilesCache();
+      if (cachedProfiles?.length) {
+        const cachedMatch = looksLikeEmail
+          ? cachedProfiles.find((p) => p.email === identifier.toLowerCase())
+          : cachedProfiles.find((p) => matchesAccountIdentifier(p, identifier));
+        if (cachedMatch) {
+          if (cachedMatch.password === pwd) {
+            completeCorporateLogin(normalizeUserProfile(cachedMatch)!);
             return;
           }
-        } else {
-          setError(looksLikeEmail
-            ? "Esta conta de e-mail não está cadastrada na plataforma."
-            : "Esta conta não está cadastrada na plataforma.");
+          setError("Senha de acesso incorreta para esta conta.");
           setIsLoading(false);
           return;
         }
-      } catch (dbErr: any) {
-        console.error("Erro ao verificar credenciais locais:", dbErr);
-        setError(`Erro ao validar credenciais no banco: ${dbErr.message || dbErr}`);
+      }
+
+      if (looksLikeEmail) {
+        const { data, error: dbErr } = await supabase
+          .from("user_profiles")
+          .select("id,email,password,role,display_name")
+          .eq("email", identifier.toLowerCase())
+          .maybeSingle();
+        if (dbErr) throw dbErr;
+
+        if (data) {
+          upsertLoginProfileCache(data as Record<string, unknown>);
+          const userData = normalizeUserProfile(data as Record<string, unknown>);
+          if (userData?.password === pwd) {
+            completeCorporateLogin(userData);
+            return;
+          }
+          setError("Senha de acesso incorreta para esta conta.");
+          setIsLoading(false);
+          return;
+        }
+
+        setError("Esta conta de e-mail não está cadastrada na plataforma.");
         setIsLoading(false);
         return;
       }
+
+      const profiles = await fetchLoginProfiles();
+      const profileRow =
+        profiles.find((profile) => matchesAccountIdentifier(profile, identifier)) || null;
+      const userData = normalizeUserProfile(profileRow);
+
+      if (!userData) {
+        setError("Esta conta não está cadastrada na plataforma.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (userData.password !== pwd) {
+        setError("Senha de acesso incorreta para esta conta.");
+        setIsLoading(false);
+        return;
+      }
+
+      completeCorporateLogin(userData);
+    } catch (dbErr: any) {
+      console.error("Erro ao verificar credenciais:", dbErr);
+      setError(`Erro ao validar credenciais no banco: ${dbErr.message || dbErr}`);
+      setIsLoading(false);
     }
   };
 
