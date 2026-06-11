@@ -34,13 +34,20 @@ function matchesAccountIdentifier(userData: Record<string, unknown>, identifier:
   if (email === search) return true;
 
   const emailPrefix = email.split("@")[0];
-  if (emailPrefix === search) return true;
+  if (emailPrefix === search || emailPrefix.includes(search)) return true;
 
   const displayName = String(userData.display_name || userData.displayName || "");
-  const parts = displayName.split("|").map((part) => part.trim().toLowerCase()).filter(Boolean);
-  if (parts.some((part) => part === search || part.includes(search))) return true;
+  const parts = displayName.split("|");
+  const responsible = parts[0]?.trim().toLowerCase() || "";
+  const company = parts[1]?.trim().toLowerCase() || "";
 
-  return displayName.toLowerCase().includes(search);
+  if (responsible && (responsible === search || responsible.includes(search))) return true;
+  if (company && (company === search || company.includes(search))) return true;
+
+  const plainName = displayName.replace(/\|/g, " ").trim().toLowerCase();
+  if (plainName && (plainName === search || plainName.includes(search))) return true;
+
+  return false;
 }
 
 export default function Login() {
@@ -129,17 +136,19 @@ export default function Login() {
 
         let profileRow: Record<string, unknown> | null = null;
 
+        const searchEmail = identifier.toLowerCase();
         if (looksLikeEmail) {
-          const searchEmail = identifier.toLowerCase();
-          const { data, error: dbErr } = await supabase.from('user_profiles').select('*').eq('email', searchEmail);
+          const { data, error: dbErr } = await supabase.from("user_profiles").select("*").eq("email", searchEmail);
           if (dbErr) throw dbErr;
           profileRow = (data?.[0] as Record<string, unknown> | undefined) || null;
-        } else {
-          const { data, error: dbErr } = await supabase.from('user_profiles').select('*');
+        }
+        if (!profileRow) {
+          const { data, error: dbErr } = await supabase.from("user_profiles").select("*");
           if (dbErr) throw dbErr;
           profileRow =
-            (data || []).find((profile) => matchesAccountIdentifier(profile as Record<string, unknown>, identifier)) ||
-            null;
+            (data || []).find((profile) =>
+              matchesAccountIdentifier(profile as Record<string, unknown>, identifier),
+            ) || null;
         }
 
         userData = normalizeUserProfile(profileRow);
@@ -237,14 +246,14 @@ export default function Login() {
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-widest mb-2 ml-1" htmlFor="email">
-                    {isSignUp ? "EMAIL" : "EMAIL OU CONTA"}
+                    {isSignUp ? "EMAIL" : "EMAIL, RESPONSÁVEL OU EMPRESA"}
                   </label>
                   <input
                     id="email"
                     type={isSignUp ? "email" : "text"}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={isSignUp ? "seu@email.com" : "email ou nome da conta"}
+                    placeholder={isSignUp ? "seu@email.com" : "email, responsável ou empresa"}
                     className="w-full h-12 bg-gray-50 border border-gray-100 px-4 text-sm text-gray-800 focus:border-[#a21b7e] placeholder:text-gray-300/70 placeholder:font-light transition-all outline-none rounded-lg"
                     required
                   />

@@ -13,11 +13,18 @@ export type AdminNavState = {
 interface AdminBreadcrumbProps {
   crumbs: AdminCrumb[];
   onBack?: () => void;
+  compact?: boolean;
 }
 
-export default function AdminBreadcrumb({ crumbs, onBack }: AdminBreadcrumbProps) {
+export default function AdminBreadcrumb({ crumbs, onBack, compact }: AdminBreadcrumbProps) {
   return (
-    <div className="flex items-center gap-3 text-sm text-gray-500 border-b border-gray-100 pb-3 mb-4 min-h-[44px]">
+    <div
+      className={
+        compact
+          ? "flex items-center gap-2 text-sm text-gray-500 min-h-[36px]"
+          : "flex items-center gap-3 text-sm text-gray-500 border-b border-gray-100 pb-3 mb-4 min-h-[44px]"
+      }
+    >
       {onBack && (
         <button
           type="button"

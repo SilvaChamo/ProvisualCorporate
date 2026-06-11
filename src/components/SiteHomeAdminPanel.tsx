@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Images, Key, Video } from "lucide-react";
 import { cn } from "../lib/utils";
 import AdminBreadcrumb, { type AdminNavState } from "./admin/AdminBreadcrumb";
+import { prefetchAdminPanelData } from "../lib/siteGalleryApi";
 import AlbumsAdminTab from "./admin/AlbumsAdminTab";
 import VideosAdminTab from "./admin/VideosAdminTab";
 import AccessAccountsAdmin from "./admin/AccessAccountsAdmin";
@@ -26,6 +27,10 @@ export default function SiteHomeAdminPanel() {
     crumbs: [{ label: "Gestão do Site" }, { label: "Álbuns" }],
   });
   const editorRef = useRef<AdminEditorHandle | null>(null);
+
+  useEffect(() => {
+    prefetchAdminPanelData();
+  }, []);
 
   const requestTabChange = (tab: HomeAdminTab) => {
     if (tab === activeTab) return;
@@ -75,19 +80,19 @@ export default function SiteHomeAdminPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
-        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:gap-2 pb-[10px]">
+      <div className="max-w-6xl mx-auto space-y-3 md:space-y-4">
+        <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-2">
           <div className="flex flex-wrap items-center gap-2">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => requestTabChange(tab.id)}
-                className="px-2 py-2 text-sm font-bold transition-colors cursor-pointer bg-transparent border-0"
+                className="px-2 py-1.5 text-sm font-bold transition-colors cursor-pointer bg-transparent border-0"
               >
                 <span
                   className={cn(
-                    "relative inline-flex items-center gap-1.5 pb-[10px] after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:rounded-full after:transition-colors",
+                    "relative inline-flex items-center gap-1.5 after:content-[''] after:absolute after:-bottom-1.5 after:left-0 after:right-0 after:h-0.5 after:rounded-full after:transition-colors",
                     activeTab === tab.id
                       ? "text-[#a21b7e] after:bg-[#a21b7e]"
                       : "text-gray-500 hover:text-[#a21b7e] after:bg-transparent hover:after:bg-[#a21b7e]",
@@ -100,35 +105,38 @@ export default function SiteHomeAdminPanel() {
             ))}
           </div>
           {toolbarActions && (
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:ml-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:ml-auto justify-end">
               {toolbarActions}
             </div>
           )}
         </div>
 
-        <AdminBreadcrumb crumbs={adminNav.crumbs} onBack={adminNav.onBack} />
+        <AdminBreadcrumb crumbs={adminNav.crumbs} onBack={adminNav.onBack} compact />
 
         <div className="min-h-[420px]">
-          {activeTab === "albuns" && (
+          <div className={activeTab === "albuns" ? "" : "hidden"}>
             <AlbumsAdminTab
-              ref={editorRef}
+              ref={activeTab === "albuns" ? editorRef : undefined}
+              isActive={activeTab === "albuns"}
               onToolbarChange={setToolbarActions}
               onNavChange={setAdminNav}
             />
-          )}
-          {activeTab === "videos" && (
+          </div>
+          <div className={activeTab === "videos" ? "" : "hidden"}>
             <VideosAdminTab
-              ref={editorRef}
+              ref={activeTab === "videos" ? editorRef : undefined}
+              isActive={activeTab === "videos"}
               onToolbarChange={setToolbarActions}
               onNavChange={setAdminNav}
             />
-          )}
-          {activeTab === "contas" && (
+          </div>
+          <div className={activeTab === "contas" ? "" : "hidden"}>
             <AccessAccountsAdmin
+              isActive={activeTab === "contas"}
               onToolbarChange={setToolbarActions}
               onNavChange={setAdminNav}
             />
-          )}
+          </div>
         </div>
       </div>
 

@@ -385,16 +385,11 @@ export async function createGalleryAlbum(payload: {
   return data.album;
 }
 
-export async function fetchAdminGalleryPhotos(
+async function fetchAdminGalleryPhotosFromApi(
   slug: string,
   options?: { refresh?: boolean },
 ): Promise<SiteDrivePhoto[]> {
   const cacheKey = ADMIN_CACHE_KEYS.photos(slug);
-  if (!options?.refresh) {
-    const cached = readAdminCache<SiteDrivePhoto[]>(cacheKey);
-    if (cached?.length) return cached;
-  }
-
   const qs = options?.refresh ? "?refresh=1" : "";
   const res = await fetch(`/api/site/gallery/${encodeURIComponent(slug)}/photos${qs}`, {
     cache: "no-store",
@@ -408,6 +403,21 @@ export async function fetchAdminGalleryPhotos(
   const photos: SiteDrivePhoto[] = data.photos || [];
   if (photos.length) writeAdminCache(cacheKey, photos);
   return photos;
+}
+
+export async function fetchAdminGalleryPhotos(
+  slug: string,
+  options?: { refresh?: boolean },
+): Promise<SiteDrivePhoto[]> {
+  const cacheKey = ADMIN_CACHE_KEYS.photos(slug);
+  if (!options?.refresh) {
+    const cached = readAdminCache<SiteDrivePhoto[]>(cacheKey);
+    if (cached?.length) {
+      fetchAdminGalleryPhotosFromApi(slug).catch(() => {});
+      return cached;
+    }
+  }
+  return fetchAdminGalleryPhotosFromApi(slug, options);
 }
 
 export async function updateGalleryAlbum(
@@ -543,13 +553,87 @@ async function fetchAdminAccountsFromApi(): Promise<any[]> {
   return accounts;
 }
 
-export async function fetchAdminAccounts(): Promise<any[]> {
-  const cached = readAdminCache<any[]>(ADMIN_CACHE_KEYS.accounts);
-  if (cached?.length) {
-    fetchAdminAccountsFromApi().catch(() => {});
-    return cached;
+export async function fetchAdminAccounts(options?: { force?: boolean }): Promise<any[]> {
+  if (!options?.force) {
+    const cached = readAdminCache<any[]>(ADMIN_CACHE_KEYS.accounts);
+    if (cached?.length) {
+      fetchAdminAccountsFromApi().catch(() => {});
+      return cached;
+    }
   }
   return fetchAdminAccountsFromApi();
+}
+
+export async function createAdminAccount(payload: {
+  email: string;
+  displayName: string;
+  password: string;
+  role: string;
+  clientId: string;
+}): Promise<any[]> {
+  const res = await fetch("/api/admin/accounts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao criar conta.");
+  }
+  const data = await res.json();
+  const accounts = (data.accounts || []).map(mapAccountRow);
+  writeAdminCache(ADMIN_CACHE_KEYS.accounts, accounts);
+  return accounts;
+}
+
+export async function updateAdminAccount(
+  id: string,
+  payload: {
+    email: string;
+    displayName: string;
+    password: string;
+    role: string;
+  },
+): Promise<any[]> {
+  const res = await fetch(`/api/admin/accounts/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao atualizar conta.");
+  }
+  const data = await res.json();
+  const accounts = (data.accounts || []).map(mapAccountRow);
+  writeAdminCache(ADMIN_CACHE_KEYS.accounts, accounts);
+  return accounts;
+}
+
+export async function deleteAdminAccount(id: string): Promise<any[]> {
+  const res = await fetch(`/api/admin/accounts/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Erro ao eliminar conta.");
+  }
+  const data = await res.json();
+  const accounts = (data.accounts || []).map(mapAccountRow);
+  writeAdminCache(ADMIN_CACHE_KEYS.accounts, accounts);
+  return accounts;
+}
+
+export function prefetchAdminPanelData() {
+  fetchAdminGalleryAlbums()
+    .then((albums) => {
+      albums.forEach((album) => {
+        fetchAdminGalleryPhotos(album.slug).catch(() => {});
+      });
+    })
+    .catch(() => {});
+  fetchAdminSiteVideos().catch(() => {});
+  fetchAdminAccounts().catch(() => {});
 }
 
 function mapAccountRow(row: any) {

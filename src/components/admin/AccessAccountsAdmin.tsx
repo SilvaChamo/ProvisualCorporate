@@ -7,22 +7,20 @@ import {
   Mail,
   Pencil,
   Plus,
-  Search,
   Trash2,
   Upload,
   UserPlus,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import {
-  db,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  setDoc,
-} from "../../lib/supabase";
-import { fetchAdminAccounts } from "../../lib/siteGalleryApi";
+  createAdminAccount,
+  deleteAdminAccount,
+  fetchAdminAccounts,
+  updateAdminAccount,
+} from "../../lib/siteGalleryApi";
 import { ADMIN_CACHE_KEYS, readAdminCache } from "../../lib/siteAdminCache";
 import type { AdminNavState } from "./AdminBreadcrumb";
+import AdminToolbarSearch from "./AdminToolbarSearch";
 
 function generateStrongPassword() {
   const chars = "abcdefghijklmnopqrstuvwxyz";
@@ -71,13 +69,28 @@ function normalizeAccountRow(row: Record<string, unknown>) {
 }
 
 interface AccessAccountsAdminProps {
+  isActive?: boolean;
   onToolbarChange?: (actions: React.ReactNode) => void;
   onNavChange?: (state: AdminNavState) => void;
 }
 
-export default function AccessAccountsAdmin({ onToolbarChange, onNavChange }: AccessAccountsAdminProps) {
-  const [accounts, setAccounts] = useState<ReturnType<typeof normalizeAccountRow>[]>([]);
-  const [accountsLoaded, setAccountsLoaded] = useState(false);
+function loadAccountsFromCache() {
+  const cached = readAdminCache<Record<string, unknown>[]>(ADMIN_CACHE_KEYS.accounts);
+  if (!cached?.length) return { accounts: [] as ReturnType<typeof normalizeAccountRow>[], loaded: false };
+  return {
+    accounts: cached.map((row) => normalizeAccountRow(row)),
+    loaded: true,
+  };
+}
+
+export default function AccessAccountsAdmin({
+  isActive = true,
+  onToolbarChange,
+  onNavChange,
+}: AccessAccountsAdminProps) {
+  const initial = loadAccountsFromCache();
+  const [accounts, setAccounts] = useState<ReturnType<typeof normalizeAccountRow>[]>(initial.accounts);
+  const [accountsLoaded, setAccountsLoaded] = useState(initial.loaded);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<ReturnType<typeof normalizeAccountRow> | null>(null);
@@ -91,35 +104,40 @@ export default function AccessAccountsAdmin({ onToolbarChange, onNavChange }: Ac
   const [accountSuccess, setAccountSuccess] = useState<string | null>(null);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
-  const reloadAccounts = useCallback(async () => {
-    const cached = readAdminCache<Record<string, unknown>[]>(ADMIN_CACHE_KEYS.accounts);
-    if (cached?.length) {
-      setAccounts(cached.map((row) => normalizeAccountRow(row)));
-      setAccountsLoaded(true);
+  const reloadAccounts = useCallback(async (options?: { force?: boolean }) => {
+    if (!options?.force) {
+      const cached = readAdminCache<Record<string, unknown>[]>(ADMIN_CACHE_KEYS.accounts);
+      if (cached?.length) {
+        setAccounts(cached.map((row) => normalizeAccountRow(row)));
+        setAccountsLoaded(true);
+      }
     }
     try {
-      const accountsList = await fetchAdminAccounts();
+      const accountsList = await fetchAdminAccounts({ force: options?.force });
       setAccounts(accountsList.map((row) => normalizeAccountRow(row)));
       setAccountsLoaded(true);
       setAccountError(null);
     } catch (error: unknown) {
       console.error("Accounts read error:", error);
-      setAccountError(
-        error instanceof Error ? error.message : "Erro ao carregar contas de acesso.",
-      );
+      if (!accounts.length) {
+        setAccountError(
+          error instanceof Error ? error.message : "Erro ao carregar contas de acesso.",
+        );
+      }
       setAccountsLoaded(true);
     }
-  }, []);
+  }, [accounts.length]);
 
   useEffect(() => {
     reloadAccounts();
   }, [reloadAccounts]);
 
   useEffect(() => {
-    onNavChange?.({
+    if (!onNavChange || !isActive) return;
+    onNavChange({
       crumbs: [{ label: "Gestão do Site" }, { label: "Contas de Acesso" }],
     });
-  }, [onNavChange]);
+  }, [onNavChange, isActive]);
 
   const filteredAccounts = useMemo(() => {
     if (!searchQuery) return accounts;
@@ -159,23 +177,30 @@ export default function AccessAccountsAdmin({ onToolbarChange, onNavChange }: Ac
   };
 
   useEffect(() => {
-    if (!onToolbarChange) return;
+    if (!onToolbarChange || !isActive) return;
     if (isAddAccountModalOpen) {
       onToolbarChange(null);
       return;
     }
     onToolbarChange(
-      <button
-        type="button"
-        onClick={openAddForm}
-        className="flex flex-1 md:flex-none items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
-      >
-        <UserPlus size={16} />
-        Criar Conta de Acesso
-      </button>,
+      <>
+        <AdminToolbarSearch
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Pesquisar contas..."
+        />
+        <button
+          type="button"
+          onClick={openAddForm}
+          className="flex flex-1 md:flex-none items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
+        >
+          <UserPlus size={16} />
+          Criar Conta de Acesso
+        </button>
+      </>,
     );
     return () => onToolbarChange(null);
-  }, [onToolbarChange, isAddAccountModalOpen]);
+  }, [onToolbarChange, isAddAccountModalOpen, isActive, searchQuery]);
 
   const openEditForm = (account: ReturnType<typeof normalizeAccountRow>) => {
     const parsed = parseAccountDisplay(account.displayNameFull);
@@ -249,18 +274,14 @@ export default function AccessAccountsAdmin({ onToolbarChange, onNavChange }: Ac
     const displayNameValue = `${newAccountResponsible.trim()}|${newAccountName.trim()}|${newAccountLogo.trim()}`;
 
     try {
+      let nextAccounts: Awaited<ReturnType<typeof fetchAdminAccounts>>;
       if (editingAccount) {
-        await setDoc(
-          doc(db, "users", editingAccount.id),
-          {
-            email: newAccountEmail.trim().toLowerCase(),
-            displayName: displayNameValue,
-            password: newAccountPassword,
-            role: newAccountRole,
-            adminToken: "Silva_Chamo_Master_Admin_2026",
-          },
-          { merge: true },
-        );
+        nextAccounts = await updateAdminAccount(editingAccount.id, {
+          email: newAccountEmail.trim().toLowerCase(),
+          displayName: displayNameValue,
+          password: newAccountPassword,
+          role: newAccountRole,
+        });
         setAccountSuccess("Conta de acesso editada com sucesso!");
       } else {
         const emailExists = accounts.some(
@@ -273,19 +294,17 @@ export default function AccessAccountsAdmin({ onToolbarChange, onNavChange }: Ac
         }
 
         const generatedUid = "client_" + Math.random().toString(36).substring(2, 11);
-        await setDoc(doc(db, "users", generatedUid), {
+        nextAccounts = await createAdminAccount({
           email: newAccountEmail.trim().toLowerCase(),
           displayName: displayNameValue,
           password: newAccountPassword,
           role: newAccountRole,
           clientId: generatedUid,
-          createdAt: serverTimestamp(),
-          adminToken: "Silva_Chamo_Master_Admin_2026",
         });
         setAccountSuccess("Conta de acesso criada com sucesso!");
       }
 
-      await reloadAccounts();
+      setAccounts(nextAccounts.map((row) => normalizeAccountRow(row)));
       setTimeout(handleCloseAccountModal, 1500);
     } catch (err: unknown) {
       console.error("Erro ao salvar conta:", err);
@@ -301,8 +320,8 @@ export default function AccessAccountsAdmin({ onToolbarChange, onNavChange }: Ac
     if (!confirmDelete) return;
 
     try {
-      await deleteDoc(doc(db, "users", accountId));
-      await reloadAccounts();
+      const nextAccounts = await deleteAdminAccount(accountId);
+      setAccounts(nextAccounts.map((row) => normalizeAccountRow(row)));
     } catch (err) {
       console.error("Erro ao excluir conta:", err);
       alert("Erro ao excluir conta.");
@@ -461,24 +480,13 @@ export default function AccessAccountsAdmin({ onToolbarChange, onNavChange }: Ac
         </div>
       )}
 
-      <div className="relative max-w-md">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Pesquisar contas..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#a21b7e]"
-        />
-      </div>
-
       <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                <th className="px-4 py-3">Nome do Cliente / Empresa</th>
-                <th className="px-4 py-3">ID do Cliente</th>
+                <th className="px-4 py-3">Responsável</th>
+                <th className="px-4 py-3">Nome da Empresa</th>
                 <th className="px-4 py-3">E-mail de Acesso</th>
                 <th className="px-4 py-3">Senha de Acesso</th>
                 <th className="px-4 py-3">Perfil</th>
@@ -506,27 +514,22 @@ export default function AccessAccountsAdmin({ onToolbarChange, onNavChange }: Ac
               ) : (
                 filteredAccounts.map((account) => (
                   <tr key={account.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 font-bold text-gray-800">
+                    <td className="px-4 py-3 font-medium text-gray-800">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
                           <span className="text-[10px] font-black text-gray-400 uppercase">
-                            {account.companyName ? account.companyName.charAt(0) : "C"}
+                            {account.responsible
+                              ? account.responsible.charAt(0)
+                              : account.companyName
+                                ? account.companyName.charAt(0)
+                                : "C"}
                           </span>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-gray-800">{account.companyName || "Sem Nome"}</span>
-                          {account.responsible && (
-                            <span className="text-[10px] font-normal text-gray-400">
-                              Resp: {account.responsible}
-                            </span>
-                          )}
-                        </div>
+                        <span className="font-bold text-gray-800">{account.responsible || "—"}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                      <span className="bg-[#a21b7e]/5 text-[#a21b7e] border border-[#a21b7e]/10 px-2 py-0.5 rounded font-bold select-all">
-                        {account.clientId}
-                      </span>
+                    <td className="px-4 py-3 font-medium text-gray-800">
+                      {account.companyName || "—"}
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-600">
                       <span className="flex items-center gap-2 mt-1 select-all">

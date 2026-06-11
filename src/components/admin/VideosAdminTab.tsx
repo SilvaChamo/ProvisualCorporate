@@ -2,7 +2,6 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import {
   AlertCircle,
   CheckCircle2,
-  ChevronLeft,
   ExternalLink,
   Loader2,
   Pencil,
@@ -22,6 +21,7 @@ import { ADMIN_CACHE_KEYS, readAdminCache } from "../../lib/siteAdminCache";
 import type { AdminEditorHandle } from "./AdminEditorHandle";
 import type { AdminNavState } from "./AdminBreadcrumb";
 import AdminListPagination, { ADMIN_LIST_PAGE_SIZE, paginateList } from "./AdminListPagination";
+import AdminToolbarSearch from "./AdminToolbarSearch";
 
 type FormMode = "hidden" | "add" | "edit";
 
@@ -33,16 +33,21 @@ type FormState = {
 };
 
 interface VideosAdminTabProps {
+  isActive?: boolean;
   onToolbarChange?: (actions: React.ReactNode) => void;
   onNavChange?: (state: AdminNavState) => void;
 }
 
 export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function VideosAdminTab(
-  { onToolbarChange, onNavChange },
+  { isActive = true, onToolbarChange, onNavChange },
   ref,
 ) {
-  const [videos, setVideos] = useState<VideoItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [videos, setVideos] = useState<VideoItem[]>(
+    () => readAdminCache<VideoItem[]>(ADMIN_CACHE_KEYS.videos) ?? [],
+  );
+  const [loading, setLoading] = useState(
+    () => !readAdminCache<VideoItem[]>(ADMIN_CACHE_KEYS.videos)?.length,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -51,6 +56,7 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [listPage, setListPage] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
   const formStateRef = useRef<FormState>({
     formMode: "hidden",
     editingSlug: null,
@@ -85,12 +91,27 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
     loadVideos();
   }, []);
 
-  useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(videos.length / ADMIN_LIST_PAGE_SIZE));
-    if (listPage >= totalPages) setListPage(Math.max(0, totalPages - 1));
-  }, [videos.length, listPage]);
+  const filteredVideos = searchQuery.trim()
+    ? videos.filter((video) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          (video.title || "").toLowerCase().includes(q) ||
+          video.slug.toLowerCase().includes(q) ||
+          video.youtubeId.toLowerCase().includes(q)
+        );
+      })
+    : videos;
 
-  const paginatedVideos = paginateList<VideoItem>(videos, listPage);
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredVideos.length / ADMIN_LIST_PAGE_SIZE));
+    if (listPage >= totalPages) setListPage(Math.max(0, totalPages - 1));
+  }, [filteredVideos.length, listPage]);
+
+  useEffect(() => {
+    setListPage(0);
+  }, [searchQuery]);
+
+  const paginatedVideos = paginateList<VideoItem>(filteredVideos, listPage);
 
   const resetForm = () => {
     setFormMode("hidden");
@@ -100,7 +121,7 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
   };
 
   useEffect(() => {
-    if (!onNavChange) return;
+    if (!onNavChange || !isActive) return;
     if (formMode === "hidden") {
       onNavChange({ crumbs: [{ label: "Gestão do Site" }, { label: "Vídeos" }] });
       return;
@@ -124,7 +145,7 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
       ],
       onBack: resetForm,
     });
-  }, [formMode, title, onNavChange]);
+  }, [formMode, title, onNavChange, isActive]);
 
   const openAddForm = () => {
     resetForm();
@@ -134,23 +155,30 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
   };
 
   useEffect(() => {
-    if (!onToolbarChange) return;
+    if (!onToolbarChange || !isActive) return;
     if (formMode !== "hidden") {
       onToolbarChange(null);
       return;
     }
     onToolbarChange(
-      <button
-        type="button"
-        onClick={openAddForm}
-        className="flex flex-1 md:flex-none items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
-      >
-        <Plus size={16} />
-        Adicionar Vídeo
-      </button>,
+      <>
+        <AdminToolbarSearch
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Pesquisar vídeos..."
+        />
+        <button
+          type="button"
+          onClick={openAddForm}
+          className="flex flex-1 md:flex-none items-center justify-center gap-2 bg-[#a21b7e] hover:bg-[#8e176e] text-white px-4 py-2 rounded-sm text-sm font-bold shadow-sm transition-all cursor-pointer h-10"
+        >
+          <Plus size={16} />
+          Adicionar Vídeo
+        </button>
+      </>,
     );
     return () => onToolbarChange(null);
-  }, [formMode, onToolbarChange]);
+  }, [formMode, onToolbarChange, isActive, searchQuery]);
 
   const openEditForm = (video: VideoItem) => {
     setError(null);
@@ -243,19 +271,9 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
           </div>
         )}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 items-start">
-          <div className="flex items-center gap-2 min-w-0 lg:col-start-1 lg:row-start-1">
-            <button
-              type="button"
-              onClick={resetForm}
-              className="inline-flex items-center gap-1 shrink-0 px-2 py-1.5 rounded-sm text-gray-600 hover:text-[#a21b7e] hover:bg-[#a21b7e]/5 font-bold text-sm transition-colors cursor-pointer"
-            >
-              <ChevronLeft size={18} />
-              Voltar
-            </button>
-            <h3 className="text-base font-bold text-gray-800 truncate">
-              {formMode === "add" ? "Novo Vídeo (YouTube)" : "Editar Vídeo"}
-            </h3>
-          </div>
+          <h3 className="text-base font-bold text-gray-800 truncate lg:col-start-1 lg:row-start-1">
+            {formMode === "add" ? "Novo Vídeo (YouTube)" : "Editar Vídeo"}
+          </h3>
 
           <div className="space-y-4 lg:col-start-1 lg:row-start-2 order-2">
             <div>
@@ -339,9 +357,11 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
         <div className="flex justify-center py-16">
           <Loader2 size={32} className="animate-spin text-[#a21b7e]" />
         </div>
-      ) : videos.length === 0 ? (
+      ) : filteredVideos.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-100 p-12 text-center text-gray-400 italic">
-          Nenhum vídeo cadastrado. Clique em &quot;Adicionar Vídeo&quot; para começar.
+          {searchQuery
+            ? "Nenhum vídeo corresponde à sua pesquisa."
+            : 'Nenhum vídeo cadastrado. Clique em "Adicionar Vídeo" para começar.'}
         </div>
       ) : (
         <div className="space-y-3">
@@ -413,7 +433,7 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
           ))}
           <AdminListPagination
             page={listPage}
-            totalItems={videos.length}
+            totalItems={filteredVideos.length}
             onPageChange={setListPage}
           />
         </div>

@@ -470,14 +470,75 @@ app.post("/api/site/gallery/sync-meta", async (_req, res) => {
   }
 });
 
+async function listAdminAccounts() {
+  const { data, error } = await supabase.from("user_profiles").select("*").order("email");
+  if (error) throw error;
+  return data || [];
+}
+
 app.get("/api/admin/accounts", async (_req, res) => {
   try {
-    const { data, error } = await supabase.from("user_profiles").select("*").order("email");
-    if (error) throw error;
-    res.json({ accounts: data || [] });
+    res.json({ accounts: await listAdminAccounts() });
   } catch (err) {
     console.error("Admin accounts list error:", err);
     res.status(500).json({ error: err.message || "Erro ao listar contas." });
+  }
+});
+
+app.post("/api/admin/accounts", async (req, res) => {
+  try {
+    const { email, displayName, password, role, clientId } = req.body || {};
+    if (!email || !displayName || !password) {
+      return res.status(400).json({ error: "Email, nome e senha são obrigatórios." });
+    }
+    const id = clientId || `client_${Math.random().toString(36).substring(2, 11)}`;
+    const { error } = await supabase.from("user_profiles").upsert({
+      id,
+      email: String(email).trim().toLowerCase(),
+      display_name: String(displayName),
+      password: String(password),
+      role: role || "cliente",
+      client_id: id,
+    });
+    if (error) throw error;
+    res.json({ success: true, accounts: await listAdminAccounts() });
+  } catch (err) {
+    console.error("Admin accounts create error:", err);
+    res.status(500).json({ error: err.message || "Erro ao criar conta." });
+  }
+});
+
+app.put("/api/admin/accounts/:id", async (req, res) => {
+  try {
+    const { email, displayName, password, role } = req.body || {};
+    if (!email || !displayName || !password) {
+      return res.status(400).json({ error: "Email, nome e senha são obrigatórios." });
+    }
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({
+        email: String(email).trim().toLowerCase(),
+        display_name: String(displayName),
+        password: String(password),
+        role: role || "cliente",
+      })
+      .eq("id", req.params.id);
+    if (error) throw error;
+    res.json({ success: true, accounts: await listAdminAccounts() });
+  } catch (err) {
+    console.error("Admin accounts update error:", err);
+    res.status(500).json({ error: err.message || "Erro ao atualizar conta." });
+  }
+});
+
+app.delete("/api/admin/accounts/:id", async (req, res) => {
+  try {
+    const { error } = await supabase.from("user_profiles").delete().eq("id", req.params.id);
+    if (error) throw error;
+    res.json({ success: true, accounts: await listAdminAccounts() });
+  } catch (err) {
+    console.error("Admin accounts delete error:", err);
+    res.status(500).json({ error: err.message || "Erro ao eliminar conta." });
   }
 });
 
