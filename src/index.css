@@ -17,10 +17,6 @@ html {
   overflow-x: hidden;
 }
 
-html:has(.site-bg) {
-  font-size: 15px;
-}
-
 body {
   @apply text-gray-900 font-sans;
   margin: 0;
@@ -41,11 +37,11 @@ body {
 }
 
 .site-btn-login {
-  @apply inline-flex items-center justify-center rounded-lg bg-[#a21b7e] px-6 py-1.5 text-sm font-normal text-white transition-colors whitespace-nowrap hover:bg-[#8e176e];
+  @apply inline-flex items-center justify-center rounded-lg bg-[#a21b7e] px-6 py-1.5 text-[15px] font-normal text-white transition-colors whitespace-nowrap hover:bg-[#8e176e];
 }
 
 .site-nav-link {
-  @apply text-[15px] lg:text-base font-medium text-gray-700 transition-colors whitespace-nowrap hover:text-[#a21b7e];
+  @apply text-[16px] lg:text-[17px] font-medium text-gray-700 transition-colors whitespace-nowrap hover:text-[#a21b7e];
 }
 
 /* Custom Utilities */
@@ -161,24 +157,8 @@ body {
 }
 
 .site-antetitle {
-  font-size: 1rem;
+  font-size: 17px;
   line-height: 1.4;
-}
-
-.about-history-card {
-  position: relative;
-}
-
-.about-history-card::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 3px;
-  height: 50%;
-  background: linear-gradient(180deg, #f97316 0%, #f97316 72%, rgba(249, 115, 22, 0) 100%);
-  pointer-events: none;
-  border-radius: 2px 0 0 0;
 }
 
 .site-section-header {
@@ -226,27 +206,27 @@ body {
 }
 
 .site-section-title {
-  @apply mb-4 text-2xl font-bold leading-tight sm:text-3xl lg:text-4xl;
+  @apply mb-4 text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl;
 }
 
 .site-section-desc {
-  @apply text-sm leading-relaxed;
+  @apply text-sm leading-relaxed sm:text-base;
 }
 
 .site-interior-banner-title {
-  @apply text-xl font-bold leading-[1.15] sm:text-2xl lg:text-3xl;
+  @apply text-2xl font-bold leading-[1.15] sm:text-3xl lg:text-4xl;
 }
 
 .site-interior-banner-title--rich {
-  @apply text-2xl leading-[1.1] sm:text-[1.75rem] lg:text-[1.875rem];
+  @apply text-[1.625rem] leading-[1.1] sm:text-3xl lg:text-[2.125rem];
 }
 
 .site-interior-banner-kicker {
-  @apply text-sm leading-none sm:text-base;
+  @apply text-base leading-none sm:text-lg;
 }
 
 .site-interior-banner-desc {
-  @apply line-clamp-2 text-xs leading-tight sm:text-sm;
+  @apply line-clamp-2 text-sm leading-tight sm:text-[0.9375rem];
 }
 
 .site-interior-banner-rich {
