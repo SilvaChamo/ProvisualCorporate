@@ -253,32 +253,59 @@ function staticAlbumsForAdmin(): SiteDriveAlbum[] {
   }));
 }
 
+function albumsFromApiPayload(data: Record<string, unknown>): SiteDriveAlbum[] | null {
+  const albums = data.albums;
+  if (Array.isArray(albums) && albums.length > 0) {
+    return albums as SiteDriveAlbum[];
+  }
+
+  const meta = data.meta;
+  if (!Array.isArray(meta) || meta.length === 0) return null;
+
+  return meta.map((entry: Record<string, unknown>) => {
+    const slug = String(entry.slug || "");
+    const staticAlbum = GALLERY_ALBUMS.find((a) => a.slug === slug);
+    const coverDriveId = entry.coverDriveId ? String(entry.coverDriveId) : null;
+    return {
+      slug,
+      name: String(entry.title || slug),
+      title: String(entry.title || slug),
+      subtitle: String(entry.subtitle || `${entry.photoCount ?? 0} fotos`),
+      folderId: entry.folderId ? String(entry.folderId) : null,
+      coverDriveId,
+      coverUrl: coverDriveId
+        ? `/api/drive/thumbnail?id=${encodeURIComponent(coverDriveId)}&sz=400`
+        : staticAlbum?.image || null,
+      photoCount: typeof entry.photoCount === "number" ? entry.photoCount : 0,
+      image: coverDriveId
+        ? `/api/drive/thumbnail?id=${encodeURIComponent(coverDriveId)}&sz=800`
+        : staticAlbum?.image || "",
+    };
+  });
+}
+
 export async function fetchAdminGalleryAlbums(): Promise<SiteDriveAlbum[]> {
   const res = await fetch("/api/site/gallery?summary=1", { cache: "no-store" });
   const data = await res.json().catch(() => ({}));
-  if (res.ok && Array.isArray(data.albums) && data.albums.length > 0) {
-    return data.albums;
-  }
+  const fromSummary = albumsFromApiPayload(data);
+  if (res.ok && fromSummary?.length) return fromSummary;
 
   if (!res.ok) {
     const message = data.error || data.message;
+    const fallback = staticAlbumsForAdmin();
+    if (fallback.length) return fallback;
     if (message === "invalid_grant") {
-      const fallback = staticAlbumsForAdmin();
-      if (fallback.length) return fallback;
       throw new Error(
         "Ligação ao Google Drive expirou. Reconecte em Google Drive → Conectar e actualize esta página.",
       );
     }
-    const fallback = staticAlbumsForAdmin();
-    if (fallback.length) return fallback;
     throw new Error(message || "Erro ao carregar álbuns.");
   }
 
   const fullRes = await fetch("/api/site/gallery", { cache: "no-store" });
   const fullData = await fullRes.json().catch(() => ({}));
-  if (fullRes.ok && Array.isArray(fullData.albums) && fullData.albums.length > 0) {
-    return fullData.albums;
-  }
+  const fromFull = albumsFromApiPayload(fullData);
+  if (fullRes.ok && fromFull?.length) return fromFull;
 
   return staticAlbumsForAdmin();
 }

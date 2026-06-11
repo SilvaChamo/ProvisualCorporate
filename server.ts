@@ -28,6 +28,7 @@ import {
   resolveHomeContentImages,
   resolveHomeContentWithIndex,
   persistResolvedHomeContentIfNeeded,
+  listGalleryAlbumsOffline,
 } from "./lib/siteDriveHelpers.js";
 import {
   getCachedGoogleAuth,
@@ -142,20 +143,36 @@ async function startServer() {
     };
 
     try {
-      const data = await loadGallery();
+      let data = await loadGallery();
+      if (!data.albums?.length) {
+        const offline = await listGalleryAlbumsOffline(supabase);
+        if (offline.albums.length) data = { ...data, ...offline };
+      }
       res.json(data);
     } catch (err: any) {
       if (isInvalidGrantError(err)) {
         clearGoogleAuthCache();
         try {
-          const data = await loadGallery();
+          let data = await loadGallery();
+          if (!data.albums?.length) {
+            const offline = await listGalleryAlbumsOffline(supabase);
+            if (offline.albums.length) data = { ...data, ...offline };
+          }
           return res.json(data);
         } catch (retryErr: any) {
           console.error("Site gallery list retry error:", retryErr);
+          try {
+            const offline = await listGalleryAlbumsOffline(supabase);
+            if (offline.albums.length) return res.json(offline);
+          } catch (_) {}
           return res.status(500).json({ error: retryErr.message || "Erro ao listar galeria do site." });
         }
       }
       console.error("Site gallery list error:", err);
+      try {
+        const offline = await listGalleryAlbumsOffline(supabase);
+        if (offline.albums.length) return res.json(offline);
+      } catch (_) {}
       res.status(500).json({ error: err.message || "Erro ao listar galeria do site." });
     }
   });
