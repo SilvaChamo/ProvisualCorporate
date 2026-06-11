@@ -1,6 +1,13 @@
 import { GALLERY_ALBUMS, VIDEO_ITEMS, type GalleryAlbum, type VideoItem } from "./sitePages";
 import { getGalleryPhotos } from "./galleryPhotos";
 import { mergeHomeContent, type HomeContent } from "./homeContent";
+import {
+  ADMIN_CACHE_KEYS,
+  clearAdminCache,
+  clearAdminPhotoCaches,
+  readAdminCache,
+  writeAdminCache,
+} from "./siteAdminCache";
 
 export interface SiteDrivePhoto {
   id: string;
@@ -101,37 +108,46 @@ export async function fetchSiteHomeContent(): Promise<HomeContent> {
   }
 }
 
+async function fetchSiteGalleryAlbumsFromApi(): Promise<GalleryAlbum[]> {
+  const res = await fetch("/api/site/gallery", { cache: "no-store" });
+  if (!res.ok) throw new Error("API error");
+  const data = await res.json();
+  if (data.cacheStatus?.stale) {
+    syncGalleryPhotosCache().catch(() => {});
+  }
+  const driveAlbums: SiteDriveAlbum[] = data.albums || [];
+  if (driveAlbums.length > 0) {
+    const merged = driveAlbums.map(mergeAlbumMetadata);
+    writeAdminCache(ADMIN_CACHE_KEYS.gallery, merged);
+    return merged;
+  }
+  throw new Error("empty");
+}
+
 export async function fetchSiteGalleryAlbums(options?: { resync?: boolean }): Promise<GalleryAlbum[]> {
+  if (!options?.resync) {
+    const cached = readAdminCache<GalleryAlbum[]>(ADMIN_CACHE_KEYS.gallery);
+    if (cached?.length) {
+      fetchSiteGalleryAlbumsFromApi().catch(() => {});
+      return cached;
+    }
+  }
+
   try {
-    if (options?.resync) {
-      try {
-        await syncSiteGalleryMeta();
-      } catch (syncErr) {
-        console.warn("Sync galeria falhou:", syncErr);
-      }
+    return await fetchSiteGalleryAlbumsFromApi();
+  } catch {
+    try {
+      await syncSiteGalleryMeta();
+      return await fetchSiteGalleryAlbumsFromApi();
+    } catch (e) {
+      console.warn("Galeria Drive indisponível, usando dados locais:", e);
     }
-
-    const res = await fetch("/api/site/gallery", { cache: "no-store" });
-    if (!res.ok) throw new Error("API error");
-    const data = await res.json();
-    if (data.cacheStatus?.stale) {
-      syncGalleryPhotosCache().catch(() => {});
-    }
-    const driveAlbums: SiteDriveAlbum[] = data.albums || [];
-    if (driveAlbums.length > 0) {
-      return driveAlbums.map(mergeAlbumMetadata);
-    }
-
-    if (!options?.resync) {
-      return fetchSiteGalleryAlbums({ resync: true });
-    }
-  } catch (e) {
-    console.warn("Galeria Drive indisponível, usando dados locais:", e);
   }
 
-  if (import.meta.env.DEV) {
-    return GALLERY_ALBUMS;
-  }
+  const cached = readAdminCache<GalleryAlbum[]>(ADMIN_CACHE_KEYS.gallery);
+  if (cached?.length) return cached;
+
+  if (import.meta.env.DEV) return GALLERY_ALBUMS;
 
   return GALLERY_ALBUMS.map((album) => ({
     ...album,
@@ -299,14 +315,17 @@ function albumsFromApiPayload(data: Record<string, unknown>): SiteDriveAlbum[] |
   });
 }
 
-export async function fetchAdminGalleryAlbums(): Promise<SiteDriveAlbum[]> {
+async function fetchAdminGalleryAlbumsFromApi(): Promise<SiteDriveAlbum[]> {
   const res = await fetch("/api/site/gallery?summary=1", { cache: "no-store" });
   const data = await res.json().catch(() => ({}));
   if (data.cacheStatus?.stale) {
     syncGalleryPhotosCache().catch(() => {});
   }
   const fromSummary = albumsFromApiPayload(data);
-  if (res.ok && fromSummary?.length) return fromSummary;
+  if (res.ok && fromSummary?.length) {
+    writeAdminCache(ADMIN_CACHE_KEYS.albums, fromSummary);
+    return fromSummary;
+  }
 
   if (!res.ok) {
     const message = data.error || data.message;
@@ -323,9 +342,23 @@ export async function fetchAdminGalleryAlbums(): Promise<SiteDriveAlbum[]> {
   const fullRes = await fetch("/api/site/gallery", { cache: "no-store" });
   const fullData = await fullRes.json().catch(() => ({}));
   const fromFull = albumsFromApiPayload(fullData);
-  if (fullRes.ok && fromFull?.length) return fromFull;
+  if (fullRes.ok && fromFull?.length) {
+    writeAdminCache(ADMIN_CACHE_KEYS.albums, fromFull);
+    return fromFull;
+  }
 
-  return staticAlbumsForAdmin();
+  const fallback = staticAlbumsForAdmin();
+  writeAdminCache(ADMIN_CACHE_KEYS.albums, fallback);
+  return fallback;
+}
+
+export async function fetchAdminGalleryAlbums(): Promise<SiteDriveAlbum[]> {
+  const cached = readAdminCache<SiteDriveAlbum[]>(ADMIN_CACHE_KEYS.albums);
+  if (cached?.length) {
+    fetchAdminGalleryAlbumsFromApi().catch(() => {});
+    return cached;
+  }
+  return fetchAdminGalleryAlbumsFromApi();
 }
 
 export async function createGalleryAlbum(payload: {
@@ -346,6 +379,9 @@ export async function createGalleryAlbum(payload: {
     throw new Error(err.error || "Erro ao criar álbum.");
   }
   const data = await res.json();
+  clearAdminCache(ADMIN_CACHE_KEYS.albums);
+  clearAdminCache(ADMIN_CACHE_KEYS.gallery);
+  clearAdminPhotoCaches();
   return data.album;
 }
 
@@ -353,13 +389,25 @@ export async function fetchAdminGalleryPhotos(
   slug: string,
   options?: { refresh?: boolean },
 ): Promise<SiteDrivePhoto[]> {
+  const cacheKey = ADMIN_CACHE_KEYS.photos(slug);
+  if (!options?.refresh) {
+    const cached = readAdminCache<SiteDrivePhoto[]>(cacheKey);
+    if (cached?.length) return cached;
+  }
+
   const qs = options?.refresh ? "?refresh=1" : "";
   const res = await fetch(`/api/site/gallery/${encodeURIComponent(slug)}/photos${qs}`, {
     cache: "no-store",
   });
-  if (!res.ok) throw new Error("Erro ao carregar fotos do álbum.");
+  if (!res.ok) {
+    const cached = readAdminCache<SiteDrivePhoto[]>(cacheKey);
+    if (cached?.length) return cached;
+    throw new Error("Erro ao carregar fotos do álbum.");
+  }
   const data = await res.json();
-  return data.photos || [];
+  const photos: SiteDrivePhoto[] = data.photos || [];
+  if (photos.length) writeAdminCache(cacheKey, photos);
+  return photos;
 }
 
 export async function updateGalleryAlbum(
@@ -390,6 +438,9 @@ export async function updateGalleryAlbum(
     throw new Error(err.error || "Erro ao atualizar álbum.");
   }
   const data = await res.json();
+  clearAdminCache(ADMIN_CACHE_KEYS.albums);
+  clearAdminCache(ADMIN_CACHE_KEYS.gallery);
+  clearAdminCache(ADMIN_CACHE_KEYS.photos(slug));
   return data.album;
 }
 
@@ -401,6 +452,9 @@ export async function deleteGalleryAlbum(slug: string): Promise<void> {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || "Erro ao eliminar álbum.");
   }
+  clearAdminCache(ADMIN_CACHE_KEYS.albums);
+  clearAdminCache(ADMIN_CACHE_KEYS.gallery);
+  clearAdminCache(ADMIN_CACHE_KEYS.photos(slug));
 }
 
 export async function fetchSiteVideos(): Promise<VideoItem[]> {
@@ -415,11 +469,22 @@ export async function fetchSiteVideos(): Promise<VideoItem[]> {
   return VIDEO_ITEMS;
 }
 
-export async function fetchAdminSiteVideos(): Promise<VideoItem[]> {
+async function fetchAdminSiteVideosFromApi(): Promise<VideoItem[]> {
   const res = await fetch("/api/site/videos", { cache: "no-store" });
   if (!res.ok) throw new Error("Erro ao carregar vídeos.");
   const data = await res.json();
-  return data.videos || [];
+  const videos = data.videos || [];
+  writeAdminCache(ADMIN_CACHE_KEYS.videos, videos);
+  return videos;
+}
+
+export async function fetchAdminSiteVideos(): Promise<VideoItem[]> {
+  const cached = readAdminCache<VideoItem[]>(ADMIN_CACHE_KEYS.videos);
+  if (cached?.length) {
+    fetchAdminSiteVideosFromApi().catch(() => {});
+    return cached;
+  }
+  return fetchAdminSiteVideosFromApi();
 }
 
 export async function addSiteVideo(title: string, url: string): Promise<VideoItem[]> {
@@ -433,6 +498,7 @@ export async function addSiteVideo(title: string, url: string): Promise<VideoIte
     throw new Error(err.error || "Erro ao adicionar vídeo.");
   }
   const data = await res.json();
+  clearAdminCache(ADMIN_CACHE_KEYS.videos);
   return data.videos || [];
 }
 
@@ -445,6 +511,7 @@ export async function deleteSiteVideo(slug: string): Promise<VideoItem[]> {
     throw new Error(err.error || "Erro ao eliminar vídeo.");
   }
   const data = await res.json();
+  clearAdminCache(ADMIN_CACHE_KEYS.videos);
   return data.videos || [];
 }
 
@@ -460,17 +527,29 @@ export async function updateSiteVideo(slug: string, title: string, url: string):
     throw new Error(err.error || "Erro ao atualizar vídeo.");
   }
   const data = await res.json();
+  clearAdminCache(ADMIN_CACHE_KEYS.videos);
   return data.videos || [];
 }
 
-export async function fetchAdminAccounts(): Promise<any[]> {
+async function fetchAdminAccountsFromApi(): Promise<any[]> {
   const res = await fetch("/api/admin/accounts");
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || "Erro ao carregar contas.");
   }
   const data = await res.json();
-  return (data.accounts || []).map(mapAccountRow);
+  const accounts = (data.accounts || []).map(mapAccountRow);
+  writeAdminCache(ADMIN_CACHE_KEYS.accounts, accounts);
+  return accounts;
+}
+
+export async function fetchAdminAccounts(): Promise<any[]> {
+  const cached = readAdminCache<any[]>(ADMIN_CACHE_KEYS.accounts);
+  if (cached?.length) {
+    fetchAdminAccountsFromApi().catch(() => {});
+    return cached;
+  }
+  return fetchAdminAccountsFromApi();
 }
 
 function mapAccountRow(row: any) {

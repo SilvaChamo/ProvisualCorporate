@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import {
   AlertCircle,
+  ChevronLeft,
   ExternalLink,
   Image as ImageIcon,
   Loader2,
@@ -19,7 +20,9 @@ import {
   type SiteDrivePhoto,
 } from "../../lib/siteGalleryApi";
 import { driveDisplayUrl } from "../../lib/driveImageUrl";
+import { ADMIN_CACHE_KEYS, readAdminCache } from "../../lib/siteAdminCache";
 import type { AdminEditorHandle } from "./AdminEditorHandle";
+import type { AdminNavState } from "./AdminBreadcrumb";
 
 const ALBUMS_INITIAL_COUNT = 10;
 const ALBUMS_LOAD_MORE_COUNT = 10;
@@ -48,10 +51,11 @@ function photoPreviewUrl(photo: SiteDrivePhoto) {
 
 interface AlbumsAdminTabProps {
   onToolbarChange?: (actions: React.ReactNode) => void;
+  onNavChange?: (state: AdminNavState) => void;
 }
 
 export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function AlbumsAdminTab(
-  { onToolbarChange },
+  { onToolbarChange, onNavChange },
   ref,
 ) {
   const [albums, setAlbums] = useState<SiteDriveAlbum[]>([]);
@@ -71,7 +75,15 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
   const [visibleAlbumCount, setVisibleAlbumCount] = useState(ALBUMS_INITIAL_COUNT);
 
   const loadAlbums = async (options?: { silent?: boolean }) => {
-    if (!options?.silent) setLoading(true);
+    if (!options?.silent) {
+      const cached = readAdminCache<SiteDriveAlbum[]>(ADMIN_CACHE_KEYS.albums);
+      if (cached?.length) {
+        setAlbums(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    }
     setError(null);
     try {
       const data = await fetchAdminGalleryAlbums();
@@ -124,6 +136,33 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
     setError(null);
   };
 
+  useEffect(() => {
+    if (!onNavChange) return;
+    if (formMode === "hidden") {
+      onNavChange({ crumbs: [{ label: "Gestão do Site" }, { label: "Álbuns" }] });
+      return;
+    }
+    if (formMode === "add") {
+      onNavChange({
+        crumbs: [
+          { label: "Gestão do Site" },
+          { label: "Álbuns", onClick: resetForm },
+          { label: "Novo álbum" },
+        ],
+        onBack: resetForm,
+      });
+      return;
+    }
+    onNavChange({
+      crumbs: [
+        { label: "Gestão do Site" },
+        { label: "Álbuns", onClick: resetForm },
+        { label: title.trim() || "Editar álbum" },
+      ],
+      onBack: resetForm,
+    });
+  }, [formMode, title, onNavChange]);
+
   const openAddForm = () => {
     pendingPhotos.forEach((photo) => URL.revokeObjectURL(photo.preview));
     setEditingSlug(null);
@@ -145,12 +184,20 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
     setTitle(album.title || album.name);
     setSubtitle(album.subtitle || "");
     setCoverPreview(albumCoverUrl(album) || null);
-    setLoadingPhotos(true);
+    const cachedPhotos = readAdminCache<SiteDrivePhoto[]>(ADMIN_CACHE_KEYS.photos(album.slug));
+    if (cachedPhotos?.length) {
+      setExistingPhotos(cachedPhotos);
+      setLoadingPhotos(false);
+    } else {
+      setLoadingPhotos(true);
+    }
     try {
       const photos = await fetchAdminGalleryPhotos(album.slug);
       setExistingPhotos(photos);
     } catch (e: any) {
-      setError(e.message || "Erro ao carregar fotos do álbum.");
+      if (!cachedPhotos?.length) {
+        setError(e.message || "Erro ao carregar fotos do álbum.");
+      }
     } finally {
       setLoadingPhotos(false);
     }
@@ -284,9 +331,19 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
   const formView = (
     <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 md:p-6">
       <div className="flex items-center justify-between gap-4 mb-4">
-        <h3 className="text-base font-bold text-gray-800">
-          {formMode === "add" ? "Novo Álbum" : "Editar Álbum"}
-        </h3>
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={resetForm}
+            className="inline-flex items-center gap-1 shrink-0 px-2 py-1.5 rounded-sm text-gray-600 hover:text-[#a21b7e] hover:bg-[#a21b7e]/5 font-bold text-sm transition-colors cursor-pointer"
+          >
+            <ChevronLeft size={18} />
+            Voltar
+          </button>
+          <h3 className="text-base font-bold text-gray-800 truncate">
+            {formMode === "add" ? "Novo Álbum" : "Editar Álbum"}
+          </h3>
+        </div>
         {formMode === "edit" && editingSlug && (
           <a
             href={`/galeria/${editingSlug}`}
@@ -464,7 +521,16 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
             return (
               <div
                 key={album.slug}
-                className="group bg-white rounded-lg border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20"
+                role="button"
+                tabIndex={0}
+                onClick={() => openEditForm(album)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openEditForm(album);
+                  }
+                }}
+                className="group bg-white rounded-lg border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20 cursor-pointer"
               >
                 <div className="relative w-full h-32 sm:w-20 sm:h-auto shrink-0 self-stretch overflow-hidden bg-gray-100">
                   {cover ? (
@@ -490,6 +556,7 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
                     href={`/galeria/${album.slug}`}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="px-3 py-2 text-xs font-bold text-green-600/50 border border-green-600/25 bg-transparent rounded-sm hover:text-green-700 hover:border-green-600 transition-colors inline-flex items-center gap-1"
                   >
                     <ExternalLink size={14} />
@@ -497,7 +564,10 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
                   </a>
                   <button
                     type="button"
-                    onClick={() => openEditForm(album)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditForm(album);
+                    }}
                     className="px-3 py-2 text-xs font-bold text-sky-600/50 border border-sky-600/25 bg-transparent rounded-sm hover:text-sky-700 hover:border-sky-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                   >
                     <Pencil size={14} />
@@ -505,7 +575,10 @@ export default forwardRef<AdminEditorHandle, AlbumsAdminTabProps>(function Album
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleDelete(album)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(album);
+                    }}
                     className="px-3 py-2 text-xs font-bold text-red-600/50 border border-red-600/25 bg-transparent rounded-sm hover:text-red-700 hover:border-red-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                   >
                     <Trash2 size={14} />

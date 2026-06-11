@@ -64,6 +64,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, displayDriveName, handleFirestoreError, isSuperAdmin, OperationType } from "../lib/utils";
 import { driveThumbnailSrc, resolveDriveFileId } from "../lib/driveImageUrl";
+import { markFolderSynced, shouldSkipFolderSync } from "../lib/siteAdminCache";
 import {
   mergeById,
   parentMatchesFolder,
@@ -1130,6 +1131,7 @@ export default function Dashboard() {
 
       const listing = parseDriveListing(driveFiles, folderId, displayDriveName);
       setDriveBrowseCache((prev) => ({ ...prev, [folderId]: listing }));
+      if (!filterType) markFolderSynced(folderId);
       setSyncErrorMessage(null);
 
       if (isBackground) {
@@ -1470,10 +1472,11 @@ export default function Dashboard() {
     }
   }, [foldersLoaded, assetsLoaded]);
 
-  // Sincronizar ao abrir ou mudar de pasta (inclui pasta restaurada do sessionStorage)
+  // Sincronizar ao abrir ou mudar de pasta — só se ainda não estiver em cache recente
   useEffect(() => {
     if (!foldersLoaded || !assetsLoaded || !selectedFolderId) return;
     if (activeTab !== "all" && activeTab !== "google_drive") return;
+    if (shouldSkipFolderSync(selectedFolderId)) return;
     handleGoogleSync(selectedFolderId, undefined, true, false);
   }, [selectedFolderId, foldersLoaded, assetsLoaded, activeTab]);
 
@@ -1672,74 +1675,6 @@ export default function Dashboard() {
     };
     syncClientFolders();
   }, []);
-
-  const handleManualSync = async () => {
-    setIsSyncing(true);
-    try {
-      // 1. Sincronizar pastas de clientes do Drive e associar client_id no banco
-      const resClient = await fetch('/api/drive/list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' })
-      });
-      if (resClient.ok) {
-        const driveFiles = await resClient.json();
-        for (const file of driveFiles) {
-          if (file.mimeType === 'application/vnd.google-apps.folder') {
-            const docRef = doc(db, "folders", file.id);
-            const docSnap = await getDoc(docRef);
-            const folderData = docSnap.exists() ? docSnap.data() : null;
-            let folderClientEmail = folderData?.clientEmail || null;
-
-            const sharedEmails = (file.permissions || [])
-              .map((p: any) => p.emailAddress?.toLowerCase())
-              .filter(Boolean);
-
-            const gDriveClientEmail = sharedEmails.find((email: string) =>
-              email !== 'provisualcorporate@gmail.com' &&
-              email !== 'silva.chamo@gmail.com' &&
-              !email.endsWith('.demo') &&
-              !email.includes('gserviceaccount.com') &&
-              !email.includes('provisual-sync')
-            );
-
-            if (gDriveClientEmail) {
-              folderClientEmail = gDriveClientEmail;
-            }
-
-            // Limpar o email de serviço se ele já tiver sido guardado anteriormente por erro
-            if (folderClientEmail && (folderClientEmail.includes('gserviceaccount.com') || folderClientEmail.includes('provisual-sync') || folderClientEmail.includes('provisual_synk'))) {
-              folderClientEmail = null;
-            }
-
-            const payload: any = {
-              name: displayDriveName(file.name),
-              date: file.createdTime ? Timestamp.fromDate(new Date(file.createdTime)) : serverTimestamp(),
-              ownerId: "google-drive",
-              parentId: '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG',
-              color: folderData?.color || '#e2b13c'
-            };
-            if (folderClientEmail !== undefined) {
-              payload.clientEmail = folderClientEmail;
-            }
-
-            await setDoc(docRef, payload);
-          }
-        }
-      }
-
-      // 2. Sincronizar arquivos da pasta atual ou raiz
-      const activeFolder = selectedFolderId || '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG';
-      await handleGoogleSync(activeFolder, undefined, true);
-
-      alert("Sincronização efetuada com sucesso!");
-    } catch (error: any) {
-      console.error("Erro na sincronização manual:", error);
-      alert("Erro ao sincronizar: " + error.message);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const isTrashView = activeTab === "google_drive" && driveFilterType === "trashed";
 
@@ -2253,24 +2188,6 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center justify-between gap-2 md:justify-end">
-              <button
-                onClick={handleManualSync}
-                disabled={isSyncing}
-                title={
-                  isSyncing
-                    ? "Sincronizando..."
-                    : driveStatus?.connected
-                      ? `Sincronizar · ${driveStatus.email}`
-                      : "Sincronizar"
-                }
-                className={cn(
-                  "hidden md:flex items-center justify-center h-9 w-9 text-gray-500 hover:text-[#a21b7e] transition-colors cursor-pointer bg-transparent border-0 p-0 shrink-0",
-                  isSyncing && "opacity-75 cursor-not-allowed"
-                )}
-              >
-                <RefreshCw size={16} className={cn(isSyncing && "animate-spin text-[#a21b7e]")} />
-              </button>
-
               {userProfile && (
                 <div className="flex items-center min-w-0 flex-1 md:flex-none h-9 px-3 bg-gray-50 border border-gray-100 rounded-sm select-none">
                   <span className="text-sm text-gray-800 font-bold truncate" title={userProfile.displayName || userProfile.email}>
@@ -2517,27 +2434,6 @@ export default function Dashboard() {
 
                         {/* Ações */}
                         <div className="px-1.5 space-y-0.5">
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              const folderId = selectedFolderId || (activeTab === 'all' ? '1ww-KgTwlOLbvCHtCLZgGTntzA6SStCjG' : (arquivoFolderId || 'root'));
-                              setIsSyncing(true);
-                              try {
-                                await handleGoogleSync(folderId, undefined, false);
-                              } finally {
-                                setIsSyncing(false);
-                              }
-                            }}
-                            className="w-full flex items-center justify-between px-3 py-2 bg-transparent hover:bg-transparent group transition-colors text-left text-[13px] font-bold text-gray-600 hover:text-[#a21b7e] cursor-pointer"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <RefreshCw size={14} className={cn("text-gray-400 group-hover:text-[#a21b7e]", isSyncing && "animate-spin text-[#a21b7e]")} />
-                              <span>Sincronizar arquivos</span>
-                            </div>
-                          </button>
-
-                          <div className="my-1 border-t border-gray-100" />
-
                           {driveStatus?.type === "oauth2" ? (
                             <button
                               onClick={async (e) => {

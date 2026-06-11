@@ -21,6 +21,8 @@ import {
   setDoc,
 } from "../../lib/supabase";
 import { fetchAdminAccounts } from "../../lib/siteGalleryApi";
+import { ADMIN_CACHE_KEYS, readAdminCache } from "../../lib/siteAdminCache";
+import type { AdminNavState } from "./AdminBreadcrumb";
 
 function generateStrongPassword() {
   const chars = "abcdefghijklmnopqrstuvwxyz";
@@ -70,9 +72,10 @@ function normalizeAccountRow(row: Record<string, unknown>) {
 
 interface AccessAccountsAdminProps {
   onToolbarChange?: (actions: React.ReactNode) => void;
+  onNavChange?: (state: AdminNavState) => void;
 }
 
-export default function AccessAccountsAdmin({ onToolbarChange }: AccessAccountsAdminProps) {
+export default function AccessAccountsAdmin({ onToolbarChange, onNavChange }: AccessAccountsAdminProps) {
   const [accounts, setAccounts] = useState<ReturnType<typeof normalizeAccountRow>[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,6 +92,11 @@ export default function AccessAccountsAdmin({ onToolbarChange }: AccessAccountsA
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
   const reloadAccounts = useCallback(async () => {
+    const cached = readAdminCache<Record<string, unknown>[]>(ADMIN_CACHE_KEYS.accounts);
+    if (cached?.length) {
+      setAccounts(cached.map((row) => normalizeAccountRow(row)));
+      setAccountsLoaded(true);
+    }
     try {
       const accountsList = await fetchAdminAccounts();
       setAccounts(accountsList.map((row) => normalizeAccountRow(row)));
@@ -106,6 +114,12 @@ export default function AccessAccountsAdmin({ onToolbarChange }: AccessAccountsA
   useEffect(() => {
     reloadAccounts();
   }, [reloadAccounts]);
+
+  useEffect(() => {
+    onNavChange?.({
+      crumbs: [{ label: "Gestão do Site" }, { label: "Contas de Acesso" }],
+    });
+  }, [onNavChange]);
 
   const filteredAccounts = useMemo(() => {
     if (!searchQuery) return accounts;

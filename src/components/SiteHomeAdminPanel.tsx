@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Images, Key, Video } from "lucide-react";
 import { cn } from "../lib/utils";
+import AdminBreadcrumb, { type AdminNavState } from "./admin/AdminBreadcrumb";
 import AlbumsAdminTab from "./admin/AlbumsAdminTab";
 import VideosAdminTab from "./admin/VideosAdminTab";
 import AccessAccountsAdmin from "./admin/AccessAccountsAdmin";
@@ -21,6 +22,9 @@ export default function SiteHomeAdminPanel() {
   const [unsavedOpen, setUnsavedOpen] = useState(false);
   const [unsavedSaving, setUnsavedSaving] = useState(false);
   const [toolbarActions, setToolbarActions] = useState<React.ReactNode>(null);
+  const [adminNav, setAdminNav] = useState<AdminNavState>({
+    crumbs: [{ label: "Gestão do Site" }, { label: "Álbuns" }],
+  });
   const editorRef = useRef<AdminEditorHandle | null>(null);
 
   const requestTabChange = (tab: HomeAdminTab) => {
@@ -102,15 +106,28 @@ export default function SiteHomeAdminPanel() {
           )}
         </div>
 
+        <AdminBreadcrumb crumbs={adminNav.crumbs} onBack={adminNav.onBack} />
+
         <div className="min-h-[420px]">
           {activeTab === "albuns" && (
-            <AlbumsAdminTab ref={editorRef} onToolbarChange={setToolbarActions} />
+            <AlbumsAdminTab
+              ref={editorRef}
+              onToolbarChange={setToolbarActions}
+              onNavChange={setAdminNav}
+            />
           )}
           {activeTab === "videos" && (
-            <VideosAdminTab ref={editorRef} onToolbarChange={setToolbarActions} />
+            <VideosAdminTab
+              ref={editorRef}
+              onToolbarChange={setToolbarActions}
+              onNavChange={setAdminNav}
+            />
           )}
           {activeTab === "contas" && (
-            <AccessAccountsAdmin onToolbarChange={setToolbarActions} />
+            <AccessAccountsAdmin
+              onToolbarChange={setToolbarActions}
+              onNavChange={setAdminNav}
+            />
           )}
         </div>
       </div>

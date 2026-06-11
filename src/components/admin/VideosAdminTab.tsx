@@ -1,5 +1,15 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, ExternalLink, Loader2, Pencil, Plus, Trash2, Video } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronLeft,
+  ExternalLink,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  Video,
+} from "lucide-react";
 import type { VideoItem } from "../../lib/sitePages";
 import {
   addSiteVideo,
@@ -8,7 +18,9 @@ import {
   updateSiteVideo,
 } from "../../lib/siteGalleryApi";
 import { parseYoutubeVideoId, youtubeThumbnail } from "../../lib/youtubeEmbed";
+import { ADMIN_CACHE_KEYS, readAdminCache } from "../../lib/siteAdminCache";
 import type { AdminEditorHandle } from "./AdminEditorHandle";
+import type { AdminNavState } from "./AdminBreadcrumb";
 import AdminListPagination, { ADMIN_LIST_PAGE_SIZE, paginateList } from "./AdminListPagination";
 
 type FormMode = "hidden" | "add" | "edit";
@@ -22,10 +34,11 @@ type FormState = {
 
 interface VideosAdminTabProps {
   onToolbarChange?: (actions: React.ReactNode) => void;
+  onNavChange?: (state: AdminNavState) => void;
 }
 
 export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function VideosAdminTab(
-  { onToolbarChange },
+  { onToolbarChange, onNavChange },
   ref,
 ) {
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -48,7 +61,15 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
   formStateRef.current = { formMode, editingSlug, title, url };
 
   const loadVideos = async (options?: { silent?: boolean }) => {
-    if (!options?.silent) setLoading(true);
+    if (!options?.silent) {
+      const cached = readAdminCache<VideoItem[]>(ADMIN_CACHE_KEYS.videos);
+      if (cached?.length) {
+        setVideos(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    }
     setError(null);
     try {
       const data = await fetchAdminSiteVideos();
@@ -77,6 +98,33 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
     setTitle("");
     setUrl("");
   };
+
+  useEffect(() => {
+    if (!onNavChange) return;
+    if (formMode === "hidden") {
+      onNavChange({ crumbs: [{ label: "Gestão do Site" }, { label: "Vídeos" }] });
+      return;
+    }
+    if (formMode === "add") {
+      onNavChange({
+        crumbs: [
+          { label: "Gestão do Site" },
+          { label: "Vídeos", onClick: resetForm },
+          { label: "Novo vídeo" },
+        ],
+        onBack: resetForm,
+      });
+      return;
+    }
+    onNavChange({
+      crumbs: [
+        { label: "Gestão do Site" },
+        { label: "Vídeos", onClick: resetForm },
+        { label: title.trim() || "Editar vídeo" },
+      ],
+      onBack: resetForm,
+    });
+  }, [formMode, title, onNavChange]);
 
   const openAddForm = () => {
     resetForm();
@@ -195,9 +243,19 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
           </div>
         )}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 items-start">
-          <h3 className="text-base font-bold text-gray-800 lg:col-start-1 lg:row-start-1">
-            {formMode === "add" ? "Novo Vídeo (YouTube)" : "Editar Vídeo"}
-          </h3>
+          <div className="flex items-center gap-2 min-w-0 lg:col-start-1 lg:row-start-1">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="inline-flex items-center gap-1 shrink-0 px-2 py-1.5 rounded-sm text-gray-600 hover:text-[#a21b7e] hover:bg-[#a21b7e]/5 font-bold text-sm transition-colors cursor-pointer"
+            >
+              <ChevronLeft size={18} />
+              Voltar
+            </button>
+            <h3 className="text-base font-bold text-gray-800 truncate">
+              {formMode === "add" ? "Novo Vídeo (YouTube)" : "Editar Vídeo"}
+            </h3>
+          </div>
 
           <div className="space-y-4 lg:col-start-1 lg:row-start-2 order-2">
             <div>
@@ -290,7 +348,16 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
           {paginatedVideos.map((video) => (
             <div
               key={`${video.slug}-${video.youtubeId}`}
-              className="bg-white border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20"
+              role="button"
+              tabIndex={0}
+              onClick={() => openEditForm(video)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openEditForm(video);
+                }
+              }}
+              className="bg-white border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-stretch overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-[#a21b7e]/10 hover:border-[#a21b7e]/20 cursor-pointer"
             >
               <div className="relative w-full h-32 sm:w-28 sm:h-auto shrink-0 self-stretch overflow-hidden bg-gray-100">
                 <img
@@ -312,6 +379,7 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
                   href="/videos"
                   target="_blank"
                   rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="px-3 py-2 text-xs font-bold text-green-600/50 border border-green-600/25 bg-transparent rounded-sm hover:text-green-700 hover:border-green-600 transition-colors inline-flex items-center gap-1"
                 >
                   <ExternalLink size={14} />
@@ -319,7 +387,10 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
                 </a>
                 <button
                   type="button"
-                  onClick={() => openEditForm(video)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditForm(video);
+                  }}
                   className="px-3 py-2 text-xs font-bold text-sky-600/50 border border-sky-600/25 bg-transparent rounded-sm hover:text-sky-700 hover:border-sky-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                 >
                   <Pencil size={14} />
@@ -327,7 +398,10 @@ export default forwardRef<AdminEditorHandle, VideosAdminTabProps>(function Video
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDelete(video)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(video);
+                  }}
                   className="px-3 py-2 text-xs font-bold text-red-600/50 border border-red-600/25 bg-transparent rounded-sm hover:text-red-700 hover:border-red-600 transition-colors inline-flex items-center gap-1 cursor-pointer"
                 >
                   <Trash2 size={14} />
