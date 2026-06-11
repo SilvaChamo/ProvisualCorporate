@@ -114,6 +114,9 @@ export async function fetchSiteGalleryAlbums(options?: { resync?: boolean }): Pr
     const res = await fetch("/api/site/gallery", { cache: "no-store" });
     if (!res.ok) throw new Error("API error");
     const data = await res.json();
+    if (data.cacheStatus?.stale) {
+      syncGalleryPhotosCache().catch(() => {});
+    }
     const driveAlbums: SiteDriveAlbum[] = data.albums || [];
     if (driveAlbums.length > 0) {
       return driveAlbums.map(mergeAlbumMetadata);
@@ -300,6 +303,9 @@ function albumsFromApiPayload(data: Record<string, unknown>): SiteDriveAlbum[] |
 export async function fetchAdminGalleryAlbums(): Promise<SiteDriveAlbum[]> {
   const res = await fetch("/api/site/gallery?summary=1", { cache: "no-store" });
   const data = await res.json().catch(() => ({}));
+  if (data.cacheStatus?.stale) {
+    syncGalleryPhotosCache().catch(() => {});
+  }
   const fromSummary = albumsFromApiPayload(data);
   if (res.ok && fromSummary?.length) return fromSummary;
 

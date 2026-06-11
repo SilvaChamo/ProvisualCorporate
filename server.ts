@@ -51,6 +51,12 @@ import {
   buildOAuthClient,
   clearStoredOAuthTokens,
 } from "./lib/googleOAuthRedirect.js";
+import {
+  getGalleryCacheStatus,
+  scheduleGalleryAutoSync,
+  runGalleryAutoSync,
+  isAuthorizedCronRequest,
+} from "./lib/galleryAutoSync.js";
 
 async function startServer() {
   // Ajudar o servidor compilado a encontrar os módulos
@@ -151,7 +157,7 @@ async function startServer() {
         const offline = await listGalleryAlbumsOffline(supabase);
         if (offline.albums.length) data = { ...data, ...offline };
       }
-      res.json(data);
+      return sendGalleryJson(res, data, summary);
     } catch (err: any) {
       if (isInvalidGrantError(err)) {
         clearGoogleAuthCache();
@@ -161,12 +167,12 @@ async function startServer() {
             const offline = await listGalleryAlbumsOffline(supabase);
             if (offline.albums.length) data = { ...data, ...offline };
           }
-          return res.json(data);
+          return sendGalleryJson(res, data, summary);
         } catch (retryErr: any) {
           console.error("Site gallery list retry error:", retryErr);
           try {
             const offline = await listGalleryAlbumsOffline(supabase);
-            if (offline.albums.length) return res.json(offline);
+            if (offline.albums.length) return sendGalleryJson(res, offline, summary);
           } catch (_) {}
           return res.status(500).json({ error: retryErr.message || "Erro ao listar galeria do site." });
         }
@@ -174,9 +180,22 @@ async function startServer() {
       console.error("Site gallery list error:", err);
       try {
         const offline = await listGalleryAlbumsOffline(supabase);
-        if (offline.albums.length) return res.json(offline);
+        if (offline.albums.length) return sendGalleryJson(res, offline, summary);
       } catch (_) {}
       res.status(500).json({ error: err.message || "Erro ao listar galeria do site." });
+    }
+  });
+
+  app.get("/api/cron/gallery-sync", async (req, res) => {
+    if (!isAuthorizedCronRequest(req)) {
+      return res.status(401).json({ error: "Não autorizado." });
+    }
+    try {
+      const result = await runGalleryAutoSync(supabase, () => createDriveClient(), { force: true });
+      res.json({ ok: true, ...result });
+    } catch (err: any) {
+      console.error("Cron gallery sync error:", err);
+      res.status(500).json({ error: err.message || "Erro na sincronização automática." });
     }
   });
 
@@ -581,6 +600,20 @@ async function startServer() {
 
   async function getGoogleAuth() {
     return getCachedGoogleAuth(createGoogleAuth);
+  }
+
+  async function createDriveClient() {
+    const { auth } = await getGoogleAuth();
+    return google.drive({ version: "v3", auth });
+  }
+
+  async function sendGalleryJson(res: express.Response, data: Record<string, unknown>, summary: boolean) {
+    const cacheStatus = await getGalleryCacheStatus(supabase);
+    if (cacheStatus.stale) {
+      scheduleGalleryAutoSync(supabase, () => createDriveClient());
+    }
+    res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
+    res.json({ ...data, cacheStatus });
   }
 
   async function listAllDriveFiles(

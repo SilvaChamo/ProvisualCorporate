@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "migrate:site-images": "node scripts/migrate-inicio-to-drive.mjs",
     "sync:equipa": "node scripts/sync-equipa-to-drive.mjs",
-    "flatten:site-drive": "node scripts/flatten-site-drive.mjs"
+    "flatten:site-drive": "node scripts/flatten-site-drive.mjs",
+    "sync:gallery": "node scripts/sync-gallery-photos.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

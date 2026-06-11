@@ -55,6 +55,12 @@ import {
   isOAuthKeysConfigured,
   isServiceKeysConfigured,
 } from "../lib/googleCredentials.js";
+import {
+  getGalleryCacheStatus,
+  scheduleGalleryAutoSync,
+  runGalleryAutoSync,
+  isAuthorizedCronRequest,
+} from "../lib/galleryAutoSync.js";
 
 const app = express();
 app.use(express.json());
@@ -158,6 +164,20 @@ async function getGoogleAuth() {
   return getCachedGoogleAuth(createGoogleAuth);
 }
 
+async function createDriveClient() {
+  const { auth } = await getGoogleAuth();
+  return google.drive({ version: "v3", auth });
+}
+
+async function sendGalleryJson(res, data, summary) {
+  const cacheStatus = await getGalleryCacheStatus(supabase);
+  if (cacheStatus.stale) {
+    scheduleGalleryAutoSync(supabase, () => createDriveClient());
+  }
+  res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
+  res.json({ ...data, cacheStatus });
+}
+
 function respondDriveAuthError(res, error) {
   if (isInvalidGrantError(error)) {
     clearGoogleAuthCache();
@@ -245,8 +265,7 @@ app.get("/api/site/gallery", async (req, res) => {
       const offline = await listGalleryAlbumsOffline(supabase);
       if (offline.albums.length) data = offline;
     }
-    res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
-    res.json(data);
+    return sendGalleryJson(res, data, summary);
   } catch (err) {
     if (isInvalidGrantError(err)) {
       clearGoogleAuthCache();
@@ -256,16 +275,12 @@ app.get("/api/site/gallery", async (req, res) => {
           const offline = await listGalleryAlbumsOffline(supabase);
           if (offline.albums.length) data = offline;
         }
-        res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
-        return res.json(data);
+        return sendGalleryJson(res, data, summary);
       } catch (retryErr) {
         console.error("Site gallery list retry error:", retryErr);
         try {
           const offline = await listGalleryAlbumsOffline(supabase);
-          if (offline.albums.length) {
-            res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
-            return res.json(offline);
-          }
+          if (offline.albums.length) return sendGalleryJson(res, offline, summary);
         } catch (_) {}
         return respondDriveAuthError(res, retryErr);
       }
@@ -273,12 +288,22 @@ app.get("/api/site/gallery", async (req, res) => {
     console.error("Site gallery list error:", err);
     try {
       const offline = await listGalleryAlbumsOffline(supabase);
-      if (offline.albums.length) {
-        res.set("Cache-Control", summary ? "private, max-age=15" : HOME_API_CACHE_CONTROL);
-        return res.json(offline);
-      }
+      if (offline.albums.length) return sendGalleryJson(res, offline, summary);
     } catch (_) {}
     res.status(500).json({ error: err.message || "Erro ao listar galeria do site." });
+  }
+});
+
+app.get("/api/cron/gallery-sync", async (req, res) => {
+  if (!isAuthorizedCronRequest(req)) {
+    return res.status(401).json({ error: "Não autorizado." });
+  }
+  try {
+    const result = await runGalleryAutoSync(supabase, () => createDriveClient(), { force: true });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error("Cron gallery sync error:", err);
+    res.status(500).json({ error: err.message || "Erro na sincronização automática." });
   }
 });
 
