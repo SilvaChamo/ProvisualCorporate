@@ -75,12 +75,20 @@ async function fetchHomeFromApi(): Promise<HomeContent> {
 
 function mergeAlbumMetadata(driveAlbum: SiteDriveAlbum): GalleryAlbum {
   const meta = GALLERY_ALBUMS.find((a) => a.slug === driveAlbum.slug);
-  const coverFromDrive =
-    driveAlbum.image ||
-    (driveAlbum.coverDriveId &&
-      `/api/drive/thumbnail?id=${encodeURIComponent(driveAlbum.coverDriveId)}&sz=800`) ||
-    (driveAlbum.coverUrl?.includes("/api/drive/") ? driveAlbum.coverUrl : "") ||
-    "";
+  
+  const staticCandidate = [driveAlbum.coverUrl, driveAlbum.image].find((u) => u?.startsWith("/INICIO/"));
+  let coverFromDrive = staticCandidate || "";
+  
+  if (!coverFromDrive) {
+    if (driveAlbum.coverDriveId && !String(driveAlbum.coverDriveId).startsWith("static-")) {
+      coverFromDrive = `/api/drive/thumbnail?id=${encodeURIComponent(driveAlbum.coverDriveId)}&sz=800`;
+    } else if (driveAlbum.image?.includes("/api/drive/")) {
+      coverFromDrive = driveAlbum.image;
+    } else {
+      coverFromDrive = driveAlbum.image || driveAlbum.coverUrl || "";
+    }
+  }
+
   return {
     slug: driveAlbum.slug,
     title: driveAlbum.title || meta?.title || driveAlbum.name,
@@ -542,7 +550,7 @@ export async function updateSiteVideo(slug: string, title: string, url: string):
 }
 
 async function fetchAdminAccountsFromApi(): Promise<any[]> {
-  const res = await fetch("/api/admin/accounts");
+  const res = await fetch("/api/admin/accounts", { cache: "no-store" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || "Erro ao carregar contas.");

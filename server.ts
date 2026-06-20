@@ -72,7 +72,7 @@ async function startServer() {
   const PORT = process.env.PORT || 3333;
 
   // Body parser
-  app.use(express.json());
+  app.use(express.json({ limit: "10mb" }));
 
   // Inicializar Supabase para sincronização resiliente de tokens do Google Drive
   const SUPABASE_URL = "https://gwankhxcbkrtgxopbxwd.supabase.co";
@@ -384,15 +384,16 @@ async function startServer() {
         return res.status(400).json({ error: "Email, nome e senha são obrigatórios." });
       }
       const id = clientId || `client_${Math.random().toString(36).substring(2, 11)}`;
-      const { error } = await supabase.from("user_profiles").upsert({
+      const { data, error } = await supabase.from("user_profiles").upsert({
         id,
         email: String(email).trim().toLowerCase(),
         display_name: String(displayName),
         password: String(password),
         role: role || "cliente",
         client_id: id,
-      });
+      }).select();
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Erro ao criar conta no banco de dados.");
       res.json({ success: true, accounts: await listAdminAccounts() });
     } catch (err: any) {
       console.error("Admin accounts create error:", err);
@@ -406,7 +407,7 @@ async function startServer() {
       if (!email || !displayName || !password) {
         return res.status(400).json({ error: "Email, nome e senha são obrigatórios." });
       }
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("user_profiles")
         .update({
           email: String(email).trim().toLowerCase(),
@@ -414,8 +415,10 @@ async function startServer() {
           password: String(password),
           role: role || "cliente",
         })
-        .eq("id", req.params.id);
+        .eq("id", req.params.id)
+        .select();
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Conta não encontrada no banco de dados.");
       res.json({ success: true, accounts: await listAdminAccounts() });
     } catch (err: any) {
       console.error("Admin accounts update error:", err);
